@@ -729,12 +729,27 @@ body.custom-footer-route > footer {
 /* Temple ritual parallel route. Providers and global audio remain mounted
    above this layer while the underlying Temple is inert and visually covered. */
 .temple-modal {
+  --bg: #f6f1e8;
+  --c: #c8202b;
+  --x: 50%;
+  --y: 50%;
+
   position: fixed;
   inset: 0;
-  z-index: 10000;
-  background: rgba(8, 7, 6, 0.82);
+  z-index: 10;
   overflow: hidden;
-  animation: temple-circular-reveal 420ms cubic-bezier(.22, 1, .36, 1) both;
+  background: color-mix(in srgb, var(--c) 20%, var(--bg));
+  clip-path: circle(0 at var(--x) var(--y));
+  visibility: hidden;
+  transition:
+    clip-path .75s cubic-bezier(.7, 0, .2, 1),
+    visibility 0s .75s;
+}
+
+.temple-modal.on {
+  clip-path: circle(150% at var(--x) var(--y));
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .temple-modal__dialog {
@@ -918,9 +933,14 @@ body.ritual-modal-open { overflow: hidden; overscroll-behavior: none; }
 body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
 
 .absolution-modal {
+  --bg: #f6f1e8;
+  --c: #67836b;
+  --x: 50%;
+  --y: 50%;
+
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -930,10 +950,18 @@ body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
     max(0.75rem, env(safe-area-inset-left));
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: rgba(8, 7, 6, 0.58);
-  -webkit-backdrop-filter: blur(7px);
-  backdrop-filter: blur(7px);
-  animation: absolution-modal-fade 220ms ease-out both;
+  background: color-mix(in srgb, var(--c) 20%, var(--bg));
+  clip-path: circle(0 at var(--x) var(--y));
+  visibility: hidden;
+  transition:
+    clip-path .75s cubic-bezier(.7, 0, .2, 1),
+    visibility 0s .75s;
+}
+
+.absolution-modal.on {
+  clip-path: circle(150% at var(--x) var(--y));
+  visibility: visible;
+  transition-delay: 0s;
 }
 
 .absolution-modal__dialog {
@@ -1110,7 +1138,10 @@ body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .absolution-modal,
+  .absolution-modal {
+    transition: none;
+  }
+
   .absolution-modal__dialog {
     animation: none !important;
   }
@@ -1140,17 +1171,15 @@ body.absolution-modal-open { overflow: hidden; overscroll-behavior: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .temple-modal { animation: none; }
+  .temple-modal {
+    transition: none;
+  }
+
   .temple-modal *,
   .temple-modal *::before,
   .temple-modal *::after {
     scroll-behavior: auto !important;
   }
-}
-
-@keyframes temple-circular-reveal {
-  from { clip-path: circle(0 at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
-  to { clip-path: circle(150vmax at var(--ritual-origin-x, 50%) var(--ritual-origin-y, 50%)); }
 }
 
 /*

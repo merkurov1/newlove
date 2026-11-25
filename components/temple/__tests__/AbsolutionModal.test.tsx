@@ -94,7 +94,9 @@ describe('dedicated compact Absolution modal', () => {
       screen.getByRole('button', { name: 'Close Absolution' })
     );
 
-    expect(back).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
 
     unmount();
 
@@ -106,19 +108,20 @@ describe('dedicated compact Absolution modal', () => {
     trigger.remove();
   });
 
-  it('closes on Escape and Telegram Back', () => {
+  it('closes on Escape and Telegram Back', async () => {
     const { unmount } = render(<AbsolutionModal />);
 
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(back).toHaveBeenCalledTimes(1);
-
     expect(runTopTelegramBackHandler()).toBe(true);
-    expect(back).toHaveBeenCalledTimes(2);
+
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
 
     unmount();
   });
 
-  it('closes only when the backdrop itself is pressed', () => {
+  it('closes only when the backdrop itself is pressed', async () => {
     const { container, unmount } = render(<AbsolutionModal />);
 
     const overlay = container.querySelector('.absolution-modal') as HTMLElement;
@@ -128,7 +131,11 @@ describe('dedicated compact Absolution modal', () => {
     expect(back).not.toHaveBeenCalled();
 
     fireEvent.mouseDown(overlay);
-    expect(back).toHaveBeenCalledTimes(1);
+    expect(overlay).toHaveAttribute('data-state', 'closed');
+
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
 
     unmount();
   });

@@ -299,6 +299,46 @@ describe('Temple home composition', () => {
     expect(rendered).toBeLessThanOrEqual(1);
   });
 
+  it('keeps the activity-driven heart glow on top of the reference base glow', () => {
+    const state = vigilSnapshot({ supporterCount: 8 });
+
+    vigilSupporters.useVigilSupporters.mockReturnValue(state);
+
+    render(<TempleClient />);
+
+    const glow = screen.getByTestId('temple-heart-glow');
+    const expected = resolveVigilFlame(state, Date.now());
+    const opacity = Number(glow.style.opacity);
+
+    expect(opacity).toBeGreaterThan(0);
+    expect(opacity).toBeCloseTo(
+      Math.min(0.95, 0.2 + expected.glowOpacity * 0.75),
+      4
+    );
+    expect(glow.style.filter).toContain('blur(');
+  });
+
+  it('turns the activity-driven glow fully off at expiry', () => {
+    const lastLitAt = new Date(
+      Date.now() - 25 * 60 * 60 * 1000
+    ).toISOString();
+
+    vigilSupporters.useVigilSupporters.mockReturnValue(
+      vigilSnapshot({
+        supporterCount: 99,
+        lastLitAt,
+        flameExpiresAt: new Date(
+          Date.parse(lastLitAt) + 24 * 60 * 60 * 1000
+        ).toISOString(),
+        flameLit: true,
+      })
+    );
+
+    render(<TempleClient />);
+
+    expect(screen.getByTestId('temple-heart-glow').style.opacity).toBe('0');
+  });
+
   it('renders the heart fully off at the shared 24h expiry', () => {
     const lastLitAt = new Date(
       Date.now() - 25 * 60 * 60 * 1000

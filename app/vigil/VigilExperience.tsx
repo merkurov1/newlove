@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -11,6 +11,10 @@ import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { hapticImpact } from '@/lib/telegram/webApp';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
+import {
+  resolveHeartBreathingPhase,
+  type HeartBreathingPhase,
+} from '@/lib/temple/breathing';
 import VigilShare from '@/components/vigil/VigilShare';
 
 import { useVigilController } from './useVigilController';
@@ -27,7 +31,12 @@ const ANGEL_ART =
  * dark room to the shared heart. The server state, cooldown and identity rules
  * are unchanged; only the way the ritual is staged is new.
  */
-export default function VigilExperience() {
+export default function VigilExperience({
+  presentation = 'page',
+}: {
+  /** The intercepted Temple modal draws the heart breathing cycle. */
+  presentation?: 'page' | 'modal';
+} = {}) {
   const {
     identity,
     reduceMotion,
@@ -51,6 +60,9 @@ export default function VigilExperience() {
   } = useVigilController();
 
   const isTelegram = useIsTelegram();
+  const isModal = presentation === 'modal';
+  const [breathPhase, setBreathPhase] =
+    useState<HeartBreathingPhase>('Inhale');
 
   useTelegramBottomButton({
     text: isOnCooldown ? `SPARK RETURNS IN ${cooldownLabel}` : 'SEND SPARK',
@@ -87,6 +99,45 @@ export default function VigilExperience() {
             ? 'Identity unavailable'
             : 'Sign in to send a spark'
         : 'Send Spark';
+
+  useEffect(() => {
+    if (!isModal) return;
+
+    let frame = 0;
+    const startedAt =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+
+    const tick = () => {
+      const now =
+        typeof performance !== 'undefined' ? performance.now() : Date.now();
+      let elapsed = now - startedAt;
+
+      // Read the running CSS animation directly so the caption cannot drift
+      // from the 10s breathing phase it describes.
+      const animations =
+        typeof heartRef.current?.getAnimations === 'function'
+          ? heartRef.current.getAnimations()
+          : [];
+      const breathing = animations.find((animation) =>
+        (animation as CSSAnimation).animationName.includes(
+          'temple-heart-breathing'
+        )
+      );
+
+      if (breathing && typeof breathing.currentTime === 'number') {
+        elapsed = breathing.currentTime;
+      }
+
+      const next = resolveHeartBreathingPhase(elapsed);
+
+      setBreathPhase((previous) => (previous === next ? previous : next));
+      frame = window.requestAnimationFrame(tick);
+    };
+
+    frame = window.requestAnimationFrame(tick);
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [heartRef, isModal]);
 
   const flameCaption = !flameReady
     ? 'Reading the shared flame'
@@ -221,7 +272,8 @@ export default function VigilExperience() {
           <div
             ref={heartRef}
             data-testid="vigil-heart"
-            className={styles.heart}
+            className={`${styles.heart}${isModal ? ` ${styles.heartModal}` : ''}`}
+            data-breathing-phase={isModal ? breathPhase : undefined}
             data-vigil-flame-state={flameStateLabel}
             data-vigil-intensity={flameVisuals.intensity.toFixed(4)}
             data-vigil-remaining-ms={Math.floor(flameVisuals.remainingMs)}
@@ -234,7 +286,7 @@ export default function VigilExperience() {
             <motion.div
               className={styles.heartBody}
               animate={
-                !flameLit || reduceMotion
+                isModal || !flameLit || reduceMotion
                   ? { scale: 1, opacity: 1 }
                   : {
                       scale: [1, 1.045, 1],
@@ -242,7 +294,7 @@ export default function VigilExperience() {
                     }
               }
               transition={
-                !flameLit || reduceMotion
+                isModal || !flameLit || reduceMotion
                   ? { duration: 0 }
                   : {
                       duration: 2.8,
@@ -281,8 +333,14 @@ export default function VigilExperience() {
               />
             </motion.div>
 
-            <span className={styles.heartCaption} aria-hidden="true">
-              {flameLit ? 'LIT' : 'WAITING'}
+            <span
+              className={styles.heartCaption}
+              data-testid={
+                isModal ? 'vigil-heart-breath-label' : 'vigil-heart-state-label'
+              }
+              aria-hidden="true"
+            >
+              {isModal ? breathPhase : flameLit ? 'LIT' : 'WAITING'}
             </span>
 
             <AnimatePresence>

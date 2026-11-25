@@ -20,7 +20,14 @@
 }
 
 :global(body:has([data-temple-theme='light'])) {
-  background-color: #f6f1e8;
+  /* The root layout ships an inline `background: #fff`; this scoped Temple
+     override is the only place the fixed ambient canvas is allowed to win. */
+  background-color: #f6f1e8 !important;
+  background-image:
+    radial-gradient(40% 50% at 8% 45%, rgba(124, 84, 214, 0.16) 0%, rgba(124, 84, 214, 0) 70%),
+    radial-gradient(40% 50% at 92% 45%, rgba(124, 84, 214, 0.16) 0%, rgba(124, 84, 214, 0) 70%),
+    radial-gradient(30% 22% at 50% 12%, rgba(200, 32, 43, 0.12) 0%, rgba(200, 32, 43, 0) 70%) !important;
+  background-attachment: fixed !important;
 }
 
 .stage {
@@ -36,6 +43,7 @@
   --blue: rgba(91, 132, 190, 0.34);
   --red: rgba(176, 56, 48, 0.3);
   --gold: #9a7437;
+  --lead: #2b2832;
   --focus: #2f5f9e;
 
   position: relative;
@@ -45,11 +53,8 @@
   overflow: hidden;
   color: var(--ink);
   color-scheme: light;
-  background:
-    radial-gradient(ellipse 46% 42% at 50% 6%, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 72%),
-    radial-gradient(ellipse 34% 52% at 0% 50%, rgba(91, 132, 190, 0.1) 0%, rgba(91, 132, 190, 0) 70%),
-    radial-gradient(ellipse 34% 52% at 100% 50%, rgba(91, 132, 190, 0.1) 0%, rgba(91, 132, 190, 0) 70%),
-    linear-gradient(180deg, var(--canvas) 0%, var(--canvas-deep) 100%);
+  /* The fixed ambient gradients live on the body so they cannot scroll. */
+  background: transparent;
   font-family:
     var(--font-inter),
     system-ui,
@@ -122,16 +127,6 @@
   justify-content: flex-start;
 }
 
-.railGlow {
-  position: absolute;
-  width: min(34vw, 26rem);
-  aspect-ratio: 1;
-  border-radius: 999px;
-  background: radial-gradient(circle at 50% 50%, var(--blue) 0%, rgba(91, 132, 190, 0.13) 46%, rgba(91, 132, 190, 0) 72%);
-  filter: blur(38px);
-  pointer-events: none;
-}
-
 .panel {
   position: relative;
   display: flex;
@@ -156,6 +151,9 @@
   background: transparent;
   object-fit: contain;
   box-shadow: none;
+  filter:
+    drop-shadow(0 0 1px var(--lead))
+    drop-shadow(0 26px 50px rgba(110, 70, 210, 0.45));
 }
 
 .panelLeft .panelImage {
@@ -309,7 +307,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: clamp(9rem, 20vh, 13.5rem);
+  width: min(46%, 230px);
   aspect-ratio: 1;
 }
 
@@ -332,7 +330,13 @@
   justify-content: center;
   width: 100%;
   height: 100%;
+  overflow: hidden;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 0 90px 10px rgba(200, 32, 43, 0.35);
   transform-origin: 50% 54%;
+  animation: temple-heartbeat 5s ease-in-out infinite;
   will-change: transform;
 }
 
@@ -350,26 +354,27 @@
 .heartLink:hover .heartPulse,
 .heartLink:focus .heartPulse,
 .heartLink:focus-visible .heartPulse {
-  animation: temple-heart-pulse 2200ms cubic-bezier(0.37, 0, 0.63, 1) infinite;
+  box-shadow: 0 0 120px 24px rgba(200, 32, 43, 0.5);
 }
 
-.heartLink:hover .heartRedGlow,
-.heartLink:focus .heartRedGlow,
-.heartLink:focus-visible .heartRedGlow {
-  filter: blur(29px);
-  opacity: 0.95;
-}
-
-@keyframes temple-heart-pulse {
-  0%,
-  100% {
+@keyframes temple-heartbeat {
+  0% {
     transform: scale(1);
   }
-  42% {
-    transform: scale(1.045);
+  8% {
+    transform: scale(1.035);
   }
-  58% {
-    transform: scale(1.03);
+  16% {
+    transform: scale(1);
+  }
+  24% {
+    transform: scale(1.025);
+  }
+  34% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1);
   }
 }
 
@@ -505,17 +510,15 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
   color: var(--ink);
   text-align: left;
-  transition:
-    border-color 180ms ease,
-    background-color 180ms ease,
-    transform 180ms ease;
+  transition: 0.25s;
 }
 
 .ritualCard:hover,
 .ritualCard:focus-visible {
-  border-color: var(--line-strong);
+  border-color: var(--c);
   background: rgba(255, 253, 249, 0.95);
-  transform: translateY(-1px);
+  box-shadow: 0 14px 34px -14px var(--c);
+  transform: translateY(-3px);
 }
 
 .ritualIcon {
@@ -1264,11 +1267,6 @@
     padding-left: 0.45rem;
   }
 
-  .railGlow {
-    width: min(48vw, 16rem);
-    filter: blur(30px);
-  }
-
   .panel {
     max-width: min(34vw, 12rem);
   }
@@ -1312,10 +1310,6 @@
   .layout {
     padding-right: max(0.9rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
     padding-left: max(0.9rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
-  }
-
-  .heartStage {
-    width: clamp(8.5rem, 40vw, 10.5rem);
   }
 
   .title {
@@ -1440,16 +1434,8 @@
 /* --- Reduced motion ----------------------------------------------------- */
 
 @media (prefers-reduced-motion: reduce) {
-  .heartLink:hover .heartPulse,
-  .heartLink:focus .heartPulse,
-  .heartLink:focus-visible .heartPulse {
+  .heartPulse {
     animation: none;
-  }
-
-  .heartLink:hover .heartRedGlow,
-  .heartLink:focus .heartRedGlow,
-  .heartLink:focus-visible .heartRedGlow {
-    filter: blur(24px);
   }
 
   .stage *,

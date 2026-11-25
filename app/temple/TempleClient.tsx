@@ -580,7 +580,6 @@ export default function TempleClient({
           data-testid="temple-left-rail"
           aria-label="Stained-glass Angel"
         >
-          <span className={styles.railGlow} aria-hidden="true" />
           <figure className={`${styles.panel} ${styles.panelLeft}`}>
             <Image
               data-testid="temple-left-panel"
@@ -635,6 +634,7 @@ export default function TempleClient({
                 onClick={() => hapticImpact('vigil')}
                 aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}.`}
                 className={styles.heartLink}
+                style={{ '--c': '#c8202b' } as React.CSSProperties}
               >
                 <span className={styles.heartStage}>
                   <span
@@ -755,7 +755,12 @@ export default function TempleClient({
                       onClick={() => hapticImpact('ritual-select')}
                       className={styles.ritualCard}
                       aria-label={ritual.label}
-                      style={{ '--accent': meta.accent } as React.CSSProperties}
+                      style={
+                        {
+                          '--accent': meta.accent,
+                          '--c': meta.accent,
+                        } as React.CSSProperties
+                      }
                     >
                       <span className={styles.ritualIcon} aria-hidden="true">
                         <Icon size={16} />
@@ -1000,7 +1005,6 @@ export default function TempleClient({
           data-testid="temple-right-rail"
           aria-label="Stained-glass Demon"
         >
-          <span className={styles.railGlow} aria-hidden="true" />
           <figure className={`${styles.panel} ${styles.panelRight}`}>
             <Image
               data-testid="temple-right-panel"

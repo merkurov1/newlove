@@ -200,18 +200,23 @@ async function expectLightCanvas(page: Page) {
 
   const theme = await stage.evaluate((element) => {
     const computed = window.getComputedStyle(element);
+    const body = window.getComputedStyle(document.body);
 
     return {
       colorScheme: computed.colorScheme,
       color: computed.color,
-      backgroundImage: computed.backgroundImage,
+      bodyColor: body.backgroundColor,
+      bodyImage: body.backgroundImage,
+      bodyAttachment: body.backgroundAttachment,
     };
   });
 
   expect(theme.colorScheme).toBe('light');
   expect(theme.color).toBe('rgb(37, 31, 26)');
-  expect(theme.backgroundImage).toContain('rgb(246, 241, 232)');
-  expect(theme.backgroundImage).not.toContain('rgb(11, 12, 16)');
+  expect(theme.bodyColor).toBe('rgb(246, 241, 232)');
+  expect(theme.bodyImage).toContain('rgba(124, 84, 214, 0.16)');
+  expect(theme.bodyImage).toContain('rgba(200, 32, 43, 0.12)');
+  expect(theme.bodyAttachment).toBe('fixed');
 }
 
 test.describe('Temple Sanctuary', () => {
@@ -484,7 +489,7 @@ test.describe('Temple Sanctuary', () => {
     });
   });
 
-  test('heart pulses only on hover or focus and respects reduced motion', async ({
+  test('heart keeps the 5s heartbeat, hover glow and reduced-motion opt out', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -493,23 +498,32 @@ test.describe('Temple Sanctuary', () => {
     const heartLink = page.getByRole('link', { name: /Light the Vigil heart/ });
     const pulse = page.getByTestId('temple-heart-pulse');
 
-    const animationName = () =>
-      pulse.evaluate((element) => window.getComputedStyle(element).animationName);
+    const animation = () =>
+      pulse.evaluate((element) => {
+        const computed = window.getComputedStyle(element);
 
-    expect(await animationName()).toBe('none');
+        return {
+          name: computed.animationName,
+          duration: computed.animationDuration,
+        };
+      });
+
+    await expect.poll(animation).toMatchObject({
+      name: expect.stringContaining('temple-heartbeat'),
+      duration: '5s',
+    });
 
     await heartLink.hover();
-    await expect.poll(animationName).toContain('temple-heart-pulse');
+    await page.waitForTimeout(300);
 
-    await page.mouse.move(4, 4);
-    await expect.poll(animationName).toBe('none');
-
-    await heartLink.focus();
-    await expect.poll(animationName).toContain('temple-heart-pulse');
+    expect(
+      await pulse.evaluate((element) => getComputedStyle(element).boxShadow)
+    ).toContain('rgba(200, 32, 43, 0.5)');
 
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await heartLink.hover();
-    expect(await animationName()).toBe('none');
+    await expect
+      .poll(async () => (await animation()).name)
+      .toBe('none');
   });
 
   test('heart links to the real Vigil and shows the authoritative count', async ({
@@ -747,4 +761,235 @@ test.describe('Temple Sanctuary', () => {
     expect(checkoutBodies).toHaveLength(1);
     expect(checkoutBodies[0]).toMatchObject({ amount: 20, currency: 'usd' });
   });
+});
+
+// ---------------------------------------------------------------------------
+// Reference reveal, focus and reduced-motion checks
+// ---------------------------------------------------------------------------
+
+async function overlayVars(modal: ReturnType<Page['getByTestId']>) {
+  return modal.evaluate((element) => ({
+    x: element.style.getPropertyValue('--x'),
+    y: element.style.getPropertyValue('--y'),
+    color: element.style.getPropertyValue('--c'),
+    state: element.getAttribute('data-state'),
+  }));
+}
+
+test.describe('Temple ritual modal reveal', () => {
+  test('opens from the ritual-card centre, focuses ← Temple, locks scroll and closes back', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    const card = page.getByRole('link', { name: 'Calm' });
+
+    await card.scrollIntoViewIfNeeded();
+    await card.hover();
+    await page.waitForTimeout(400);
+
+    const box = await card.boundingBox();
+
+    expect(box).not.toBeNull();
+
+    await card.click();
+
+    const modal = page.getByTestId('temple-modal');
+
+    await expect(modal).toHaveAttribute('data-state', 'open');
+
+    const vars = await overlayVars(modal);
+
+    expect(parseFloat(vars.x)).toBeCloseTo(box!.x + box!.width / 2, 0);
+    expect(parseFloat(vars.y)).toBeCloseTo(box!.y + box!.height / 2, 0);
+    expect(vars.color).toBe('#5d7f9b');
+
+    await expect(
+      page.getByRole('button', { name: '← Temple' })
+    ).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.body).overflow))
+      .toBe('hidden');
+
+    await page.keyboard.press('Escape');
+
+    await expect(modal).toHaveAttribute('data-state', 'closed');
+    await expect(page).toHaveURL(/\/temple$/);
+    await expect(card).toBeFocused();
+    await expect
+      .poll(() => page.evaluate(() => getComputedStyle(document.body).overflow))
+      .not.toBe('hidden');
+  });
+
+  test('opens the heart modal from the heart centre with the Vigil accent', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    const heart = page.getByRole('link', { name: /Light the Vigil heart/ });
+
+    await heart.scrollIntoViewIfNeeded();
+
+    const box = await heart.boundingBox();
+
+    expect(box).not.toBeNull();
+
+    await heart.click();
+
+    const modal = page.getByTestId('temple-modal');
+
+    await expect(modal).toHaveAttribute('data-state', 'open');
+
+    const vars = await overlayVars(modal);
+
+    expect(parseFloat(vars.x)).toBeCloseTo(box!.x + box!.width / 2, 0);
+    expect(parseFloat(vars.y)).toBeCloseTo(box!.y + box!.height / 2, 0);
+    expect(vars.color).toBe('#c8202b');
+
+    await page.keyboard.press('Escape');
+    await expect(page).toHaveURL(/\/temple$/);
+  });
+
+  test('keeps the 5s home heartbeat and the 10s modal Inhale/Exhale cycle', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    const pulse = page.getByTestId('temple-heart-pulse');
+    const heartbeat = await pulse.evaluate((element) => {
+      const computed = getComputedStyle(element);
+
+      return {
+        name: computed.animationName,
+        duration: computed.animationDuration,
+        easing: computed.animationTimingFunction,
+        iteration: computed.animationIterationCount,
+      };
+    });
+
+    expect(heartbeat.name).toContain('temple-heartbeat');
+    expect(heartbeat.duration).toBe('5s');
+    expect(heartbeat.easing).toBe('ease-in-out');
+    expect(heartbeat.iteration).toBe('infinite');
+
+    const heart = page.getByRole('link', { name: /Light the Vigil heart/ });
+
+    await heart.scrollIntoViewIfNeeded();
+    await heart.click();
+
+    const modalHeart = page.getByTestId('vigil-heart');
+
+    await expect(modalHeart).toHaveAttribute('data-breathing-phase', 'Inhale');
+    await expect(page.getByTestId('vigil-heart-breath-label')).toHaveText(
+      'Inhale'
+    );
+
+    const breathing = await modalHeart.evaluate((element) => {
+      const computed = getComputedStyle(element);
+
+      return {
+        name: computed.animationName,
+        duration: computed.animationDuration,
+      };
+    });
+
+    expect(breathing.name).toContain('temple-heart-breathing');
+    expect(breathing.duration).toBe('10s');
+
+    await page.waitForTimeout(4_200);
+
+    await expect(modalHeart).toHaveAttribute('data-breathing-phase', 'Exhale');
+    await expect(page.getByTestId('vigil-heart-breath-label')).toHaveText(
+      'Exhale'
+    );
+  });
+
+  test('prefers-reduced-motion disables the reveal transition', async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    await page.getByRole('link', { name: 'Calm' }).click();
+
+    const modal = page.getByTestId('temple-modal');
+
+    await expect(modal).toHaveAttribute('data-state', 'open');
+
+    const transition = await modal.evaluate((element) => {
+      const computed = getComputedStyle(element);
+
+      return {
+        duration: computed.transitionDuration,
+        property: computed.transitionProperty,
+      };
+    });
+
+    expect(transition.duration).toBe('0s');
+    expect(transition.property).toBe('none');
+  });
+});
+
+test.describe('Temple reference screenshots', () => {
+  test('captures the open Calm ritual modal after its reveal', async ({
+    page,
+  }) => {
+    const outputDir = path.resolve(
+      process.cwd(),
+      'test-results/temple-reference'
+    );
+
+    fs.mkdirSync(outputDir, { recursive: true });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+    await page.getByRole('link', { name: 'Calm' }).click();
+    await expect(page.getByTestId('temple-modal')).toHaveAttribute(
+      'data-state',
+      'open'
+    );
+    await page.waitForTimeout(900);
+    await page.screenshot({
+      path: path.join(outputDir, 'modal-calm-light-desktop.png'),
+    });
+  });
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`captures the Temple in ${scheme} theme at 1440 and 390`, async ({
+      page,
+    }) => {
+      const outputDir = path.resolve(
+        process.cwd(),
+        'test-results/temple-reference'
+      );
+
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      await page.emulateMedia({ colorScheme: scheme });
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await openTemple(page);
+      await page.getByTestId('temple-center-scroll').evaluate((element) => {
+        element.scrollTop = 0;
+      });
+      await page.waitForTimeout(250);
+      await page.screenshot({
+        path: path.join(outputDir, `temple-${scheme}-desktop.png`),
+      });
+
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.reload();
+      await openTemple(page);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(250);
+      await page.screenshot({
+        path: path.join(outputDir, `temple-${scheme}-mobile-390.png`),
+        fullPage: true,
+      });
+    });
+  }
 });

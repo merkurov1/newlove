@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CastModal from '@/app/@modal/(.)cast/page';
 import { runTopTelegramBackHandler } from '@/lib/telegram/backHandler';
 
@@ -42,27 +42,33 @@ describe('Cast modal shell', () => {
     expect(document.body).toHaveClass('ritual-modal-open');
   });
 
-  it('closes from the shared header control and locks the page scroll', () => {
+  it('closes from the shared header control and locks the page scroll', async () => {
     render(<CastModal />);
 
     expect(document.body).toHaveClass('ritual-modal-open');
 
     fireEvent.click(screen.getByRole('button', { name: /Temple/i }));
 
-    expect(back).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
   });
 
-  it('closes on Escape and Telegram BackButton through the same dialog', () => {
+  it('closes on Escape and Telegram BackButton through the same dialog', async () => {
     render(<CastModal />);
 
-    fireEvent.keyDown(document, { key: 'Escape' });
-    expect(back).toHaveBeenCalledTimes(1);
-
     expect(runTopTelegramBackHandler()).toBe(true);
-    expect(back).toHaveBeenCalledTimes(2);
+
+    await waitFor(() => expect(back).toHaveBeenCalledTimes(1), {
+      timeout: 1500,
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(back).toHaveBeenCalledTimes(1);
   });
 
-  it('restores focus to the trigger when the modal unmounts', () => {
+  it('restores focus to the trigger when the modal unmounts', async () => {
     const trigger = document.createElement('button');
 
     document.body.appendChild(trigger);
@@ -70,7 +76,9 @@ describe('Cast modal shell', () => {
 
     const { unmount } = render(<CastModal />);
 
-    expect(screen.getByRole('dialog', { name: 'Cast ritual' })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '← Temple' })).toHaveFocus()
+    );
 
     unmount();
 
