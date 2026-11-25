@@ -9,10 +9,14 @@
 export const FLOW_READER_STATE_VERSION = 1;
 export const FLOW_READER_STATE_KEY = 'flow_reader_state_v1';
 export const FLOW_FEED_STATE_KEY = 'flow_feed_state_v1';
+/** Appearance preferences are deliberately separate: they are not progress. */
+export const FLOW_READER_PREFS_VERSION = 1;
+export const FLOW_READER_PREFS_KEY = 'flow_reader_prefs_v1';
 /** Older sessions only stored a raw number under this key. */
 export const LEGACY_FLOW_SCROLL_KEY = 'flow_scroll_y';
 
-export type StorageLike = Pick<Storage, 'getItem'> & Partial<Pick<Storage, 'setItem' | 'removeItem'>>;
+export type StorageLike = Pick<Storage, 'getItem'> &
+  Partial<Pick<Storage, 'setItem' | 'removeItem'>>;
 
 export type FlowLastRead = {
   slug: string;
@@ -26,6 +30,31 @@ export type FlowLastRead = {
 export type FlowReaderState = {
   version: typeof FLOW_READER_STATE_VERSION;
   lastRead: FlowLastRead | null;
+};
+
+export type FlowReaderTheme = 'light' | 'sepia' | 'dark';
+
+export type FlowReaderPrefs = {
+  version: typeof FLOW_READER_PREFS_VERSION;
+  theme: FlowReaderTheme;
+  /** Multiplier applied to the base text size. */
+  fontScale: number;
+  /** Multiplier applied to body line-height. */
+  lineHeight: number;
+  focusMode: boolean;
+};
+
+export const FLOW_READER_FONT_SCALE_MIN = 0.85;
+export const FLOW_READER_FONT_SCALE_MAX = 1.5;
+export const FLOW_READER_LINE_HEIGHT_MIN = 1.45;
+export const FLOW_READER_LINE_HEIGHT_MAX = 2.1;
+
+export const DEFAULT_FLOW_READER_PREFS: FlowReaderPrefs = {
+  version: FLOW_READER_PREFS_VERSION,
+  theme: 'light',
+  fontScale: 1,
+  lineHeight: 1.75,
+  focusMode: false,
 };
 
 export type FlowFeedPosition = {
@@ -139,9 +168,9 @@ export function writeFlowLastRead(
     version: FLOW_READER_STATE_VERSION,
     lastRead: {
       slug,
-      title: cleanTitle(input.title) || (sameItem ? previous?.title ?? '' : ''),
-      progress: clampProgress(input.progress ?? (sameItem ? previous?.progress ?? 0 : 0)),
-      openedAt: sameItem ? previous?.openedAt ?? now : now,
+      title: cleanTitle(input.title) || (sameItem ? (previous?.title ?? '') : ''),
+      progress: clampProgress(input.progress ?? (sameItem ? (previous?.progress ?? 0) : 0)),
+      openedAt: sameItem ? (previous?.openedAt ?? now) : now,
       updatedAt: now,
     },
   });
@@ -175,6 +204,99 @@ export function writeFlowReadingProgress(
       updatedAt: nowMs(now),
     },
   });
+}
+
+function clampNumber(value: unknown, minimum: number, maximum: number, fallback: number): number {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return fallback;
+
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
+function roundTo(value: number, step: number): number {
+  return Number((Math.round(value / step) * step).toFixed(2));
+}
+
+/**
+ * Validate any stored or hand-edited preference payload. Unknown fields are
+ * dropped, numbers are clamped and the whole object is rebuilt so a bad value
+ * can never leak into CSS or storage.
+ */
+export function sanitizeFlowReaderPrefs(value: unknown): FlowReaderPrefs {
+  if (!isRecord(value)) return { ...DEFAULT_FLOW_READER_PREFS };
+
+  const theme: FlowReaderTheme =
+    value.theme === 'light' || value.theme === 'sepia' || value.theme === 'dark'
+      ? value.theme
+      : DEFAULT_FLOW_READER_PREFS.theme;
+
+  const fontScale = roundTo(
+    clampNumber(
+      value.fontScale,
+      FLOW_READER_FONT_SCALE_MIN,
+      FLOW_READER_FONT_SCALE_MAX,
+      DEFAULT_FLOW_READER_PREFS.fontScale
+    ),
+    0.01
+  );
+
+  const lineHeight = roundTo(
+    clampNumber(
+      value.lineHeight,
+      FLOW_READER_LINE_HEIGHT_MIN,
+      FLOW_READER_LINE_HEIGHT_MAX,
+      DEFAULT_FLOW_READER_PREFS.lineHeight
+    ),
+    0.01
+  );
+
+  return {
+    version: FLOW_READER_PREFS_VERSION,
+    theme,
+    fontScale,
+    lineHeight,
+    focusMode: value.focusMode === true,
+  };
+}
+
+/** Read and validate appearance preferences. Never throws. */
+export function readFlowReaderPrefs(storage?: StorageLike | null): FlowReaderPrefs {
+  if (!storage) return { ...DEFAULT_FLOW_READER_PREFS };
+
+  try {
+    const raw = storage.getItem(FLOW_READER_PREFS_KEY);
+
+    if (!raw) return { ...DEFAULT_FLOW_READER_PREFS };
+
+    const parsed: unknown = JSON.parse(raw);
+
+    if (!isRecord(parsed) || parsed.version !== FLOW_READER_PREFS_VERSION) {
+      return { ...DEFAULT_FLOW_READER_PREFS };
+    }
+
+    return sanitizeFlowReaderPrefs(parsed);
+  } catch {
+    return { ...DEFAULT_FLOW_READER_PREFS };
+  }
+}
+
+/** Persist appearance preferences. Only validated, non-identifying fields. */
+export function writeFlowReaderPrefs(
+  storage: StorageLike | null | undefined,
+  prefs: FlowReaderPrefs
+): FlowReaderPrefs {
+  const next = sanitizeFlowReaderPrefs(prefs);
+
+  if (!storage?.setItem) return next;
+
+  try {
+    storage.setItem(FLOW_READER_PREFS_KEY, JSON.stringify(next));
+  } catch {
+    /* Quota or private-mode failures are intentionally silent. */
+  }
+
+  return next;
 }
 
 export function readFlowFeedPosition(storage?: StorageLike | null): FlowFeedPosition | null {

@@ -212,7 +212,9 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.getByRole('link', { name: 'Two rooms, one light' }).first().click();
 
-    await expect(page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
 
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'flow-reader-390x844.png'),
@@ -269,8 +271,8 @@ test.describe('Flow reader — Telegram', () => {
     await story.click();
 
     expect(
-      await page.evaluate(
-        () => Boolean((window as unknown as { __flowStory?: unknown }).__flowStory)
+      await page.evaluate(() =>
+        Boolean((window as unknown as { __flowStory?: unknown }).__flowStory)
       )
     ).toBe(true);
   });
@@ -285,7 +287,9 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.goto('/flow/reader-with-images');
 
-    await expect(page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
     await expect(page.locator('body')).toHaveClass(/telegram-app/);
     await expect(page.locator('body')).toHaveClass(/telegram-fullscreen-close/);
 
@@ -310,7 +314,9 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.goto('/flow/reader-with-images');
 
-    await expect(page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
     await expect(page.locator('body')).not.toHaveClass(/telegram-app/);
     await expect(page.getByRole('progressbar', { name: 'Reading progress' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open Flow navigation' })).toHaveCount(0);
@@ -321,6 +327,158 @@ test.describe('Flow reader — Telegram', () => {
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'flow-reader-browser-fallback-390x844.png'),
     });
+  });
+
+  test('browser reading controls persist appearance, expose contents and keep vertical reading intact', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockFlowApis(page);
+    await mockImages(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+
+    const appearance = page.getByRole('button', { name: 'Appearance settings' });
+
+    await expect(appearance).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Contents' })).toBeVisible();
+
+    // Controls sit above the publication text in normal flow, not over it.
+    const controlBox = await page.locator('.flow-reader__controls').boundingBox();
+    const contentBox = await page.locator('.flow-reader__meta').boundingBox();
+
+    expect(controlBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+    expect(controlBox!.y + controlBox!.height).toBeLessThanOrEqual(contentBox!.y + 1);
+
+    await appearance.click();
+
+    const settings = page.getByRole('dialog', { name: 'Appearance' });
+
+    await settings.getByRole('button', { name: 'Increase text size' }).click();
+    await expect(settings.getByText('110%')).toBeVisible();
+
+    await settings.getByRole('button', { name: 'Dark' }).click();
+    await expect(page.locator('html')).toHaveAttribute('data-flow-reader-theme', 'dark');
+    await expect(page.locator('.flow-post-page--reader')).toHaveCSS(
+      'background-color',
+      'rgb(18, 18, 18)'
+    );
+
+    const stored = await page.evaluate(() => window.localStorage.getItem('flow_reader_prefs_v1'));
+
+    expect(stored).toContain('"fontScale":1.1');
+    expect(stored).toContain('"theme":"dark"');
+    expect(stored).not.toMatch(/initData|telegram|user_id|token/i);
+
+    await page.keyboard.press('Escape');
+    await expect(settings).toHaveCount(0);
+
+    await page.reload();
+    await page.getByRole('button', { name: 'Appearance settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Appearance' }).getByText('110%')).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Contents' }).click();
+
+    const toc = page.getByRole('navigation', { name: 'Table of contents' });
+
+    await expect(toc.getByRole('button', { name: 'A room with one light' })).toBeVisible();
+    await page.keyboard.press('Escape');
+
+    await page.getByRole('button', { name: 'Focus mode' }).click();
+    await expect(page.locator('body')).toHaveClass(/flow-reader-focus/);
+    await expect(page.locator('.flow-reader__meta')).toBeHidden();
+
+    // Text selection remains a normal vertical document selection.
+    const selection = await page.evaluate(() => {
+      const paragraph = document.querySelector('.flow-item p');
+      const range = document.createRange();
+
+      if (!paragraph) return '';
+
+      range.selectNodeContents(paragraph);
+
+      const current = window.getSelection();
+
+      current?.removeAllRanges();
+      current?.addRange(range);
+
+      return current?.toString() ?? '';
+    });
+
+    expect(selection.length).toBeGreaterThan(20);
+
+    expect(
+      await page.evaluate(() => {
+        const article = document.querySelector('.flow-item');
+
+        return article ? getComputedStyle(article).userSelect : 'none';
+      })
+    ).not.toBe('none');
+
+    // Browser text zoom / Dynamic Type must not create horizontal pagination.
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
+    ).toBe(true);
+  });
+
+  test('1280px desktop reading controls stay outside the text measure', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await mockFlowApis(page);
+    await mockImages(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(page.getByRole('button', { name: 'Appearance settings' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Contents' })).toBeVisible();
+
+    const controlBox = await page.locator('.flow-reader__controls').boundingBox();
+    const contentBox = await page.locator('.flow-reader__meta').boundingBox();
+
+    expect(controlBox).not.toBeNull();
+    expect(contentBox).not.toBeNull();
+    expect(controlBox!.y + controlBox!.height).toBeLessThanOrEqual(contentBox!.y + 1);
+
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)
+    ).toBe(true);
+  });
+
+  test('reduced motion keeps reader controls still', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await mockFlowApis(page);
+    await mockImages(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    expect(
+      await page.evaluate(() => {
+        const article = document.querySelector('.flow-item');
+
+        return article ? getComputedStyle(article).animationName : 'missing';
+      })
+    ).toBe('none');
+
+    await page.getByRole('button', { name: 'Appearance settings' }).click();
+    await expect(page.getByRole('dialog', { name: 'Appearance' })).toBeVisible();
+
+    expect(
+      await page.evaluate(() => {
+        const panel = document.querySelector('.flow-reader-dialog__panel');
+
+        return panel ? getComputedStyle(panel).animationName : 'missing';
+      })
+    ).toBe('none');
   });
 
   test('restores the feed from a stable entry anchor after a reload', async ({ page }) => {
@@ -337,7 +495,11 @@ test.describe('Flow reader — Telegram', () => {
 
       entry?.scrollIntoView({ block: 'start' });
     });
-    await page.waitForTimeout(350);
+    await page.waitForTimeout(300);
+    // A second, tiny scroll guarantees the throttled feed writer runs even if
+    // an earlier viewport event consumed the first frame.
+    await page.evaluate(() => window.scrollBy(0, 24));
+    await page.waitForTimeout(120);
 
     const saved = await page.evaluate(() => {
       const raw = window.sessionStorage.getItem('flow_feed_state_v1');
@@ -349,8 +511,10 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.reload();
     await expect(page.getByRole('link', { name: 'Two rooms, one light' })).toBeVisible();
-    await page.waitForTimeout(500);
 
-    expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(120);
+    // Restoration may wait for image boxes and a second animation frame.
+    await expect
+      .poll(() => page.evaluate(() => window.scrollY), { timeout: 3_000 })
+      .toBeGreaterThan(120);
   });
 });
