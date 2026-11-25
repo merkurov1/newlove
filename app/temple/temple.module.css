@@ -413,6 +413,36 @@
   text-transform: uppercase;
 }
 
+.vigilEntry {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.1rem;
+  color: var(--gold);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  transition: gap 180ms ease;
+}
+
+.vigilEntryArrow {
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 180ms ease;
+}
+
+.heartLink:hover .vigilEntry,
+.heartLink:focus-visible .vigilEntry {
+  gap: 0.55rem;
+}
+
+.heartLink:hover .vigilEntryArrow,
+.heartLink:focus-visible .vigilEntryArrow {
+  transform: translateX(2px);
+}
+
 .eyebrow {
   margin: clamp(1.3rem, 3vh, 2.1rem) 0 0;
   color: var(--muted);
@@ -479,6 +509,50 @@
   letter-spacing: 0.16em;
   line-height: 1.5;
   text-align: right;
+  text-transform: uppercase;
+}
+
+.sectionMark {
+  flex: 0 0 auto;
+  color: var(--gold);
+  opacity: 0.75;
+}
+
+.groupHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  text-align: left;
+}
+
+.groupIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 1px solid rgba(154, 116, 55, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 253, 249, 0.55);
+  color: var(--gold);
+}
+
+.groupTitle {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 1.08rem;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.groupNote {
+  margin: 0.15rem 0 0;
+  color: var(--faint);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  line-height: 1.5;
   text-transform: uppercase;
 }
 
@@ -667,6 +741,28 @@
   text-align: center;
 }
 
+/* --- Community / home-screen groups ------------------------------------- */
+
+.communitySection {
+  padding-top: clamp(1.1rem, 2.6vh, 1.8rem);
+}
+
+.communityCard {
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(154, 116, 55, 0.2);
+  border-radius: 1rem;
+  background:
+    radial-gradient(ellipse 90% 130% at 50% 0%, rgba(154, 116, 55, 0.1) 0%, rgba(154, 116, 55, 0) 74%),
+    rgba(255, 253, 249, 0.38);
+}
+
+.homeHintSection {
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding-top: clamp(0.9rem, 2.2vh, 1.4rem);
+}
+
 /* --- Traces ------------------------------------------------------------- */
 
 .tracesPanel {
@@ -675,8 +771,34 @@
 
 .tracesActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: flex-end;
+  gap: 0.45rem;
+}
+
+.chroniclesLink {
+  border-color: rgba(154, 116, 55, 0.32);
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.chroniclesLink:hover,
+.chroniclesLink:focus-visible {
+  border-color: rgba(154, 116, 55, 0.62);
+  color: var(--ink);
+}
+
+.chroniclesArrow {
+  margin-left: 0.28rem;
+  font-size: 11px;
+  line-height: 1;
+  transition: transform 180ms ease;
+}
+
+.chroniclesLink:hover .chroniclesArrow,
+.chroniclesLink:focus-visible .chroniclesArrow {
+  transform: translateX(2px);
 }
 
 .ghostButton {
@@ -813,30 +935,79 @@
 /* --- Chambers / footer -------------------------------------------------- */
 
 .chamberGrid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chamberItem {
+  min-width: 0;
 }
 
 .chamberLink {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  min-height: 40px;
-  padding: 0.45rem 0.8rem;
+  gap: 0.65rem;
+  min-height: 48px;
+  height: 100%;
+  padding: 0.6rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 0.8rem;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.18) 100%);
   color: var(--muted);
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  transition: color 180ms ease, border-color 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.chamberIndex {
+  flex: 0 0 auto;
+  color: var(--gold);
+  font-family: var(--font-cormorant), 'Cormorant Garamond', Georgia, serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.chamberLabel {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: break-word;
+  line-height: 1.35;
+}
+
+.chamberArrow {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1;
+  transition: color 180ms ease, transform 180ms ease;
 }
 
 .chamberLink:hover,
 .chamberLink:focus-visible {
   border-color: var(--line-strong);
+  background: rgba(255, 253, 249, 0.92);
   color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.chamberLink:hover .chamberArrow,
+.chamberLink:focus-visible .chamberArrow {
+  color: var(--gold);
+  transform: translateX(2px);
 }
 
 .footer {
@@ -1213,6 +1384,8 @@
       'left right'
       'rituals rituals'
       'support support'
+      'community community'
+      'home home'
       'traces traces'
       'chambers chambers'
       'footer footer';
@@ -1290,6 +1463,14 @@
     grid-area: support;
   }
 
+  .communitySection {
+    grid-area: community;
+  }
+
+  .homeHintSection {
+    grid-area: home;
+  }
+
   .tracesSection {
     grid-area: traces;
   }
@@ -1338,6 +1519,19 @@
 
   .sectionNote {
     text-align: left;
+  }
+
+  .sectionMark {
+    display: none;
+  }
+
+  .tracesActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .chamberGrid {
+    grid-template-columns: 1fr;
   }
 
   .traceRow {

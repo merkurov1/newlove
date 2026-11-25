@@ -106,7 +106,7 @@ export default function SharedVigil() {
   }
 
   return (
-    <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-100/20 px-4 py-3 text-center">
+    <div className="mt-3 border-t border-amber-400/20 pt-3 text-center">
       <p className="font-mono text-[9px] uppercase tracking-[.16em] opacity-60">
         Shared Vigil{hint.title ? ` · ${hint.title}` : ''}
       </p>

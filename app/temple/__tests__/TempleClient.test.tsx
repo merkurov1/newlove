@@ -57,8 +57,11 @@ jest.mock('next/image', () => {
 
 jest.mock('@/components/useIsTelegram', () => ({
   __esModule: true,
-  default: () => false,
+  default: jest.fn(() => false),
 }));
+
+const useIsTelegramMock = require('@/components/useIsTelegram')
+  .default as jest.Mock;
 
 jest.mock('@/hooks/useVigilSupporters', () => ({
   useVigilSupporters: jest.fn(),
@@ -231,6 +234,7 @@ const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
 
 beforeEach(() => {
   vigilSupporters.useVigilSupporters.mockReturnValue(vigilSnapshot());
+  useIsTelegramMock.mockReturnValue(false);
   fetchMock.mockClear();
   checkoutClient.createTributeCheckout.mockClear();
   checkoutClient.openSecureCheckout.mockClear();
@@ -334,6 +338,52 @@ describe('Temple home composition', () => {
     expect(
       screen.getByRole('link', { name: /Light the Vigil heart/ })
     ).toHaveAttribute('href', '/vigil');
+  });
+
+  it('adds a quiet tap-or-hold cue without replacing the Vigil caption', () => {
+    render(<TempleClient />);
+
+    expect(
+      screen.getByText('VIGIL · TAP THE HEART TO KEEP WATCH')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Tap or hold the heart · Enter the Vigil/)
+    ).toBeInTheDocument();
+  });
+
+  it('keeps Tribute as its own group with the existing payment destinations', () => {
+    render(<TempleClient />);
+
+    const tribute = screen.getByRole('region', { name: 'Tribute' });
+
+    expect(
+      within(tribute).getByRole('link', { name: /support the temple/i })
+    ).toHaveAttribute('href', '/temple/support');
+    expect(
+      within(tribute).getByRole('button', { name: '$5' })
+    ).toBeInTheDocument();
+    expect(
+      within(tribute).getByRole('button', { name: '$20' })
+    ).toBeInTheDocument();
+    expect(
+      within(tribute).getByRole('button', { name: '$100' })
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('shared-vigil-group')).toBeNull();
+  });
+
+  it('gives Shared Vigil its own community group inside Telegram', () => {
+    useIsTelegramMock.mockReturnValue(true);
+
+    render(<TempleClient />);
+
+    const community = screen.getByTestId('shared-vigil-group');
+
+    expect(
+      within(community).getByRole('heading', { name: 'Shared Vigil' })
+    ).toBeInTheDocument();
+    expect(
+      within(community).getByText(/available in group chats/i)
+    ).toBeInTheDocument();
   });
 
   it('renders exactly four canonical ritual links', () => {
@@ -501,6 +551,50 @@ describe('Temple home composition', () => {
     expect(
       within(dialog).getByText(/Last 30 days · all eligible ritual events/i)
     ).toBeInTheDocument();
+  });
+
+  it('opens Chronicles from the Traces heading while Refresh remains available', async () => {
+    render(<TempleClient />);
+
+    const traces = screen.getByRole('region', { name: 'Traces' });
+
+    expect(
+      within(traces).getByRole('button', {
+        name: /refresh the latest temple traces/i,
+      })
+    ).toBeInTheDocument();
+
+    fireEvent.click(
+      within(traces).getByRole('button', { name: 'Open full Chronicles' })
+    );
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Chronicles' })
+    ).toBeInTheDocument();
+  });
+
+  it('keeps all seven chamber destinations in a library index', () => {
+    render(<TempleClient />);
+
+    const chambers = screen.getByRole('region', { name: 'Chambers' });
+
+    expect(within(chambers).getByRole('list')).toBeInTheDocument();
+    expect(
+      within(chambers)
+        .getAllByRole('link')
+        .map(link => [
+          link.textContent?.replace(/→$/, '').trim(),
+          link.getAttribute('href'),
+        ])
+    ).toEqual([
+      ['01Heritage', '/heritage'],
+      ['02Media Archive', '/media'],
+      ['03Unframed', '/unframed'],
+      ['04Flow', '/flow'],
+      ['05Flow Issues', '/flow-issues'],
+      ['06Selection', '/selection'],
+      ['07Journal', '/journal'],
+    ]);
   });
 
   it('states that the Temple stays light at every hour', async () => {
