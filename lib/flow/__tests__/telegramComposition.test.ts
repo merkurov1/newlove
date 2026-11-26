@@ -4,6 +4,10 @@ import { describe, expect, it } from '@jest/globals';
 
 import { normalizeFlowItem } from '../content';
 import {
+  TELEGRAM_CAPTION_LIMIT,
+  TELEGRAM_SAFE_CAPTION_LIMIT,
+  TELEGRAM_SAFE_TEXT_LIMIT,
+  clipTelegramPreviewExcerpt,
   composeTelegramPublication,
   ensureTelegramLinks,
   formatTelegramMessage,
@@ -106,13 +110,15 @@ describe('Telegram composition — text', () => {
     expect(result.fullHtml).not.toContain('<script>');
   });
 
-  it('splits text above 4096 characters without losing content', () => {
+  it('replaces a long article with one compact preview instead of splitting it', () => {
     const body = `${'Длинный текст про память и сети. '.repeat(300)}КОНЕЦ`;
     const result = composition({ title: 'Длинная статья', body_md: body });
-    expect(result.textOnlyParts.length).toBeGreaterThan(1);
-    expect(result.textOnlyParts.every((part) => part.length <= 3900)).toBe(true);
-    expect(result.textOnlyParts.join(' ')).toContain('КОНЕЦ');
+    expect(result.isPreview).toBe(true);
+    expect(result.textOnlyParts).toHaveLength(1);
+    expect(result.textOnlyParts[0].length).toBeLessThanOrEqual(3900);
     expect(result.textOnlyParts.join(' ')).toContain('Длинный текст');
+    expect(result.textOnlyParts.join(' ')).not.toContain('КОНЕЦ');
+    expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
   });
 
   it('preserves Cyrillic and emoji at split boundaries', () => {
@@ -367,7 +373,7 @@ describe('Telegram composition — compact link row', () => {
     expect(result.validation.ok).toBe(true);
   });
 
-  it('keeps anchors balanced when a long body is split into messages', () => {
+  it('keeps anchors balanced in a long-form preview', () => {
     const result = composition({
       title: 'Длинный текст',
       body_md: `${'Длинный текст про память и сети. '.repeat(300)}КОНЕЦ`,
@@ -375,18 +381,13 @@ describe('Telegram composition — compact link row', () => {
       metadata: {},
     });
 
-    const joined = result.textOnlyParts.join(' ');
-    expect(result.textOnlyParts.length).toBeGreaterThan(1);
-    expect(joined).toContain('КОНЕЦ');
-    expect(joined).toContain(SOURCE_URL);
-    expect(joined).toContain(FLOW_URL);
-    expect(
-      result.textOnlyParts.every(
-        (part) =>
-          (part.match(/<a\b/g) ?? []).length === (part.match(/<\/a>/g) ?? []).length
-      )
-    ).toBe(true);
-    expect(result.textOnlyParts.every((part) => part.length <= 3900)).toBe(true);
+    expect(result.isPreview).toBe(true);
+    expect(result.textOnlyParts).toHaveLength(1);
+    const part = result.textOnlyParts[0];
+    expect(part).toContain(FLOW_URL);
+    expect(part).not.toContain('КОНЕЦ');
+    expect((part.match(/<a\b/g) ?? []).length).toBe((part.match(/<\/a>/g) ?? []).length);
+    expect(part.length).toBeLessThanOrEqual(3900);
   });
 });
 
@@ -492,7 +493,7 @@ describe('Telegram composition — media', () => {
     expect(result.mediaType).toBe('video');
   });
 
-  it('splits a long article with an image into a caption and continuation', () => {
+  it('puts a long article preview in one image caption without a continuation', () => {
     const body = `${'Длинный абзац статьи. '.repeat(120)}ФИНАЛ`;
     const result = composition({
       type: 'article',
@@ -500,12 +501,230 @@ describe('Telegram composition — media', () => {
       body_md: body,
       metadata: { image: 'https://cdn.example.com/cover.jpg' },
     });
+    expect(result.isPreview).toBe(true);
     expect(result.mediaCaption).toBeTruthy();
     expect((result.mediaCaption ?? '').length).toBeLessThanOrEqual(950);
-    expect(result.textContinuation.length).toBeGreaterThan(0);
+    expect(result.textContinuation).toHaveLength(0);
+    expect(result.messageParts).toHaveLength(1);
     expect(result.messageParts[0].kind).toBe('media');
-    expect(result.messageParts.slice(1).every((part) => part.kind === 'text')).toBe(true);
-    expect(result.textContinuation.join(' ')).toContain('ФИНАЛ');
+    expect(result.mediaCaption).toContain('Длинная статья');
+    expect(result.mediaCaption).not.toContain('ФИНАЛ');
+    expect(hrefCount(result.mediaCaption ?? '', FLOW_URL)).toBe(1);
+  });
+});
+
+describe('Telegram composition — long-form preview', () => {
+  function longBody(sentinel = 'ФИНАЛ') {
+    return [
+      'Первый абзац начинается с главной мысли и задаёт направление всего текста.',
+      'Второй абзац добавляет подробности, примеры и объяснение того, почему это важно для читателя.',
+      'Третий абзац развивает аргумент и не должен оказаться в коротком превью.',
+      `${'Повторение аргумента для длины. '.repeat(60)}${sentinel}`,
+    ].join('\n\n');
+  }
+
+  it('sends a long post without media as one title/excerpt/Flow preview', () => {
+    const result = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+    });
+
+    expect(result.isPreview).toBe(true);
+    expect(result.preview?.excerptSource).toBe('body');
+    expect(result.textOnlyParts).toHaveLength(1);
+    expect(result.messageParts).toHaveLength(1);
+    expect(result.fullHtml).toContain('<b>Длинная публикация</b>');
+    expect(result.fullHtml).toContain('Первый абзац начинается');
+    expect(result.fullHtml).toContain('…');
+    expect(result.fullHtml).not.toContain('ФИНАЛ');
+    expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
+    expect(result.textOnlyParts[0].length).toBeLessThanOrEqual(
+      TELEGRAM_SAFE_CAPTION_LIMIT
+    );
+  });
+
+  it('prefers an authored excerpt over the body', () => {
+    const result = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+      metadata: { excerpt: 'Авторский эксклюзивный фрагмент для превью.' },
+    });
+
+    expect(result.isPreview).toBe(true);
+    expect(result.preview).toMatchObject({
+      excerpt: 'Авторский эксклюзивный фрагмент для превью.',
+      excerptSource: 'authored',
+      truncated: false,
+    });
+    expect(result.fullHtml).toContain('Авторский эксклюзивный фрагмент');
+    expect(result.fullHtml).not.toContain('Первый абзац начинается');
+  });
+
+  it('uses authored summary/description metadata when no excerpt exists', () => {
+    const summary = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+      metadata: { summary: 'Краткое авторское резюме.' },
+    });
+    const description = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+      metadata: { description: 'Авторское описание публикации.' },
+    });
+
+    expect(summary.preview).toMatchObject({
+      excerpt: 'Краткое авторское резюме.',
+      excerptSource: 'authored',
+    });
+    expect(description.preview).toMatchObject({
+      excerpt: 'Авторское описание публикации.',
+      excerptSource: 'authored',
+    });
+  });
+
+  it('falls back deterministically to the opening of the body', () => {
+    const first = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+    });
+    const second = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+    });
+
+    expect(first.preview?.excerptSource).toBe('body');
+    expect(first.preview?.excerpt).toBe(second.preview?.excerpt);
+    expect(first.preview?.excerpt.startsWith('Первый абзац')).toBe(true);
+    expect(first.preview?.excerpt).not.toContain('ФИНАЛ');
+  });
+
+  it('clips at paragraph and sentence boundaries with a restrained ellipsis', () => {
+    const firstParagraph = `${'Первый абзац остаётся целиком, потому что он важен. '.repeat(3)}`;
+    const secondParagraph = `${'Второй абзац не должен попасть в короткий фрагмент. '.repeat(20)}`;
+    const paragraphClip = clipTelegramPreviewExcerpt(
+      `${firstParagraph}\n\n${secondParagraph}`,
+      260
+    );
+
+    expect(paragraphClip.truncated).toBe(true);
+    expect(paragraphClip.text.startsWith('Первый абзац')).toBe(true);
+    expect(paragraphClip.text).not.toContain('Второй абзац');
+    expect(paragraphClip.text.endsWith('…')).toBe(true);
+
+    const sentenceClip = clipTelegramPreviewExcerpt(
+      `Первое предложение остаётся. Второе предложение тоже важно. ${'Дальше '.repeat(200)}`,
+      96
+    );
+
+    expect(sentenceClip.text).toMatch(/[.!?]…$/);
+    expect(sentenceClip.text.length).toBeLessThanOrEqual(96);
+    expect(sentenceClip.text).not.toContain('\uFFFD');
+  });
+
+  it('escapes HTML and ampersands in an authored excerpt', () => {
+    const result = composition({
+      type: 'article',
+      title: 'Безопасность',
+      body_md: longBody(),
+      metadata: { excerpt: 'A & B <unsafe>alert("x")</unsafe> & C' },
+    });
+
+    expect(result.isPreview).toBe(true);
+    expect(result.fullHtml).toContain('A &amp; B');
+    expect(result.fullHtml).toContain('&amp; C');
+    expect(result.fullHtml).not.toContain('<unsafe>');
+    expect(result.validation.ok).toBe(true);
+  });
+
+  it('never cuts a long URL through the middle', () => {
+    const longUrl = `https://example.com/${'segment-'.repeat(35)}end`;
+    const leading = clipTelegramPreviewExcerpt(
+      `${longUrl} После ссылки идёт полезный авторский текст. ${'Ещё текст. '.repeat(80)}`,
+      120
+    );
+
+    expect(leading.text).not.toContain('http');
+    expect(leading.text).toContain('После ссылки');
+    expect(leading.text.endsWith('…')).toBe(true);
+
+    const inside = clipTelegramPreviewExcerpt(
+      `Текст до ссылки. ${longUrl} Текст после ссылки. ${'Продолжение. '.repeat(100)}`,
+      500
+    );
+
+    expect(inside.text).toContain('Текст до ссылки.');
+    expect(inside.text).toContain(longUrl);
+    expect(inside.text).not.toMatch(/https?:\/\/\S*…$/);
+  });
+
+  it('keeps RU and EN previews localized and intact', () => {
+    const ru = composition({
+      type: 'article',
+      title: 'Русский заголовок',
+      body_md: longBody(),
+      lang: 'ru',
+    });
+    const en = composition({
+      type: 'article',
+      title: 'English title',
+      body_md: `${'English paragraph explaining the argument. '.repeat(80)}THE END`,
+      lang: 'en',
+    });
+
+    expect(ru.isPreview).toBe(true);
+    expect(en.isPreview).toBe(true);
+    expect(ru.fullHtml).toContain('Русский заголовок');
+    expect(ru.fullHtml).toContain('Первый абзац');
+    expect(en.fullHtml).toContain('English title');
+    expect(en.fullHtml).toContain('English paragraph');
+    expect(en.fullHtml).not.toContain('THE END');
+    expect(en.fullHtml).toContain('>Flow</a>');
+    expect(en.validation.ok).toBe(true);
+  });
+
+  it('keeps previews inside Telegram caption and text limits', () => {
+    const textOnly = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+    });
+    const withMedia = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: longBody(),
+      metadata: { image: 'https://cdn.example.com/cover.jpg' },
+    });
+
+    expect(textOnly.fullHtml.length).toBeLessThanOrEqual(TELEGRAM_SAFE_CAPTION_LIMIT);
+    expect(textOnly.textOnlyParts[0].length).toBeLessThanOrEqual(TELEGRAM_SAFE_TEXT_LIMIT);
+
+    expect(withMedia.mediaCaption).toBeTruthy();
+    expect((withMedia.mediaCaption ?? '').length).toBeLessThanOrEqual(
+      TELEGRAM_CAPTION_LIMIT
+    );
+    expect((withMedia.mediaCaption ?? '').length).toBeLessThanOrEqual(
+      TELEGRAM_SAFE_CAPTION_LIMIT
+    );
+    expect(withMedia.textContinuation).toHaveLength(0);
+  });
+
+  it('does not duplicate the Flow link or append an unnecessary source row', () => {
+    const result = composition({
+      type: 'article',
+      title: 'Длинная публикация',
+      body_md: `${longBody()} ${FLOW_URL}`,
+      source_url: SOURCE_URL,
+    });
+
+    expect(result.isPreview).toBe(true);
+    expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
+    expect(result.fullHtml).not.toContain(`<a href="${SOURCE_URL}">Источник</a>`);
   });
 });
 

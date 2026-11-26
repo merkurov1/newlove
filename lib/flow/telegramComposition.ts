@@ -9,6 +9,10 @@
 
 import {
   FLOW_SITE_URL,
+  graphemeLength,
+  graphemes,
+  isTechnicalText,
+  markdownToDisplayText,
   normalizeHttpUrl,
   truncateGraphemes,
   type FlowContent,
@@ -22,6 +26,15 @@ export const TELEGRAM_CAPTION_LIMIT = 1024;
 export const TELEGRAM_MEDIA_GROUP_LIMIT = 10;
 export const TELEGRAM_SAFE_TEXT_LIMIT = 3900;
 export const TELEGRAM_SAFE_CAPTION_LIMIT = 950;
+
+/**
+ * Telegram is a showcase for Flow, not a mirror of a long publication. As soon
+ * as the complete message no longer fits one comfortable media caption, the
+ * publication is represented by a single composed preview instead of a
+ * multi-message dump of the article.
+ */
+export const TELEGRAM_PREVIEW_THRESHOLD = TELEGRAM_SAFE_CAPTION_LIMIT;
+export const TELEGRAM_PREVIEW_LIMIT = TELEGRAM_SAFE_CAPTION_LIMIT;
 
 export type TelegramLanguage = 'ru' | 'en';
 
@@ -64,6 +77,15 @@ export type TelegramValidation = {
   warnings: string[];
 };
 
+export type TelegramPreviewSource = 'authored' | 'body';
+
+export type TelegramPreview = {
+  html: string;
+  excerpt: string;
+  excerptSource: TelegramPreviewSource | null;
+  truncated: boolean;
+};
+
 export type TelegramComposition = {
   contentType: FlowContent['contentType'];
   language: TelegramLanguage;
@@ -85,6 +107,8 @@ export type TelegramComposition = {
   messageParts: TelegramMessagePart[];
   fullHtml: string;
   textPartCount: number;
+  isPreview: boolean;
+  preview: TelegramPreview | null;
   validation: TelegramValidation;
 };
 
@@ -995,6 +1019,191 @@ function validateComposition(input: {
   return { ok: errors.length === 0, errors, warnings };
 }
 
+/* ------------------------------------------------------------------ */
+/* Long-form preview                                                   */
+/* ------------------------------------------------------------------ */
+
+const PREVIEW_URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
+
+function normalizePreviewSource(value: string): string {
+  return value
+    .replace(/\r\n?/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function authoredPreviewExcerpt(content: FlowContent): string | null {
+  const metadata = content.metadata ?? {};
+
+  for (const key of ['excerpt', 'summary', 'description']) {
+    const raw = metadata[key];
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+
+    // The excerpt is metadata authored/selected for display, not generated
+    // prose. Convert Markdown to readable plain text, but never ask a model.
+    const clean = normalizePreviewSource(markdownToDisplayText(raw));
+    if (clean && !isTechnicalText(clean)) return clean;
+  }
+
+  return null;
+}
+
+function stripFlowUrlFromExcerpt(text: string, flowUrl: string): string {
+  if (!text || !flowUrl) return text;
+
+  const variants = new Set([flowUrl, flowUrl.replace(/\/+$/, '')]);
+  let result = text;
+  for (const variant of variants) {
+    if (!variant) continue;
+    result = result.split(variant).join(' ');
+  }
+
+  return normalizePreviewSource(result);
+}
+
+function clipPreviewOnce(
+  text: string,
+  max: number
+): { text: string; truncated: boolean } {
+  const budget = Math.max(1, max - 1);
+  const slice = graphemes(text).slice(0, budget).join('');
+  let cut = slice.length;
+  const minimum = Math.max(1, Math.floor(budget * 0.55));
+
+  // Prefer a paragraph break, then a sentence, then a word boundary. The
+  // ellipsis always replaces the last grapheme of the budget.
+  const paragraph = slice.lastIndexOf('\n\n');
+  if (paragraph >= minimum) {
+    cut = paragraph;
+  } else {
+    const sentence = [...slice.matchAll(/[.!?…]["'»”)\]]?(?=\s|$)/g)].at(-1);
+    if (sentence && (sentence.index ?? 0) + sentence[0].length >= minimum) {
+      cut = (sentence.index ?? 0) + sentence[0].length;
+    } else {
+      const whitespace = slice.lastIndexOf(' ');
+      if (whitespace > 0) cut = whitespace;
+    }
+  }
+
+  // Never cut through a URL. If the boundary falls inside one, move the cut
+  // before the URL; the caller can retry with the prose that follows it.
+  for (const match of text.matchAll(PREVIEW_URL_PATTERN)) {
+    const start = match.index ?? 0;
+    const end = start + match[0].length;
+    if (cut > start && cut < end) {
+      cut = start;
+      break;
+    }
+  }
+
+  const clipped = text.slice(0, cut).trimEnd();
+  if (!clipped) return { text: '', truncated: true };
+
+  return {
+    text: clipped.endsWith('…') ? clipped : `${clipped}…`,
+    truncated: true,
+  };
+}
+
+/**
+ * Deterministic, paragraph-aware excerpt. It only ever shows the beginning of
+ * the supplied text and marks a continuation with an ellipsis.
+ */
+export function clipTelegramPreviewExcerpt(
+  value: string,
+  max: number
+): { text: string; truncated: boolean } {
+  const clean = normalizePreviewSource(value);
+  if (!clean) return { text: '', truncated: false };
+  if (max <= 0) return { text: '', truncated: true };
+  if (graphemeLength(clean) <= max) return { text: clean, truncated: false };
+
+  let candidate = clean;
+  let skippedLeadingUrl = false;
+
+  // A single leading URL longer than the budget cannot be shown intact. Drop
+  // it rather than cutting through the URL, then use the prose after it.
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const clipped = clipPreviewOnce(candidate, max);
+    if (clipped.text) {
+      return skippedLeadingUrl && !clipped.truncated
+        ? { text: `${clipped.text}…`, truncated: true }
+        : clipped;
+    }
+
+    const leadingUrl = candidate.match(/^https?:\/\/[^\s<>"']+/i);
+    if (!leadingUrl) break;
+    const rest = candidate.slice(leadingUrl[0].length).trimStart();
+    if (!rest) return { text: '', truncated: true };
+    candidate = rest;
+    skippedLeadingUrl = true;
+  }
+
+  return { text: '', truncated: true };
+}
+
+function buildTelegramPreview(input: {
+  content: FlowContent;
+  title: string;
+  titleVisible: boolean;
+  flowUrl: string;
+  language: TelegramLanguage;
+  limit?: number;
+}): TelegramPreview {
+  const limit = input.limit ?? TELEGRAM_PREVIEW_LIMIT;
+  const titleText = input.titleVisible ? input.title.trim() : '';
+  const titleHtml = titleText ? `<b>${escapeHtml(titleText)}</b>` : '';
+  const linkHtml = `<a href="${escapeHtmlAttribute(input.flowUrl)}">${escapeHtml(
+    telegramFlowLabel(input.language)
+  )}</a>`;
+
+  const prefix = titleHtml ? `${titleHtml}\n\n` : '';
+  const available = limit - prefix.length - linkHtml.length - 2;
+
+  const authored = authoredPreviewExcerpt(input.content);
+  const excerptSource: TelegramPreviewSource = authored ? 'authored' : 'body';
+  const sourceText = authored ?? input.content.bodyText;
+  const cleanExcerpt = stripFlowUrlFromExcerpt(sourceText, input.flowUrl);
+
+  let excerpt = '';
+  let truncated = false;
+
+  if (cleanExcerpt && available > 0) {
+    let budget = available;
+
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const clipped = clipTelegramPreviewExcerpt(cleanExcerpt, budget);
+      const html = escapeHtml(clipped.text);
+
+      if (html.length <= available) {
+        excerpt = clipped.text;
+        truncated = clipped.truncated;
+        break;
+      }
+
+      budget = Math.max(1, budget - (html.length - available) - 1);
+      if (budget <= 1) break;
+    }
+  }
+
+  const html = [titleHtml, excerpt ? escapeHtml(excerpt) : '', linkHtml]
+    .filter(Boolean)
+    .join('\n\n');
+
+  return {
+    html,
+    excerpt,
+    excerptSource: excerpt ? excerptSource : null,
+    truncated: excerpt ? truncated : Boolean(cleanExcerpt),
+  };
+}
+
+function shouldUseTelegramPreview(fullHtml: string): boolean {
+  return fullHtml.length > TELEGRAM_PREVIEW_THRESHOLD;
+}
+
 export function composeTelegramPublication(content: FlowContent): TelegramComposition {
   const language = telegramLanguage(content.language);
   const flowUrl = normalizeHttpUrl(content.canonicalUrl) ?? `${FLOW_SITE_URL}/flow`;
@@ -1029,7 +1238,7 @@ export function composeTelegramPublication(content: FlowContent): TelegramCompos
       ? telegramVideoLabel(language)
       : telegramSourceLabel(language);
 
-  const { html: fullHtml } = buildHtmlSections({
+  const { html: completeHtml } = buildHtmlSections({
     content,
     language,
     flowUrl,
@@ -1040,6 +1249,17 @@ export function composeTelegramPublication(content: FlowContent): TelegramCompos
     bodyHtml,
     sourceIncluded: bodyHasSource,
   });
+
+  const preview = shouldUseTelegramPreview(completeHtml)
+    ? buildTelegramPreview({
+        content,
+        title,
+        titleVisible,
+        flowUrl,
+        language,
+      })
+    : null;
+  const fullHtml = preview?.html ?? completeHtml;
 
   const imageMedia = content.images
     .map(mediaFromImage)
@@ -1113,8 +1333,12 @@ export function composeTelegramPublication(content: FlowContent): TelegramCompos
         kind: 'text',
         html,
         allowPreview:
-          index === 0 && mode === 'link' && Boolean(sourceUrl) && !media.length,
-        previewUrl: index === 0 ? sourceUrl ?? undefined : undefined,
+          !preview &&
+          index === 0 &&
+          mode === 'link' &&
+          Boolean(sourceUrl) &&
+          !media.length,
+        previewUrl: !preview && index === 0 ? sourceUrl ?? undefined : undefined,
       });
     });
   }
@@ -1165,6 +1389,8 @@ export function composeTelegramPublication(content: FlowContent): TelegramCompos
     messageParts,
     fullHtml,
     textPartCount,
+    isPreview: Boolean(preview),
+    preview,
     validation,
   };
 }
