@@ -5,6 +5,8 @@
  * the small, explicit boundary between that engine and the two Meta APIs.
  */
 
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export type MetaPublishPhase = 'container_created' | 'published';
 
 export type MetaPublishResult = {
@@ -34,4 +36,6 @@ export type MetaAdapterOptions = {
   resume?: MetaResumeState;
   now?: () => Date;
   sleep?: (ms: number) => Promise<void>;
+  /** Optional service-role store for the encrypted Facebook OAuth connection. */
+  store?: SupabaseClient | null;
 };

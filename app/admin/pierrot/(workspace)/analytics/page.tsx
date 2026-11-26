@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { unstable_cache } from 'next/cache';
+import { cookies } from 'next/headers';
 
 import { requireAdmin, getServerSupabaseClient } from '@/lib/serverAuth';
 import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
@@ -8,6 +9,7 @@ import {
   WEBSITE_ANALYTICS_MEASUREMENT_ID,
   getAnalyticsTimezone,
   getGoogleOAuthConfig,
+  getSiteUrl,
   getUmamiConfig,
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
@@ -15,8 +17,16 @@ import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
 import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
 import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config';
 import type { ProviderHealth } from '@/lib/analytics/website/types';
+import {
+  decryptFacebookPageSelection,
+  FACEBOOK_OAUTH_PAGES_COOKIE,
+  readFacebookOAuthConfig,
+  summarizeFacebookPages,
+} from '@/lib/meta/facebookOAuth';
+import { loadFacebookConnectionState } from '@/lib/meta/facebookConnection';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
 import SearchConsoleMonitor from '@/components/analytics/SearchConsoleMonitor';
+import FacebookPageManager from '@/components/analytics/FacebookPageManager';
 import YouTubeChannelManager from '@/components/youtube/YouTubeChannelManager';
 
 import './analytics.css';
@@ -145,13 +155,86 @@ function discoveryBanner(
   };
 }
 
+function facebookBanner(
+  params: SearchParams
+): { tone: 'ok' | 'warn' | 'bad'; text: string } | null {
+  const facebook = one(params, 'facebook');
+  if (!facebook) return null;
+
+  if (facebook === 'connected') {
+    return {
+      tone: 'ok',
+      text: 'Facebook Page подключён. Long-lived Page token сохранён на сервере в зашифрованном виде; копировать токен вручную не нужно.',
+    };
+  }
+
+  if (facebook === 'denied') {
+    return {
+      tone: 'warn',
+      text: 'Доступ к Facebook отменён на стороне Meta. Ранее сохранённое подключение не изменено.',
+    };
+  }
+
+  if (facebook === 'select') {
+    return {
+      tone: 'warn',
+      text: 'Facebook вернул несколько доступных Page. Выберите нужную страницу в блоке Flow · Facebook Page.',
+    };
+  }
+
+  if (facebook === 'disconnected') {
+    return {
+      tone: 'warn',
+      text: 'Facebook Page отключён в Flow, сохранённый токен удалён из базы. Доступ приложения на стороне Meta отзывается отдельно в настройках Facebook.',
+    };
+  }
+
+  const reason = one(params, 'reason') || 'unknown';
+  const missing = one(params, 'missing');
+  const detail =
+    reason === 'not_configured'
+      ? 'Не заданы META_FACEBOOK_APP_ID и/или META_FACEBOOK_APP_SECRET.'
+      : reason === 'invalid_state' || reason === 'expired_state'
+        ? 'OAuth state недействителен или истёк. Запустите подключение заново из этой страницы.'
+        : reason === 'missing_code'
+          ? 'Meta не вернул authorization code.'
+          : reason === 'exchange_failed' || reason === 'long_lived_exchange_failed'
+            ? 'Meta не выдал токен при обмене authorization code. Проверьте настройки OAuth-приложения и повторите подключение.'
+            : reason === 'permissions_missing'
+              ? `В Facebook не выданы обязательные права${missing ? `: ${missing}` : ''}. Нужны pages_show_list, pages_read_engagement и pages_manage_posts.`
+              : reason === 'no_pages'
+                ? 'У Facebook-аккаунта нет доступных Page. Нужна роль администратора или редактора страницы.'
+                : reason === 'pages_failed'
+                  ? 'Не удалось получить список Facebook Page. Проверьте права приложения и повторите подключение.'
+                  : reason === 'page_not_found'
+                    ? 'Настроенный META_FACEBOOK_PAGE_ID не найден среди доступных Page. Проверьте ID или права аккаунта.'
+                    : reason === 'page_token_invalid'
+                      ? 'Page token не прошёл проверку доступа. Повторите подключение и подтвердите доступ к странице.'
+                      : reason === 'selection_expired'
+                        ? 'Выбор страницы истёк. Запустите подключение Facebook заново.'
+                        : reason === 'storage_unavailable'
+                          ? 'Серверное хранилище токенов недоступно. Проверьте Supabase service-role конфигурацию.'
+                          : reason === 'storage_failed'
+                            ? 'Токен получен, но защищённое хранилище недоступно. Проверьте, что подготовленная миграция Facebook применена, и повторите подключение.'
+                            : reason === 'disconnect_failed'
+                              ? 'Не удалось удалить сохранённый Facebook token.'
+                              : 'Подключение Facebook завершилось ошибкой.';
+
+  return {
+    tone: 'bad',
+    text: `Facebook Page не подключён: ${detail}`,
+  };
+}
+
 function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: string } | null {
   const connect = one(params, 'connect');
   const sync = one(params, 'sync');
   const disconnected = one(params, 'disconnected');
   const discovery = discoveryBanner(params);
   const youtubeManagement = one(params, 'youtube_management');
+  const facebook = facebookBanner(params);
 
+  if (facebook) return facebook;
   if (discovery) return discovery;
 
   if (youtubeManagement === 'success') {
@@ -479,6 +562,18 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const youtubeStatusHref = '/api/admin/pierrot/youtube/status';
   const youtubeConnectHref = '/api/admin/analytics/connect?provider=youtube';
   const youtubeProject = one(params, 'project') === 'unframed' ? 'unframed' : 'pierrot';
+  const facebookOAuth = readFacebookOAuthConfig();
+  const facebook = await loadFacebookConnectionState();
+  const facebookCallbackUrl = `${getSiteUrl()}/api/meta/facebook/callback`;
+  const cookieStore = await cookies();
+  const encryptedFacebookPages = cookieStore.get(FACEBOOK_OAUTH_PAGES_COOKIE)?.value;
+  const facebookSelection =
+    encryptedFacebookPages && facebookOAuth.appSecret
+      ? decryptFacebookPageSelection(encryptedFacebookPages, facebookOAuth.appSecret)
+      : null;
+  const facebookPages = facebookSelection
+    ? summarizeFacebookPages(facebookSelection.pages)
+    : null;
 
   return (
     <div className="pw-page pw-analytics">
@@ -546,6 +641,15 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           {gsc && <SourceCard source={gsc} provider="search_console" />}
           {um && <SourceCard source={um} provider="umami" />}
           {bs && <SourceCard source={bs} provider="bluesky" />}
+        </section>
+
+        <section className="pw-analytics-grid" aria-label="Flow · Facebook Page">
+          <FacebookPageManager
+            state={facebook}
+            oauth={facebookOAuth}
+            callbackUrl={facebookCallbackUrl}
+            selection={facebookPages}
+          />
         </section>
 
         {youtube && (

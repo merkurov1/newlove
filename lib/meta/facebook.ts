@@ -14,6 +14,11 @@ import { normalizeFlowItem, type FlowItemInput } from '@/lib/flow/content';
 
 import { composeFacebookPost } from './content';
 import {
+  readFacebookEnvConfig,
+  type FacebookConfig,
+} from './facebookConfig';
+import { loadFacebookRuntimeConfig } from './facebookConnection';
+import {
   isTimeoutError,
   metaErrorMessage,
   metaResponseIsUncertain,
@@ -30,41 +35,34 @@ type FacebookInput = FlowItemInput & {
   description?: string | null;
 };
 
-export type FacebookConfig = {
-  pageId: string | null;
-  accessToken: string | null;
-  version: string;
-  configured: boolean;
-};
+export type { FacebookConfig } from './facebookConfig';
 
-const DEFAULT_GRAPH_VERSION = 'v26.0';
 const REQUEST_TIMEOUT_MS = 15_000;
 
-function normalizeVersion(value: string | undefined): string {
-  const version = (value ?? '').trim();
-  if (!version) return DEFAULT_GRAPH_VERSION;
-  return /^v\d+\.\d+$/.test(version) ? version : DEFAULT_GRAPH_VERSION;
-}
-
+/**
+ * Environment-only configuration, kept for diagnostics and legacy callers.
+ * Publishing resolves the database OAuth connection first.
+ */
 export function readFacebookConfig(
   env: Record<string, string | undefined> = process.env
 ): FacebookConfig {
-  const pageId = readString(env.META_FACEBOOK_PAGE_ID);
-  const accessToken = readString(env.META_FACEBOOK_PAGE_ACCESS_TOKEN);
-  const version = normalizeVersion(env.META_GRAPH_API_VERSION);
-
-  return {
-    pageId,
-    accessToken,
-    version,
-    configured: Boolean(pageId && accessToken),
-  };
+  return readFacebookEnvConfig(env);
 }
 
 export function isFacebookConfigured(
   env: Record<string, string | undefined> = process.env
 ): boolean {
   return readFacebookConfig(env).configured;
+}
+
+async function resolveFacebookConfig(
+  options: MetaAdapterOptions
+): Promise<FacebookConfig> {
+  if (options.env !== undefined) {
+    return readFacebookEnvConfig(options.env);
+  }
+
+  return loadFacebookRuntimeConfig({ store: options.store });
 }
 
 function graphUrl(config: FacebookConfig, path: string): string {
@@ -198,8 +196,7 @@ export async function publishToFacebook(
   input: FacebookInput,
   options: MetaAdapterOptions = {}
 ): Promise<MetaPublishResult> {
-  const env = options.env ?? process.env;
-  const config = readFacebookConfig(env);
+  const config = await resolveFacebookConfig(options);
 
   if (!config.configured) return skippedResult();
 

@@ -2,9 +2,9 @@ import { createHash } from 'node:crypto';
 
 import { publishToBluesky, type BlueskyPublishResult } from '@/lib/bluesky';
 import {
-  isFacebookConfigured,
   publishToFacebook,
 } from '@/lib/meta/facebook';
+import { isFacebookRuntimeConfigured } from '@/lib/meta/facebookConnection';
 import {
   isThreadsConfigured,
   publishToThreads,
@@ -118,7 +118,7 @@ export type CrosspostDeps = {
   publishBluesky?: (payload: CrosspostPayload) => Promise<BlueskyPublishResult | null>;
   publishFacebook?: (
     payload: CrosspostPayload,
-    options?: { resume?: MetaResumeState }
+    options?: { resume?: MetaResumeState; store?: SupabaseClient | null }
   ) => Promise<MetaPublishResult>;
   publishThreads?: (
     payload: CrosspostPayload,
@@ -160,17 +160,23 @@ function channelEnabled(channel: CrosspostChannel): boolean {
 
 /**
  * Channels attempted when the caller does not pass an explicit list. Telegram
- * and Bluesky keep their historical default. Facebook is added when configured;
- * Threads only when explicitly enabled.
+ * and Bluesky keep their historical default. Facebook is added when an
+ * environment token or an encrypted OAuth connection exists; Threads only when
+ * explicitly enabled.
  */
-function defaultRequestedChannels(deps: CrosspostDeps): CrosspostChannel[] {
+async function defaultRequestedChannels(
+  deps: CrosspostDeps
+): Promise<CrosspostChannel[]> {
   const channels: CrosspostChannel[] = ['telegram', 'bluesky'];
 
-  if (
-    facebookCrosspostEnabled() &&
-    (deps.publishFacebook || isFacebookConfigured())
-  ) {
-    channels.push('facebook');
+  if (facebookCrosspostEnabled()) {
+    const configured = deps.publishFacebook
+      ? true
+      : await isFacebookRuntimeConfigured({
+          store: deps.supabase === undefined ? undefined : deps.supabase,
+        }).catch(() => false);
+
+    if (configured) channels.push('facebook');
   }
 
   if (
@@ -937,7 +943,7 @@ export async function crosspostFlowItem(
   const requestedChannels =
     Array.isArray(options.channels) && options.channels.length > 0
       ? CHANNELS.filter((channel) => options.channels?.includes(channel))
-      : defaultRequestedChannels(deps);
+      : await defaultRequestedChannels(deps);
   const channelsToAttempt = selectChannels(
     previousState,
     { ...options, channels: requestedChannels },
@@ -1050,6 +1056,7 @@ export async function crosspostFlowItem(
                 uncertain: previousState.channels.facebook?.uncertain ?? false,
                 phase: previousState.channels.facebook?.phase ?? null,
               },
+              store: supabase,
             }
           ).catch((error): MetaPublishResult => ({
             ok: false,

@@ -11,7 +11,8 @@ export type AnalyticsProvider =
   | 'search_console'
   | 'umami'
   | 'bluesky'
-  | 'youtube';
+  | 'youtube'
+  | 'facebook';
 export type AnalyticsLanguage = 'ru' | 'en';
 
 export type AnalyticsConnectionStatus =
