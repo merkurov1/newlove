@@ -573,7 +573,9 @@ export async function publishTelegramContent(
   } else {
     const start = clamp(textPartsSent, 0, composition.textOnlyParts.length);
     const allowPreview =
-      composition.presentationMode === 'link' && Boolean(composition.sourceUrl);
+      !composition.isPreview &&
+      composition.presentationMode === 'link' &&
+      Boolean(composition.sourceUrl);
 
     for (let index = start; index < composition.textOnlyParts.length; index += 1) {
       const ok = await sendTextPart(

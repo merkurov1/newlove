@@ -121,7 +121,7 @@ describe('Telegram HTML chunking', () => {
 });
 
 describe('Telegram publisher', () => {
-  it('sends long text as sequential full messages, not a caption slice', async () => {
+  it('sends a long text publication as one compact preview, not a multi-message dump', async () => {
     const body = `${'Длинный текст про память и сети. '.repeat(300)}КОНЕЦ`;
     const calls = installFetch((call) =>
       call.url.includes('/sendMessage')
@@ -132,11 +132,13 @@ describe('Telegram publisher', () => {
     const result = await publishTelegramContent(content({ body_md: body }));
 
     expect(result.ok).toBe(true);
-    expect(result.textPartsSent).toBeGreaterThan(1);
+    expect(result.textPartsSent).toBe(1);
+    expect(calls).toHaveLength(1);
     expect(calls.every((call) => call.url.includes('/sendMessage'))).toBe(true);
-    expect(calls.every((call) => call.body.text.length <= 4096)).toBe(true);
-    expect(calls.map((call) => call.body.text).join(' ')).toContain('КОНЕЦ');
-    expect(calls.map((call) => call.body.text).join(' ')).toContain('Длинный текст');
+    expect(calls[0].body.text.length).toBeLessThanOrEqual(4096);
+    expect(calls[0].body.text).toContain('Длинный текст');
+    expect(calls[0].body.text).toContain('>Flow</a>');
+    expect(calls[0].body.text).not.toContain('КОНЕЦ');
   });
 
   it('splits more than ten images into logical albums and keeps all of them', async () => {
@@ -210,24 +212,49 @@ describe('Telegram publisher', () => {
     expect(result.textPartsSent).toBe(0);
   });
 
-  it('resumes only the missing text parts on retry', async () => {
+  it('does not resend a completed long-form preview on retry', async () => {
     const body = `${'Текст для нескольких сообщений. '.repeat(400)}ФИНАЛ`;
 
     let nextId = 0;
     installFetch(() => success((nextId += 1)));
 
     const first = await publishTelegramContent(content({ body_md: body }));
-    expect(first.textPartsSent).toBeGreaterThan(1);
+    expect(first.textPartsSent).toBe(1);
 
     const calls = installFetch((call) => success(callsIndex(call)));
     const second = await publishTelegramContent(content({ body_md: body }), {
-      resume: { textParts: 1 },
+      resume: { textParts: first.textPartsSent },
     });
 
+    expect(second.ok).toBe(true);
     expect(second.textPartsSent).toBe(first.textPartsSent);
-    expect(calls.filter((call) => call.url.includes('/sendMessage'))).toHaveLength(
-      first.textPartsSent - 1
+    expect(calls.filter((call) => call.url.includes('/sendMessage'))).toHaveLength(0);
+  });
+
+  it('does not resend a long-form media preview when image and caption are confirmed', async () => {
+    const body = `${'Длинный текст статьи. '.repeat(200)}ФИНАЛ`;
+    const payload = content({
+      type: 'article',
+      title: 'Длинная статья',
+      body_md: body,
+      metadata: { image: 'https://cdn.example.com/cover.jpg' },
+    });
+
+    const firstCalls = installFetch((call) =>
+      call.url.includes('/sendPhoto') ? success(71) : { ok: false, description: 'unexpected endpoint' }
     );
+    const first = await publishTelegramContent(payload);
+    expect(first.ok).toBe(true);
+    expect(first.textPartsSent).toBe(1);
+    expect(firstCalls).toHaveLength(1);
+
+    const retryCalls = installFetch((call) => success(callsIndex(call)));
+    const retry = await publishTelegramContent(payload, {
+      resume: { textParts: 1, imageUrls: first.sentImageUrls },
+    });
+
+    expect(retry.ok).toBe(true);
+    expect(retryCalls).toHaveLength(0);
   });
 
   it('skips images already delivered on a partial retry', async () => {
@@ -273,7 +300,7 @@ describe('Telegram publisher', () => {
     expect(calls[0].body.show_caption_above_media).toBe(true);
   });
 
-  it('sends an opening caption first, then the article continuation in order', async () => {
+  it('sends a long media article as one photo with a compact preview caption', async () => {
     const body = `${'Длинный абзац статьи. '.repeat(120)}ФИНАЛ`;
     const calls = installFetch((call) => {
       if (call.url.includes('/sendPhoto')) return success(22);
@@ -291,10 +318,12 @@ describe('Telegram publisher', () => {
     );
 
     expect(result.ok).toBe(true);
+    expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain('/sendPhoto');
     expect(calls[0].body.caption.length).toBeLessThanOrEqual(1024);
-    expect(calls.slice(1).every((call) => call.url.includes('/sendMessage'))).toBe(true);
-    expect(calls.map((call) => call.body.caption ?? call.body.text).join(' ')).toContain('ФИНАЛ');
+    expect(calls[0].body.caption).toContain('Длинная статья');
+    expect(calls[0].body.caption).toContain('>Flow</a>');
+    expect(calls[0].body.caption).not.toContain('ФИНАЛ');
   });
 
   it('sends a downloadable video as a video, not a photo', async () => {
@@ -370,6 +399,26 @@ describe('Telegram publisher', () => {
       url: 'https://example.com/source',
       prefer_large_media: true,
     });
+  });
+
+  it('does not attach a source preview card to a long-form preview', async () => {
+    const calls = installFetch((call) =>
+      call.url.includes('/sendMessage') ? success(43) : { ok: false, description: 'unexpected endpoint' }
+    );
+
+    await publishTelegramContent(
+      content({
+        type: 'article',
+        title: 'Long external source',
+        body_md: `${'Long commentary on the source. '.repeat(120)}END`,
+        source_url: 'https://example.com/source',
+        metadata: {},
+      })
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].body.text).not.toContain('>Источник</a>');
+    expect(calls[0].body.link_preview_options).toEqual({ is_disabled: true });
   });
 
   it('disables previews for ordinary notes', async () => {
