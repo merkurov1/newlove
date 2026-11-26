@@ -123,8 +123,7 @@ const CHANNEL_COLUMNS = [
   'last_synced_at',
 ].join(',');
 
-const BINDING_COLUMNS =
-  'id,project_slug,channel_record_id,channel_id,is_active,updated_at';
+const BINDING_COLUMNS = 'id,project_slug,channel_record_id,channel_id,is_active,updated_at';
 
 function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
@@ -145,12 +144,80 @@ export function isMissingYouTubeSchema(error: unknown): boolean {
   return /42P01|PGRST205|PGRST204|does not exist|could not find the table/i.test(value);
 }
 
+export type YouTubeMultichannelSchemaStatus = {
+  ready: boolean;
+  reason: 'ready' | 'missing_tables' | 'database_error';
+  missingTables: string[];
+  code: string | null;
+};
+
+const YOUTUBE_MULTICHANNEL_TABLES = [
+  'youtube_oauth_connections',
+  'youtube_channels',
+  'youtube_project_bindings',
+] as const;
+
+function errorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') return null;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && code ? code.slice(0, 40) : null;
+}
+
+/**
+ * Verifies that every additive multi-channel table exists *and* that the
+ * server-side (service-role) client can select from it. A stale PostgREST
+ * schema cache and a missing/unauthorised table both must report `ready:false`;
+ * treating an arbitrary database error as "ready" hides the real fault from the
+ * owner and makes the next API call fail with a generic 500.
+ */
+export async function checkYouTubeMultichannelSchema(
+  store: SupabaseClient
+): Promise<YouTubeMultichannelSchemaStatus> {
+  const checks = await Promise.all(
+    YOUTUBE_MULTICHANNEL_TABLES.map(async (table) => {
+      try {
+        const { error } = await store.from(table).select('id').limit(1);
+
+        if (!error) {
+          return { table, ok: true, missing: false, code: null as string | null };
+        }
+
+        return {
+          table,
+          ok: false,
+          missing: isMissingYouTubeSchema(error),
+          code: errorCode(error),
+        };
+      } catch (error) {
+        return {
+          table,
+          ok: false,
+          missing: false,
+          code: errorCode(error),
+        };
+      }
+    })
+  );
+
+  const failed = checks.filter((check) => !check.ok);
+
+  if (failed.length === 0) {
+    return { ready: true, reason: 'ready', missingTables: [], code: null };
+  }
+
+  const missingTables = failed.filter((check) => check.missing).map((check) => check.table);
+
+  return {
+    ready: false,
+    reason: missingTables.length > 0 ? 'missing_tables' : 'database_error',
+    missingTables,
+    code: failed.find((check) => check.code)?.code ?? null,
+  };
+}
+
 export async function youtubeMultichannelSchemaReady(store: SupabaseClient): Promise<boolean> {
-  const { error } = await store
-    .from('youtube_oauth_connections')
-    .select('id')
-    .limit(1);
-  return !error || !isMissingYouTubeSchema(error);
+  const status = await checkYouTubeMultichannelSchema(store);
+  return status.ready;
 }
 
 export function mapSafeConnection(row: Record<string, unknown>): SafeOAuthConnection {
@@ -637,11 +704,7 @@ export async function loadChannelAccessToken(
   const cached = tokenCache.get(channel.connectionId);
   const now = Date.now();
 
-  if (
-    cached &&
-    cached.fingerprint === fingerprint &&
-    cached.expiresAtMs > now + 30_000
-  ) {
+  if (cached && cached.fingerprint === fingerprint && cached.expiresAtMs > now + 30_000) {
     return { accessToken: cached.accessToken, channel, connection };
   }
 

@@ -2,10 +2,7 @@ import { isAuthenticationError } from '@/lib/auth/errors';
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 
-import {
-  getGoogleOAuthConfig,
-  getSyncOwnerSecret,
-} from '@/lib/analytics/website/config';
+import { getGoogleOAuthConfig, getSyncOwnerSecret } from '@/lib/analytics/website/config';
 import {
   buildGoogleConsentUrl,
   probeGoogleConsentUrl,
@@ -16,22 +13,37 @@ import {
   YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   getYouTubeChannelsRedirectUri,
 } from '@/lib/youtube/config';
-import {
-  isYouTubeProjectSlug,
-  youtubeMultichannelSchemaReady,
-} from '@/lib/youtube/channels';
+import { checkYouTubeMultichannelSchema, isYouTubeProjectSlug } from '@/lib/youtube/channels';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+// The OAuth preflight makes one bounded request to Google. Give the route room
+// for it on serverless platforms instead of returning a platform timeout.
+export const maxDuration = 30;
 
 const STATE_COOKIE = 'pierrot_youtube_channels_oauth';
 
-function fail(request: Request, reason: string, project: string) {
+function noStore(response: NextResponse): NextResponse {
+  response.headers.set('Cache-Control', 'no-store, max-age=0, must-revalidate');
+  return response;
+}
+
+function fail(
+  request: Request,
+  reason: string,
+  project: string,
+  extra: Record<string, string> = {}
+) {
   const url = new URL('/admin/pierrot/youtube', request.url);
   url.searchParams.set('youtube_channels', 'error');
-  url.searchParams.set('reason', reason);
+  url.searchParams.set('reason', reason.slice(0, 120));
   url.searchParams.set('project', project);
-  return NextResponse.redirect(url);
+
+  for (const [key, value] of Object.entries(extra)) {
+    if (value) url.searchParams.set(key, value.slice(0, 240));
+  }
+
+  return noStore(NextResponse.redirect(url));
 }
 
 export async function GET(request: Request) {
@@ -53,16 +65,27 @@ export async function GET(request: Request) {
   const config = getGoogleOAuthConfig();
 
   if (!config.configured) {
-    return NextResponse.json(
-      { error: 'google_oauth_not_configured', missing: config.missing },
-      { status: 503, headers: { 'Cache-Control': 'no-store' } }
-    );
+    // Return to the page with an actionable notice instead of a raw JSON
+    // response that a normal browser click renders as an opaque document.
+    return fail(request, 'google_oauth_not_configured', project, {
+      missing: config.missing.join(','),
+    });
   }
 
-  const store = getServerSupabaseClient({ useServiceRole: true });
+  let store;
+  try {
+    store = getServerSupabaseClient({ useServiceRole: true });
+  } catch (error) {
+    console.error('[youtube-channels-connect] service client unavailable', error);
+    return fail(request, 'server_configuration_error', project);
+  }
 
-  if (!(await youtubeMultichannelSchemaReady(store))) {
-    return fail(request, 'migration_required', project);
+  const schema = await checkYouTubeMultichannelSchema(store);
+
+  if (!schema.ready) {
+    return fail(request, 'migration_required', project, {
+      missing: schema.missingTables.join(','),
+    });
   }
 
   const loginHint = url.searchParams.get('login_hint')?.trim() || null;
@@ -80,13 +103,20 @@ export async function GET(request: Request) {
     getSyncOwnerSecret()
   );
 
-  const consentUrl = buildGoogleConsentUrl({
-    state,
-    loginHint,
-    selectAccount,
-    scopes: YOUTUBE_CHANNEL_CONNECTION_SCOPES,
-    redirectUri: getYouTubeChannelsRedirectUri(),
-  });
+  let consentUrl: string;
+
+  try {
+    consentUrl = buildGoogleConsentUrl({
+      state,
+      loginHint,
+      selectAccount,
+      scopes: YOUTUBE_CHANNEL_CONNECTION_SCOPES,
+      redirectUri: getYouTubeChannelsRedirectUri(),
+    });
+  } catch (error) {
+    console.error('[youtube-channels-connect] consent URL could not be built', error);
+    return fail(request, 'google_oauth_not_configured', project);
+  }
 
   const probe = await probeGoogleConsentUrl(consentUrl);
 
@@ -105,5 +135,5 @@ export async function GET(request: Request) {
     maxAge: 600,
   });
 
-  return response;
+  return noStore(response);
 }

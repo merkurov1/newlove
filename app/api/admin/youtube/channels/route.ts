@@ -5,6 +5,7 @@ import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAu
 import { listMyChannels } from '@/lib/youtube/api';
 import {
   bindChannelToProject,
+  checkYouTubeMultichannelSchema,
   disconnectOAuthConnection,
   isYouTubeProjectSlug,
   listOAuthConnections,
@@ -13,7 +14,6 @@ import {
   loadChannelAccessToken,
   replaceConnectionChannels,
   unbindProject,
-  youtubeMultichannelSchemaReady,
   YOUTUBE_PROJECTS,
   type YouTubeProjectSlug,
 } from '@/lib/youtube/channels';
@@ -77,14 +77,34 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const rawProject = url.searchParams.get('project');
   const project = isYouTubeProjectSlug(rawProject) ? rawProject : 'art-engine';
-  const store = getServerSupabaseClient({ useServiceRole: true });
-  const schemaReady = await youtubeMultichannelSchemaReady(store);
+  let store;
 
-  if (!schemaReady) {
+  try {
+    store = getServerSupabaseClient({ useServiceRole: true });
+  } catch (error) {
+    console.error('[youtube-channels] service client unavailable', error);
+    return json(
+      {
+        ok: false,
+        error: 'server_configuration_error',
+        message: 'Серверная конфигурация Supabase неполна. Обратитесь к владельцу окружения.',
+      },
+      503
+    );
+  }
+
+  const schema = await checkYouTubeMultichannelSchema(store);
+
+  if (!schema.ready) {
+    const missing = schema.missingTables.length
+      ? ` Отсутствуют таблицы: ${schema.missingTables.join(', ')}.`
+      : '';
+
     return json({
       ok: true,
       ownerOnly: true,
       schemaReady: false,
+      schema,
       project,
       projects: YOUTUBE_PROJECTS,
       connections: [],
@@ -97,46 +117,73 @@ export async function GET(request: Request) {
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       },
       message:
-        'Аддитивная миграция multi-channel YouTube ещё не применена. Подключение недоступно.',
+        `Аддитивная миграция multi-channel YouTube ещё не применена или недоступна.${missing} ` +
+        'Подключение недоступно до применения миграции.',
     });
   }
 
-  const [connections, channels, bindings] = await Promise.all([
-    listOAuthConnections(store, user.id),
-    listYouTubeChannels(store, user.id),
-    listProjectBindings(store, user.id),
-  ]);
+  try {
+    const [connections, channels, bindings] = await Promise.all([
+      listOAuthConnections(store, user.id),
+      listYouTubeChannels(store, user.id),
+      listProjectBindings(store, user.id),
+    ]);
 
-  const channelsById = new Map(channels.map((channel) => [channel.id, channel]));
-  const activeByProject: Record<string, unknown> = {};
+    const channelsById = new Map(channels.map((channel) => [channel.id, channel]));
+    const activeByProject: Record<string, unknown> = {};
 
-  for (const binding of bindings.filter((item) => item.isActive)) {
-    const channel = channelsById.get(binding.channelRecordId);
-    if (!channel) continue;
-    activeByProject[binding.projectSlug] = {
-      binding,
-      channel,
-      connection: connections.find((item) => item.id === channel.connectionId) ?? null,
-    };
+    for (const binding of bindings.filter((item) => item.isActive)) {
+      const channel = channelsById.get(binding.channelRecordId);
+      if (!channel) continue;
+      activeByProject[binding.projectSlug] = {
+        binding,
+        channel,
+        connection: connections.find((item) => item.id === channel.connectionId) ?? null,
+      };
+    }
+
+    return json({
+      ok: true,
+      ownerOnly: true,
+      schemaReady: true,
+      schema,
+      project,
+      projects: YOUTUBE_PROJECTS,
+      connections,
+      channels,
+      bindings,
+      activeByProject,
+      active: activeByProject[project] ?? null,
+      config: {
+        scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
+        redirectUri: getYouTubeChannelsRedirectUri(),
+        connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
+      },
+    });
+  } catch (error) {
+    // Do not return a bare HTML 500: the client would only be able to show a
+    // generic "status" failure. Log the server-side detail, expose a safe code.
+    console.error('[youtube-channels] state read failed', error);
+    const code =
+      error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+        ? String((error as { code?: unknown }).code).slice(0, 40)
+        : 'state_read_failed';
+
+    return json(
+      {
+        ok: false,
+        schemaReady: true,
+        schema,
+        project,
+        error: 'state_read_failed',
+        code,
+        retryable: true,
+        message:
+          'Не удалось прочитать состояние YouTube из базы. Повторите запрос; если ошибка повторится, проверьте серверные таблицы и ключ service role.',
+      },
+      500
+    );
   }
-
-  return json({
-    ok: true,
-    ownerOnly: true,
-    schemaReady: true,
-    project,
-    projects: YOUTUBE_PROJECTS,
-    connections,
-    channels,
-    bindings,
-    activeByProject,
-    active: activeByProject[project] ?? null,
-    config: {
-      scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
-      redirectUri: getYouTubeChannelsRedirectUri(),
-      connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
-    },
-  });
 }
 
 export async function POST(request: Request) {

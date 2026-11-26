@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Connection = {
   id: string;
@@ -37,8 +37,16 @@ type Binding = {
   isActive: boolean;
 };
 
+type SchemaStatus = {
+  ready?: boolean;
+  reason?: string;
+  missingTables?: string[];
+  code?: string | null;
+};
+
 type StatusPayload = {
   schemaReady?: boolean;
+  schema?: SchemaStatus;
   project?: string;
   projects?: Array<{ slug: string; name: string; defaultChannelHandle: string | null }>;
   connections?: Connection[];
@@ -48,6 +56,15 @@ type StatusPayload = {
   active?: { binding: Binding; channel: Channel; connection: Connection | null } | null;
   config?: { connectUrl: string; redirectUri: string; scopes: string[] };
   message?: string;
+  error?: string;
+  code?: string;
+  retryable?: boolean;
+};
+
+type StatusError = {
+  message: string;
+  code: string | null;
+  httpStatus: number | null;
 };
 
 type Metric = {
@@ -205,6 +222,61 @@ function inputToTags(value: string): string[] {
     .filter(Boolean);
 }
 
+type StatusFailure = Error & { httpStatus?: number | null; code?: string | null };
+
+function statusFailure(
+  message: string,
+  httpStatus: number | null,
+  code: string | null
+): StatusFailure {
+  const error = new Error(message) as StatusFailure;
+  error.httpStatus = httpStatus;
+  error.code = code;
+  return error;
+}
+
+function describeStatusError(error: unknown): StatusError {
+  if (error && typeof error === 'object') {
+    const candidate = error as StatusFailure;
+    const httpStatus = typeof candidate.httpStatus === 'number' ? candidate.httpStatus : null;
+    const code = typeof candidate.code === 'string' ? candidate.code : null;
+
+    if (httpStatus !== null || code) {
+      return {
+        message: candidate.message || 'Не удалось прочитать состояние YouTube.',
+        code,
+        httpStatus,
+      };
+    }
+  }
+
+  if (error instanceof TypeError) {
+    return {
+      message: 'Сеть недоступна или запрос был прерван. Проверьте соединение и повторите.',
+      code: 'network_error',
+      httpStatus: null,
+    };
+  }
+
+  return {
+    message:
+      error instanceof Error && error.message
+        ? error.message
+        : 'Не удалось прочитать состояние YouTube.',
+    code: null,
+    httpStatus: null,
+  };
+}
+
+function formatStatusError(error: StatusError): string {
+  const details = [
+    error.httpStatus !== null ? `HTTP ${error.httpStatus}` : null,
+    error.code ? `код: ${error.code}` : null,
+  ].filter(Boolean);
+
+  return `${error.message}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
+}
+
 export default function YouTubeProjectWorkspace({
   project,
   notice,
@@ -213,7 +285,10 @@ export default function YouTubeProjectWorkspace({
   notice?: string | null;
 }) {
   const [status, setStatus] = useState<StatusPayload | null>(null);
-  const [statusError, setStatusError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<StatusError | null>(null);
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
+  const statusRequestId = useRef(0);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(notice || null);
   const [error, setError] = useState<string | null>(null);
@@ -253,22 +328,45 @@ export default function YouTubeProjectWorkspace({
 
   const active = status?.active ?? null;
   const selectedChannel = channelsForConnection.find((channel) => channel.id === selectedChannelId);
+  // Keep connect actionable even when the state request itself failed or is
+  // still loading; the route performs its own auth/schema/preflight checks and
+  // returns a visible notice on failure.
+  const connectUrl =
+    status?.config?.connectUrl ||
+    `/api/admin/youtube/channels/connect?project=${encodeURIComponent(project)}`;
 
   const loadStatus = useCallback(async () => {
+    const requestId = ++statusRequestId.current;
+
+    setStatusLoading(true);
+    setStatusError(null);
+
     try {
       const response = await fetch(
         `/api/admin/youtube/channels?project=${encodeURIComponent(project)}`,
         { cache: 'no-store' }
       );
-      const payload = (await response.json().catch(() => ({}))) as StatusPayload & {
-        error?: string;
-      };
+      const payload = (await response.json().catch(() => ({}))) as StatusPayload;
 
       if (!response.ok) {
-        throw new Error(payload.error || 'status');
+        const safeMessage =
+          typeof payload.message === 'string' && payload.message.trim()
+            ? payload.message
+            : 'Сервер не вернул состояние YouTube.';
+        const code =
+          typeof payload.error === 'string'
+            ? payload.error
+            : typeof payload.code === 'string'
+              ? payload.code
+              : 'status_request_failed';
+
+        throw statusFailure(safeMessage, response.status, code);
       }
 
+      if (requestId !== statusRequestId.current) return;
+
       setStatus(payload);
+      setStatusCheckedAt(new Date().toISOString());
       setStatusError(null);
 
       const firstConnection = payload.connections?.[0];
@@ -281,13 +379,20 @@ export default function YouTubeProjectWorkspace({
           setSelectedChannelId((current) => current || firstChannel.id);
         }
       }
-    } catch {
-      setStatusError('Не удалось прочитать состояние YouTube-подключения.');
+    } catch (loadError) {
+      if (requestId !== statusRequestId.current) return;
+      setStatusError(describeStatusError(loadError));
+    } finally {
+      if (requestId === statusRequestId.current) {
+        setStatusLoading(false);
+      }
     }
   }, [project]);
 
   useEffect(() => {
     setStatus(null);
+    setStatusError(null);
+    setStatusCheckedAt(null);
     setAnalytics(null);
     setCatalog(null);
     setVideo(null);
@@ -320,11 +425,18 @@ export default function YouTubeProjectWorkspace({
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
+        code?: string;
         message?: string;
         revoked?: boolean;
       };
 
-      if (!response.ok) throw new Error(payload.message || payload.error || 'action');
+      if (!response.ok) {
+        throw statusFailure(
+          payload.message || payload.error || 'Действие с YouTube не выполнено.',
+          response.status,
+          payload.code || payload.error || 'channel_action_failed'
+        );
+      }
 
       setMessage(
         body.action === 'bind'
@@ -339,9 +451,7 @@ export default function YouTubeProjectWorkspace({
       );
       await loadStatus();
     } catch (actionError) {
-      setError(
-        actionError instanceof Error ? actionError.message : 'Действие не выполнено.'
-      );
+      setError(formatStatusError(describeStatusError(actionError)));
     } finally {
       setBusy(false);
     }
@@ -358,10 +468,9 @@ export default function YouTubeProjectWorkspace({
           end: period.end,
           ...(fresh ? { fresh: '1' } : {}),
         });
-        const response = await fetch(
-          `/api/admin/youtube/channels/analytics?${params.toString()}`,
-          { cache: 'no-store' }
-        );
+        const response = await fetch(`/api/admin/youtube/channels/analytics?${params.toString()}`, {
+          cache: 'no-store',
+        });
         const payload = (await response.json().catch(() => ({}))) as {
           report?: AnalyticsReport;
           message?: string;
@@ -401,10 +510,9 @@ export default function YouTubeProjectWorkspace({
       try {
         const params = new URLSearchParams({ project, pageSize: '25' });
         if (token) params.set('pageToken', token);
-        const response = await fetch(
-          `/api/admin/youtube/channels/videos?${params.toString()}`,
-          { cache: 'no-store' }
-        );
+        const response = await fetch(`/api/admin/youtube/channels/videos?${params.toString()}`, {
+          cache: 'no-store',
+        });
         const payload = (await response.json().catch(() => ({}))) as {
           page?: CatalogPage;
           message?: string;
@@ -491,9 +599,7 @@ export default function YouTubeProjectWorkspace({
         tags: tagsToInput(payload.video.tags),
       });
     } catch (videoError) {
-      setError(
-        videoError instanceof Error ? videoError.message : 'Не удалось открыть видео.'
-      );
+      setError(videoError instanceof Error ? videoError.message : 'Не удалось открыть видео.');
     } finally {
       setEditorBusy(false);
     }
@@ -539,9 +645,7 @@ export default function YouTubeProjectWorkspace({
           baseFingerprint: payload.baseFingerprint || fingerprint,
           diff: payload.diff || [],
         });
-        setMessage(
-          'Diff готов. Ничего не записано. Подтвердите изменение отдельной кнопкой ниже.'
-        );
+        setMessage('Diff готов. Ничего не записано. Подтвердите изменение отдельной кнопкой ниже.');
         return;
       }
 
@@ -556,9 +660,7 @@ export default function YouTubeProjectWorkspace({
           : 'Предпросмотр готов.'
       );
     } catch (previewError) {
-      setError(
-        previewError instanceof Error ? previewError.message : 'Не удалось построить diff.'
-      );
+      setError(previewError instanceof Error ? previewError.message : 'Не удалось построить diff.');
     } finally {
       setEditorBusy(false);
     }
@@ -610,9 +712,7 @@ export default function YouTubeProjectWorkspace({
       await openVideo(video.videoId);
       await loadCatalog(pageTokens[pageIndex] ?? null);
     } catch (applyError) {
-      setError(
-        applyError instanceof Error ? applyError.message : 'Изменение не записано.'
-      );
+      setError(applyError instanceof Error ? applyError.message : 'Изменение не записано.');
     } finally {
       setEditorBusy(false);
     }
@@ -629,20 +729,34 @@ export default function YouTubeProjectWorkspace({
             />
             <h2>YouTube · {projects.find((item) => item.slug === project)?.name || project}</h2>
           </div>
-          <span className="pw-analytics-badge">
-            {status?.schemaReady === false
-              ? 'миграция не применена'
-              : active
-                ? 'канал привязан'
-                : 'канал не привязан'}
+          <span className="pw-analytics-badge" aria-live="polite">
+            {statusLoading && !status
+              ? 'проверяю…'
+              : status?.schemaReady === false
+                ? 'миграция не применена'
+                : active
+                  ? 'канал привязан'
+                  : 'канал не привязан'}
           </span>
         </div>
 
         {status?.schemaReady === false && (
-          <p className="pw-analytics-error">
-            {status.message ||
-              'Аддитивная миграция multi-channel YouTube ещё не применена на этом окружении.'}
-          </p>
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              {status.message ||
+                'Аддитивная миграция multi-channel YouTube ещё не применена на этом окружении.'}
+            </p>
+            {status.schema?.missingTables && status.schema.missingTables.length > 0 && (
+              <p className="pw-analytics-hint">
+                Нет таблиц: <code>{status.schema.missingTables.join(', ')}</code>
+              </p>
+            )}
+            {status.schema?.code && (
+              <p className="pw-analytics-hint">
+                Код ответа базы: <code>{status.schema.code}</code>
+              </p>
+            )}
+          </div>
         )}
 
         <p className="pw-analytics-hint">
@@ -651,20 +765,50 @@ export default function YouTubeProjectWorkspace({
         </p>
 
         <div className="pw-analytics-card-actions">
-          {status?.config?.connectUrl && status.schemaReady !== false && (
-            <a className="pw-analytics-button" href={status.config.connectUrl}>
-              Подключить Google-аккаунт
-            </a>
-          )}
+          <a className="pw-analytics-button" href={connectUrl}>
+            Подключить Google-аккаунт
+          </a>
           <button
             type="button"
             className="pw-analytics-button pw-analytics-button--quiet"
-            disabled={busy}
+            disabled={statusLoading || busy}
+            aria-busy={statusLoading}
             onClick={() => void loadStatus()}
           >
-            Обновить состояние
+            {statusLoading ? 'Обновление…' : 'Обновить состояние'}
           </button>
         </div>
+
+        {statusLoading && (
+          <p className="pw-analytics-hint" role="status" aria-live="polite">
+            Читаю состояние YouTube…
+          </p>
+        )}
+
+        {statusError && (
+          <div className="pw-analytics-error" role="alert">
+            <p>{formatStatusError(statusError)}</p>
+            <div className="pw-analytics-card-actions">
+              <button
+                type="button"
+                className="pw-analytics-button pw-analytics-button--quiet"
+                disabled={statusLoading}
+                onClick={() => void loadStatus()}
+              >
+                {statusLoading ? 'Повторяю…' : 'Повторить'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!statusLoading && !statusError && statusCheckedAt && (
+          <p className="pw-analytics-hint" role="status">
+            Состояние обновлено: {formatDate(statusCheckedAt)}
+          </p>
+        )}
+
+        {message && <p className="pw-analytics-action">{message}</p>}
+        {error && <p className="pw-analytics-error">{error}</p>}
 
         {status?.config?.redirectUri && (
           <p className="pw-analytics-hint">
@@ -676,7 +820,9 @@ export default function YouTubeProjectWorkspace({
           <div className="pw-analytics-config">
             <h3>Активный канал проекта</h3>
             <p>
-              <strong>{active.channel.title || active.channel.handle || active.channel.channelId}</strong>{' '}
+              <strong>
+                {active.channel.title || active.channel.handle || active.channel.channelId}
+              </strong>{' '}
               · {active.channel.handle || '—'} · {active.channel.channelId}
             </p>
             <p className="pw-analytics-hint">
@@ -696,12 +842,15 @@ export default function YouTubeProjectWorkspace({
           </div>
         )}
 
-        {(status?.activeByProject && Object.keys(status.activeByProject).length > 0) && (
+        {status?.activeByProject && Object.keys(status.activeByProject).length > 0 && (
           <p className="pw-analytics-hint">
             Общий канал используется:{' '}
             {Object.entries(status.activeByProject)
               .filter(([slug]) => slug !== project)
-              .map(([slug, value]) => `${projects.find((p) => p.slug === slug)?.name || slug}: ${value?.channel.title || value?.channel.channelId}`)
+              .map(
+                ([slug, value]) =>
+                  `${projects.find((p) => p.slug === slug)?.name || slug}: ${value?.channel.title || value?.channel.channelId}`
+              )
               .join(' · ') || 'других проектов нет'}
           </p>
         )}
@@ -772,8 +921,7 @@ export default function YouTubeProjectWorkspace({
                 >
                   {channelsForConnection.map((channel) => (
                     <option key={channel.id} value={channel.id}>
-                      {channel.title || channel.handle || channel.channelId} ·{' '}
-                      {channel.channelId}
+                      {channel.title || channel.handle || channel.channelId} · {channel.channelId}
                     </option>
                   ))}
                 </select>
@@ -805,10 +953,6 @@ export default function YouTubeProjectWorkspace({
             </ul>
           </>
         )}
-
-        {statusError && <p className="pw-analytics-error">{statusError}</p>}
-        {message && <p className="pw-analytics-action">{message}</p>}
-        {error && <p className="pw-analytics-error">{error}</p>}
       </section>
 
       {active && (
@@ -862,17 +1006,15 @@ export default function YouTubeProjectWorkspace({
 
           {analyticsLoading && <p className="pw-analytics-hint">Загрузка аналитики…</p>}
 
-          {analytics && !analytics.bound && (
-            <p className="pw-analytics-hint">{analytics.reason}</p>
-          )}
+          {analytics && !analytics.bound && <p className="pw-analytics-hint">{analytics.reason}</p>}
 
           {analytics?.bound && (
             <>
               <p className="pw-analytics-hint">
                 {analytics.channel?.title || analytics.channel?.id} · период{' '}
-                {analytics.period?.label} · часовой пояс {analytics.period?.timezone} ·
-                обновлено {formatDate(analytics.fetchedAt)} · задержка API ≈{' '}
-                {analytics.reportingDelayDays} дн.
+                {analytics.period?.label} · часовой пояс {analytics.period?.timezone} · обновлено{' '}
+                {formatDate(analytics.fetchedAt)} · задержка API ≈ {analytics.reportingDelayDays}{' '}
+                дн.
               </p>
 
               <div className="pw-analytics-grid" aria-label="Метрики канала">
