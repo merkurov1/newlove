@@ -77,6 +77,20 @@ export function useNewPostModal({
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Async results must never be written back after the composer was closed,
+  // cleared or the attachment they belong to was removed. The counters also
+  // keep the existing loading states truthful when requests overlap.
+  const linkEpochRef = useRef(0);
+  const linkRequestSeqRef = useRef(0);
+  const linkRequestsRef = useRef<Map<string, number>>(new Map());
+  const suppressedLinkKeysRef = useRef<Set<string>>(new Set());
+  const pendingLinkParsesRef = useRef<Set<number>>(new Set());
+  const youtubeRequestSeqRef = useRef(0);
+  const pendingYouTubeParsesRef = useRef<Set<number>>(new Set());
+  const uploadEpochRef = useRef(0);
+  const uploadSeqRef = useRef(0);
+  const pendingUploadsRef = useRef<Set<number>>(new Set());
+
   const isEditing = Boolean(itemId);
 
   const canClear = Boolean(
@@ -107,6 +121,17 @@ export function useNewPostModal({
   // Reset the composer when it closes.
   useEffect(() => {
     if (!open) {
+      // Invalidate every request that may still be running so its result
+      // cannot repopulate the next composer session.
+      linkEpochRef.current += 1;
+      youtubeRequestSeqRef.current += 1;
+      uploadEpochRef.current += 1;
+      linkRequestsRef.current.clear();
+      suppressedLinkKeysRef.current.clear();
+      pendingLinkParsesRef.current.clear();
+      pendingYouTubeParsesRef.current.clear();
+      pendingUploadsRef.current.clear();
+
       setItem(null);
       setTitle("");
       setBodyMd("");
@@ -118,6 +143,12 @@ export function useNewPostModal({
       setShowYouTubeInput(false);
       setError(null);
       setSaveState("idle");
+      setIsInitializing(false);
+      setIsParsingLink(false);
+      setIsParsingYouTube(false);
+      setIsUploadingImage(false);
+      setIsPublishing(false);
+      setIsClearing(false);
       return;
     }
 
@@ -361,6 +392,20 @@ export function useNewPostModal({
     [],
   );
 
+  const beginImageUpload = () => {
+    const uploadId = ++uploadSeqRef.current;
+
+    pendingUploadsRef.current.add(uploadId);
+    setIsUploadingImage(true);
+
+    return uploadId;
+  };
+
+  const endImageUpload = (uploadId: number) => {
+    pendingUploadsRef.current.delete(uploadId);
+    setIsUploadingImage(pendingUploadsRef.current.size > 0);
+  };
+
   const handleImageUpload = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -368,7 +413,8 @@ export function useNewPostModal({
 
     if (selectedFiles.length === 0) return;
 
-    setIsUploadingImage(true);
+    const epoch = uploadEpochRef.current;
+    const uploadId = beginImageUpload();
     setError(null);
 
     const uploaded: FlowImageAttachment[] = [];
@@ -388,6 +434,8 @@ export function useNewPostModal({
           );
         }
       }
+
+      if (epoch !== uploadEpochRef.current) return;
 
       // Keep successful uploads even when another file fails.
       if (uploaded.length > 0) {
@@ -411,7 +459,7 @@ export function useNewPostModal({
         );
       }
     } finally {
-      setIsUploadingImage(false);
+      endImageUpload(uploadId);
 
       if (fileRef.current) {
         fileRef.current.value = "";
@@ -424,21 +472,32 @@ export function useNewPostModal({
   };
 
   const removeYouTube = () => {
+    // A parse that is still in flight belongs to the attachment being removed.
+    youtubeRequestSeqRef.current += 1;
+    pendingYouTubeParsesRef.current.clear();
+    setIsParsingYouTube(false);
     setYoutubeUrl("");
     setYoutubeMetadata(null);
     setShowYouTubeInput(false);
   };
 
   const removeLink = (id: string) => {
+    const removed = links.find((link) => link.id === id);
+
+    if (removed) {
+      // Remember the destination so an older parse response cannot restore an
+      // attachment the author has just deleted.
+      suppressedLinkKeysRef.current.add(urlDedupeKey(removed.url));
+    }
+
     setLinks((prev) => prev.filter((link) => link.id !== id));
   };
 
-  const parseLink = useCallback(async (url: string) => {
-    const normalized =
-      normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
+  const parseLink = useCallback(async (url: string, options?: { forceLink?: boolean }) => {
+    const normalized = normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
 
     if (!normalized) {
-      setError("Please enter a valid http or https URL.");
+      setError('Please enter a valid http or https URL.');
       return;
     }
 
@@ -449,21 +508,34 @@ export function useNewPostModal({
           : [
               ...prev,
               {
-                id: makeId("image-url"),
+                id: makeId('image-url'),
                 url: normalized,
-                name: "Linked image",
+                name: 'Linked image',
               },
-            ],
+            ]
       );
       setShowLinkInput(false);
       return;
     }
 
-    if (isYouTubeVideo(normalized)) {
+    if (!options?.forceLink && isYouTubeVideo(normalized)) {
       await parseYouTube(normalized);
       return;
     }
 
+    const epoch = linkEpochRef.current;
+    const requestKey = urlDedupeKey(normalized);
+    const requestId = ++linkRequestSeqRef.current;
+
+    // A repeated parse of the same destination supersedes the previous one,
+    // while parses of different destinations may still settle independently.
+    linkRequestsRef.current.set(requestKey, requestId);
+    suppressedLinkKeysRef.current.delete(requestKey);
+
+    const isCurrent = () =>
+      epoch === linkEpochRef.current && linkRequestsRef.current.get(requestKey) === requestId;
+
+    pendingLinkParsesRef.current.add(requestId);
     setIsParsingLink(true);
     setError(null);
 
@@ -475,31 +547,34 @@ export function useNewPostModal({
         : await fetch(parseUrl);
       const data = await readResponse(res);
 
+      if (!isCurrent()) return;
+
       if (!res.ok) {
-        throw new Error(data.error || "Could not fetch link preview.");
+        throw new Error(data.error || 'Could not fetch link preview.');
       }
 
       // The parser may return a canonical destination. Keep it only when it
       // is still a safe HTTP(S) URL; otherwise retain the author's URL.
       const finalUrl =
-        normalizeExtractedUrl(
-          typeof data.url === "string" ? data.url : "",
-        ) ?? normalized;
+        normalizeExtractedUrl(typeof data.url === 'string' ? data.url : '') ?? normalized;
       const finalKey = urlDedupeKey(finalUrl);
 
+      if (
+        suppressedLinkKeysRef.current.has(requestKey) ||
+        suppressedLinkKeysRef.current.has(finalKey)
+      ) {
+        return;
+      }
+
       setLinks((prev) => {
-        if (
-          prev.some(
-            (link) => urlDedupeKey(link.url) === finalKey,
-          )
-        ) {
+        if (prev.some((link) => urlDedupeKey(link.url) === finalKey)) {
           return prev;
         }
 
         return [
           ...prev,
           {
-            id: makeId("link"),
+            id: makeId('link'),
             url: finalUrl,
             preview: {
               url: finalUrl,
@@ -516,44 +591,54 @@ export function useNewPostModal({
 
       setShowLinkInput(false);
     } catch (err) {
+      if (!isCurrent()) return;
+
       // Keep the URL as an attachment even if preview parsing fails.
-      console.warn("[useNewPostModal] Link preview failed:", err);
+      console.warn('[useNewPostModal] Link preview failed:', err);
+
+      if (suppressedLinkKeysRef.current.has(requestKey)) return;
 
       const fallbackKey = urlDedupeKey(normalized);
 
       setLinks((prev) =>
-        prev.some(
-          (link) => urlDedupeKey(link.url) === fallbackKey,
-        )
+        prev.some((link) => urlDedupeKey(link.url) === fallbackKey)
           ? prev
           : [
               ...prev,
               {
-                id: makeId("link"),
+                id: makeId('link'),
                 url: normalized,
                 preview: {
                   url: normalized,
                   title: normalized,
                 },
               },
-            ],
+            ]
       );
 
       setShowLinkInput(false);
     } finally {
-      setIsParsingLink(false);
+      if (linkRequestsRef.current.get(requestKey) === requestId) {
+        linkRequestsRef.current.delete(requestKey);
+      }
+
+      pendingLinkParsesRef.current.delete(requestId);
+      setIsParsingLink(pendingLinkParsesRef.current.size > 0);
     }
   }, []);
 
   const parseYouTube = useCallback(async (url: string) => {
-    const normalized =
-      normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
+    const normalized = normalizeExtractedUrl(url) ?? normalizePastedUrl(url);
 
     if (!normalized || !isYouTubeVideo(normalized)) {
-      setError("Please enter a valid YouTube video URL.");
+      setError('Please enter a valid YouTube video URL.');
       return;
     }
 
+    // Only the most recently started video request may update the composer.
+    const requestId = ++youtubeRequestSeqRef.current;
+
+    pendingYouTubeParsesRef.current.add(requestId);
     setIsParsingYouTube(true);
     setError(null);
 
@@ -565,25 +650,24 @@ export function useNewPostModal({
         : await fetch(parseUrl);
       const data = await readResponse(res);
 
+      if (requestId !== youtubeRequestSeqRef.current) return;
+
       if (!res.ok || !data.youtube) {
-        throw new Error(
-          data.error || "Could not load YouTube video information.",
-        );
+        throw new Error(data.error || 'Could not load YouTube video information.');
       }
 
       setYoutubeMetadata(data.youtube);
       setYoutubeUrl(data.url || normalized);
       setShowYouTubeInput(false);
     } catch (err) {
-      console.warn("[useNewPostModal] YouTube parse failed:", err);
+      if (requestId !== youtubeRequestSeqRef.current) return;
 
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Failed to load YouTube video. Check the URL.",
-      );
+      console.warn('[useNewPostModal] YouTube parse failed:', err);
+
+      setError(err instanceof Error ? err.message : 'Failed to load YouTube video. Check the URL.');
     } finally {
-      setIsParsingYouTube(false);
+      pendingYouTubeParsesRef.current.delete(requestId);
+      setIsParsingYouTube(pendingYouTubeParsesRef.current.size > 0);
     }
   }, []);
 
@@ -604,7 +688,8 @@ export function useNewPostModal({
 
     if (imageFiles.length > 0) {
       event.preventDefault();
-      setIsUploadingImage(true);
+      const epoch = uploadEpochRef.current;
+      const uploadId = beginImageUpload();
       setError(null);
 
       const uploaded: FlowImageAttachment[] = [];
@@ -623,6 +708,8 @@ export function useNewPostModal({
             );
           }
         }
+
+        if (epoch !== uploadEpochRef.current) return;
 
         if (uploaded.length > 0) {
           setImages((prev) => {
@@ -645,7 +732,7 @@ export function useNewPostModal({
           );
         }
       } finally {
-        setIsUploadingImage(false);
+        endImageUpload(uploadId);
       }
 
       return;
@@ -694,6 +781,10 @@ export function useNewPostModal({
       setBodyMd((prev) => prev + textWithoutUrls);
     }
 
+    // Capture the current attachment once: state updates inside this loop do
+    // not refresh the closure, so a local flag keeps the first video.
+    let hasYouTubeAttachment = Boolean(youtubeUrl || youtubeMetadata);
+
     for (const url of urls) {
       if (isProbablyImageUrl(url)) {
         setImages((prev) =>
@@ -711,10 +802,11 @@ export function useNewPostModal({
       } else if (isYouTubeVideo(url)) {
         // The composer supports one YouTube attachment at a time.
         // Keep the first video and process other URLs as links.
-        if (!youtubeUrl && !youtubeMetadata) {
+        if (!hasYouTubeAttachment) {
+          hasYouTubeAttachment = true;
           await parseYouTube(url);
         } else {
-          await parseLink(url);
+          await parseLink(url, { forceLink: true });
         }
       } else {
         await parseLink(url);
@@ -962,6 +1054,16 @@ export function useNewPostModal({
     setIsClearing(true);
 
     try {
+      // Clearing is terminal for any request started before it.
+      linkEpochRef.current += 1;
+      youtubeRequestSeqRef.current += 1;
+      uploadEpochRef.current += 1;
+      linkRequestsRef.current.clear();
+      suppressedLinkKeysRef.current.clear();
+      pendingLinkParsesRef.current.clear();
+      pendingYouTubeParsesRef.current.clear();
+      pendingUploadsRef.current.clear();
+
       setTitle("");
       setBodyMd("");
       setLinks([]);
@@ -971,6 +1073,9 @@ export function useNewPostModal({
       setShowLinkInput(false);
       setShowYouTubeInput(false);
       setError(null);
+      setIsParsingLink(false);
+      setIsParsingYouTube(false);
+      setIsUploadingImage(false);
     } finally {
       setIsClearing(false);
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { Image as ImageIcon, X } from "lucide-react";
 import {
@@ -14,6 +14,26 @@ import type {
   NewPostModalProps,
   SaveState,
 } from "./new-post/types";
+
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+  ).filter(
+    (element) =>
+      element.tabIndex >= 0 &&
+      !element.hasAttribute("disabled") &&
+      element.getAttribute("aria-hidden") !== "true",
+  );
+}
 
 function SaveStatus({
   state,
@@ -103,21 +123,110 @@ export default function NewPostModal({
     lang,
   });
 
+  const dialogRef = useRef<HTMLElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
     if (!open) return;
 
+    // Remember the trigger before moving focus into the composer.
+    restoreFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
     const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
 
     const frame = window.requestAnimationFrame(() => {
       textareaRef.current?.focus({ preventScroll: true });
     });
 
+    // Safari does not shrink `dvh` for the on-screen keyboard. Follow the
+    // visual viewport while open so the composer stays inside the visible area.
+    // Telegram Mini Apps publish their own viewport height; use the smaller of
+    // the two so neither a keyboard nor collapsing chrome can cover the panel.
+    const syncViewportHeight = () => {
+      const panel = dialogRef.current;
+
+      if (!panel) return;
+
+      const viewportHeight =
+        window.visualViewport?.height || window.innerHeight;
+      const telegramHeight = Number.parseFloat(
+        window.getComputedStyle(document.documentElement).getPropertyValue(
+          '--tg-viewport-height',
+        ),
+      );
+      const height = Math.round(
+        Number.isFinite(telegramHeight) && telegramHeight > 0
+          ? Math.min(telegramHeight, viewportHeight)
+          : viewportHeight,
+      );
+
+      panel.style.setProperty('--pi-composer-height', `${height}px`);
+      panel.style.setProperty(
+        '--pi-composer-offset',
+        `${Math.round(window.visualViewport?.offsetTop || 0)}px`,
+      );
+    };
+
+    syncViewportHeight();
+
+    const visualViewport = window.visualViewport;
+    visualViewport?.addEventListener('resize', syncViewportHeight);
+    window.addEventListener('resize', syncViewportHeight);
+
     return () => {
       document.body.style.overflow = previousOverflow;
       window.cancelAnimationFrame(frame);
+      visualViewport?.removeEventListener('resize', syncViewportHeight);
+      window.removeEventListener('resize', syncViewportHeight);
+
+      const restoreTarget = restoreFocusRef.current;
+      restoreFocusRef.current = null;
+
+      if (restoreTarget && restoreTarget.isConnected) {
+        restoreTarget.focus({ preventScroll: true });
+      }
     };
   }, [open, textareaRef]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Tab') return;
+
+      const dialog = dialogRef.current;
+
+      if (!dialog) return;
+
+      const focusable = getFocusableElements(dialog);
+
+      if (focusable.length === 0) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
 
   if (!open) return null;
 
@@ -126,13 +235,10 @@ export default function NewPostModal({
   return createPortal(
     <div
       className="
-        fixed inset-0 z-[9999] flex items-center justify-center
+        fixed inset-0 z-[9999] flex items-start justify-center
         bg-[#24211D]/25 p-0 backdrop-blur-[3px]
-        sm:p-4
+        sm:items-center sm:p-4
       "
-      role="dialog"
-      aria-modal="true"
-      aria-label={isEditing ? "Edit Flow post" : "New Flow post"}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !busy) {
           void handleClose();
@@ -140,16 +246,25 @@ export default function NewPostModal({
       }}
     >
       <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={isEditing ? "Edit Flow post" : "New Flow post"}
+        aria-busy={busy}
+        tabIndex={-1}
         className="
-          flex h-[100dvh] max-h-[100dvh] w-full flex-col
-          overflow-hidden bg-[#FAF8F4] text-[#37332D]
-          sm:h-[min(88dvh,780px)] sm:max-h-[calc(100dvh-2rem)]
-          sm:max-w-2xl sm:rounded-2xl
+          flex w-full flex-col overflow-hidden
+          h-[var(--pi-composer-height,var(--tg-viewport-height,100dvh))]
+          max-h-[var(--pi-composer-height,var(--tg-viewport-height,100dvh))]
+          translate-y-[var(--pi-composer-offset,0px)] sm:translate-y-0
+          bg-[#FAF8F4] text-[#37332D] outline-none
+          sm:h-[min(86dvh,760px,var(--pi-composer-height,var(--tg-viewport-height,100dvh)))] sm:max-h-[calc(100dvh-2rem)]
+          sm:max-w-[40rem] sm:rounded-2xl
         "
         onMouseDown={(event) => event.stopPropagation()}
       >
         {/* Minimal top row */}
-        <header className="flex shrink-0 items-center justify-between px-5 pt-[max(16px,env(safe-area-inset-top))] sm:px-7 sm:pt-5">
+        <header className="flex shrink-0 items-center justify-between pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pt-[max(16px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))] sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-[max(20px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))]">
           <div className="min-w-0">
             <SaveStatus state={saveState} error={error} />
           </div>
@@ -166,7 +281,9 @@ export default function NewPostModal({
               -mr-2 flex h-10 w-10 shrink-0 items-center justify-center
               rounded-full text-[#898277] transition
               hover:bg-black/[0.04] hover:text-[#37332D]
-              disabled:opacity-40
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
+              focus-visible:ring-offset-[#FAF8F4] disabled:opacity-40
             "
           >
             <X size={18} strokeWidth={1.6} />
@@ -174,7 +291,7 @@ export default function NewPostModal({
         </header>
 
         {/* Writing area: no field borders or inner card */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-5 pt-3 sm:px-7 sm:pt-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pb-5 pt-3 sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-4">
           <div className="flex min-h-full flex-col">
             <textarea
               ref={textareaRef}
@@ -190,15 +307,21 @@ export default function NewPostModal({
                 bg-transparent p-0 font-serif text-lg
                 leading-[1.7] tracking-[-0.01em] text-[#49443C]
                 outline-none ring-0 placeholder:text-[#B8B0A4]
-                focus:outline-none focus:ring-0
+                focus:ring-0 focus-visible:rounded-[2px]
+                focus-visible:outline focus-visible:outline-2
+                focus-visible:outline-offset-[6px]
+                focus-visible:outline-[#8A8378]
                 sm:text-xl
               "
             />
 
             {/* Automatic URL / YouTube previews */}
             {(isParsingLink || isParsingYouTube) && (
-              <div className="mt-5">
+              <div className="mt-4">
                 <ShimmerPreview
+                  variant={
+                    isParsingYouTube ? "youtube" : "link"
+                  }
                   text={
                     isParsingYouTube
                       ? "Loading video…"
@@ -209,13 +332,16 @@ export default function NewPostModal({
             )}
 
             {isUploadingImage && (
-              <div className="mt-5">
-                <ShimmerPreview text="Uploading image…" />
+              <div className="mt-4">
+                <ShimmerPreview
+                  variant="image"
+                  text="Uploading image…"
+                />
               </div>
             )}
 
             {youtubeMetadata && (
-              <div className="group relative mt-5">
+              <div className="group relative mt-4">
                 <button
                   type="button"
                   onClick={removeYouTube}
@@ -225,8 +351,11 @@ export default function NewPostModal({
                     absolute right-2 top-2 z-10 flex h-8 w-8
                     items-center justify-center rounded-full
                     bg-black/55 text-white opacity-100 transition
-                    hover:bg-black/75 sm:opacity-0
-                    sm:group-hover:opacity-100
+                    hover:bg-black/75 focus-visible:opacity-100
+                    focus-visible:outline-none focus-visible:ring-2
+                    focus-visible:ring-white focus-visible:ring-offset-2
+                    focus-visible:ring-offset-black/40
+                    sm:opacity-0 sm:group-hover:opacity-100
                   "
                 >
                   <X size={15} />
@@ -244,7 +373,7 @@ export default function NewPostModal({
             )}
 
             {links.length > 0 && (
-              <div className="mt-5 space-y-4">
+              <div className="mt-4 space-y-4">
                 {links.map((link) => (
                   <div key={link.id} className="group relative">
                     <button
@@ -256,8 +385,11 @@ export default function NewPostModal({
                         absolute right-2 top-2 z-10 flex h-8 w-8
                         items-center justify-center rounded-full
                         bg-black/55 text-white opacity-100 transition
-                        hover:bg-black/75 sm:opacity-0
-                        sm:group-hover:opacity-100
+                        hover:bg-black/75 focus-visible:opacity-100
+                        focus-visible:outline-none focus-visible:ring-2
+                        focus-visible:ring-white focus-visible:ring-offset-2
+                        focus-visible:ring-offset-black/40
+                        sm:opacity-0 sm:group-hover:opacity-100
                       "
                     >
                       <X size={15} />
@@ -276,8 +408,8 @@ export default function NewPostModal({
               <div
                 className={
                   images.length === 1
-                    ? "mt-5"
-                    : "mt-5 grid grid-cols-2 gap-3 sm:gap-4"
+                    ? "mt-4"
+                    : "mt-4 grid grid-cols-2 gap-3 sm:gap-4"
                 }
               >
                 {images.map((image) => (
@@ -291,8 +423,11 @@ export default function NewPostModal({
                         absolute right-2 top-2 z-10 flex h-8 w-8
                         items-center justify-center rounded-full
                         bg-black/55 text-white opacity-100 transition
-                        hover:bg-black/75 sm:opacity-0
-                        sm:group-hover:opacity-100
+                        hover:bg-black/75 focus-visible:opacity-100
+                        focus-visible:outline-none focus-visible:ring-2
+                        focus-visible:ring-white focus-visible:ring-offset-2
+                        focus-visible:ring-offset-black/40
+                        sm:opacity-0 sm:group-hover:opacity-100
                       "
                     >
                       <X size={15} />
@@ -322,8 +457,10 @@ export default function NewPostModal({
         <footer
           className="
             flex shrink-0 items-center justify-between gap-3
-            px-5 pb-[max(16px,env(safe-area-inset-bottom))]
-            pt-3 sm:px-7 sm:pb-5
+            pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))]
+            pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))]
+            pb-[max(16px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
+            pt-3 sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pb-[max(20px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
           "
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -332,6 +469,7 @@ export default function NewPostModal({
               type="file"
               accept="image/*"
               multiple
+              tabIndex={-1}
               className="hidden"
               onChange={handleImageUpload}
             />
@@ -345,7 +483,10 @@ export default function NewPostModal({
               className={`
                 flex h-11 w-11 shrink-0 items-center justify-center
                 rounded-full transition-colors
-                hover:bg-black/[0.05] disabled:opacity-40
+                hover:bg-black/[0.05]
+                focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
+                focus-visible:ring-offset-[#FAF8F4] disabled:opacity-40
                 ${
                   images.length > 0
                     ? "text-[#37332D]"
@@ -362,8 +503,10 @@ export default function NewPostModal({
                 onClick={() => void clearDraft()}
                 disabled={busy || isClearing}
                 className="
-                  text-xs text-[#92897D] transition-colors
-                  hover:text-[#37332D] disabled:opacity-40
+                  rounded-sm text-xs text-[#92897D] transition-colors
+                  hover:text-[#37332D] focus-visible:text-[#37332D]
+                  focus-visible:underline focus-visible:underline-offset-4
+                  focus-visible:outline-none disabled:opacity-40
                 "
               >
                 {isClearing ? "Clearing…" : "Clear"}
@@ -379,6 +522,9 @@ export default function NewPostModal({
               min-h-11 rounded-full bg-[#37332D] px-6 py-2.5
               text-sm text-white transition-colors
               hover:bg-[#514B42] active:scale-[0.98]
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[#37332D] focus-visible:ring-offset-2
+              focus-visible:ring-offset-[#FAF8F4]
               disabled:cursor-not-allowed disabled:opacity-35
             "
           >

@@ -7,21 +7,34 @@ import type {
   YouTubeMetadata,
 } from "./types";
 
+type ShimmerVariant = "link" | "youtube" | "image";
+
 type ShimmerPreviewProps = {
   text?: string;
+  /** Match the media box of the preview this shimmer is standing in for. */
+  variant?: ShimmerVariant;
+};
+
+const SHIMMER_MEDIA: Record<ShimmerVariant, string> = {
+  link: "aspect-[1.91/1]",
+  youtube: "aspect-video",
+  image: "aspect-[4/3]",
 };
 
 export function ShimmerPreview({
   text = "Loading preview…",
+  variant = "link",
 }: ShimmerPreviewProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-black/10 bg-black/[0.02]">
       <div className="animate-pulse">
-        <div className="h-32 bg-black/[0.06]" />
+        <div
+          className={`w-full bg-black/[0.06] ${SHIMMER_MEDIA[variant]}`}
+        />
 
-        <div className="space-y-2 p-3.5">
-          <div className="h-3 w-2/3 bg-black/[0.08]" />
-          <div className="h-3 w-1/2 bg-black/[0.06]" />
+        <div className="space-y-2 p-4">
+          <div className="h-3 w-2/3 rounded-sm bg-black/[0.08]" />
+          <div className="h-3 w-1/2 rounded-sm bg-black/[0.06]" />
 
           <div className="pt-1 text-[10px] uppercase tracking-[0.16em] text-black/35">
             {text}
@@ -80,13 +93,13 @@ export function YouTubePreview({
         </div>
       </div>
 
-      <div className="p-3.5">
-        <div className="line-clamp-2 text-sm font-medium leading-5 text-black">
+      <div className="p-4">
+        <div className="line-clamp-2 text-sm font-medium leading-[1.4] text-black">
           {title}
         </div>
 
         {author ? (
-          <div className="mt-1 text-xs text-black/50">
+          <div className="mt-1.5 line-clamp-1 text-xs leading-[1.45] text-black/50">
             {author}
           </div>
         ) : null}
@@ -95,7 +108,7 @@ export function YouTubePreview({
           href={safeUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 block truncate text-[10px] uppercase tracking-[0.12em] text-black/35 transition-colors hover:text-black/60"
+          className="mt-2.5 block truncate rounded-sm text-[10px] uppercase tracking-[0.12em] text-black/35 underline-offset-4 transition-colors hover:text-black/60 focus-visible:text-black/60 focus-visible:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#37332D]/45"
         >
           youtube.com
         </a>
@@ -142,13 +155,13 @@ export function LinkPreviewCard({
         </div>
       ) : null}
 
-      <div className="p-3.5">
-        <div className="line-clamp-2 text-sm font-medium leading-5 text-black">
+      <div className="p-4">
+        <div className="line-clamp-2 text-sm font-medium leading-[1.4] text-black">
           {title}
         </div>
 
         {description ? (
-          <div className="mt-1 line-clamp-2 text-xs leading-4 text-black/50">
+          <div className="mt-1.5 line-clamp-2 text-xs leading-[1.45] text-black/50">
             {description}
           </div>
         ) : null}
@@ -157,7 +170,7 @@ export function LinkPreviewCard({
           href={safeUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="mt-2 block truncate text-[10px] uppercase tracking-[0.12em] text-black/35 transition-colors hover:text-black/60"
+          className="mt-2.5 block truncate rounded-sm text-[10px] uppercase tracking-[0.12em] text-black/35 underline-offset-4 transition-colors hover:text-black/60 focus-visible:text-black/60 focus-visible:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#37332D]/45"
         >
           {sourceLabel}
         </a>

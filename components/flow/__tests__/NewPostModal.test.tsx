@@ -1,5 +1,6 @@
-import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
+import NewPostModal from '../NewPostModal';
 import { LinkPreviewCard } from '../new-post/Previews';
 import { useNewPostModal } from '../new-post/useNewPostModal';
 import {
@@ -19,6 +20,15 @@ function apiResponse(body: Record<string, unknown>): Response {
     status: 200,
     json: async () => body,
   } as unknown as Response;
+}
+
+function deferredResponse() {
+  let resolve!: (value: Response) => void;
+  const promise = new Promise<Response>((settle) => {
+    resolve = settle;
+  });
+
+  return { promise, resolve };
 }
 
 describe('Flow composer URL handling', () => {
@@ -118,6 +128,23 @@ describe('Flow link preview', () => {
     );
 
     expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
+
+  it('keeps a visible keyboard focus state on the preview destination', () => {
+    render(
+      <LinkPreviewCard
+        url="https://example.com/article"
+        preview={{
+          url: 'https://example.com/article',
+          title: 'Example article',
+          domain: 'example.com',
+        }}
+      />
+    );
+
+    expect(screen.getByText('example.com').className).toContain(
+      'focus-visible:underline'
+    );
   });
 
   describe('useNewPostModal link parsing', () => {
@@ -271,6 +298,312 @@ describe('Flow link preview', () => {
       expect(result.current.links[0].url).toBe('https://example.com/article');
     });
 
+    it('ignores a superseded link parse for the same destination', async () => {
+      const stale = deferredResponse();
+      const fetchMock = jest
+        .fn()
+        .mockImplementationOnce(() => stale.promise)
+        .mockResolvedValueOnce(
+          apiResponse({
+            url: 'https://example.com/article',
+            domain: 'example.com',
+            title: 'Fresh preview',
+          })
+        );
+      global.fetch = fetchMock as typeof fetch;
+
+      const { result } = renderHook(() => useNewPostModal({ open: true, onClose: jest.fn() }));
+
+      let firstCall!: Promise<void>;
+
+      act(() => {
+        firstCall = result.current.parseLink('https://example.com/article');
+      });
+
+      await act(async () => {
+        await result.current.parseLink('https://example.com/article');
+      });
+
+      await waitFor(() => {
+        expect(result.current.links).toHaveLength(1);
+      });
+
+      expect(result.current.links[0].preview.title).toBe('Fresh preview');
+
+      stale.resolve(
+        apiResponse({
+          url: 'https://example.com/article',
+          title: 'Stale preview',
+        })
+      );
+
+      await act(async () => {
+        await firstCall;
+      });
+
+      expect(result.current.links).toHaveLength(1);
+      expect(result.current.links[0].preview.title).toBe('Fresh preview');
+    });
+
+    it('does not restore a link whose parse finishes after removal', async () => {
+      const fetchMock = jest.fn().mockResolvedValueOnce(
+        apiResponse({
+          url: 'https://example.com/article',
+          domain: 'example.com',
+          title: 'Original preview',
+        })
+      );
+
+      global.fetch = fetchMock as typeof fetch;
+
+      const { result } = renderHook(() => useNewPostModal({ open: true, onClose: jest.fn() }));
+
+      await act(async () => {
+        await result.current.parseLink('https://example.com/article');
+      });
+
+      await waitFor(() => {
+        expect(result.current.links).toHaveLength(1);
+      });
+
+      const pending = deferredResponse();
+
+      fetchMock.mockImplementationOnce(() => pending.promise);
+
+      let repeatedParse!: Promise<void>;
+
+      act(() => {
+        repeatedParse = result.current.parseLink('https://example.com/article');
+      });
+
+      act(() => {
+        result.current.removeLink(result.current.links[0].id);
+      });
+
+      pending.resolve(
+        apiResponse({
+          url: 'https://example.com/article',
+          title: 'Should not return',
+        })
+      );
+
+      await act(async () => {
+        await repeatedParse;
+      });
+
+      expect(result.current.links).toHaveLength(0);
+    });
+
+    it('keeps the most recently requested YouTube video', async () => {
+      const firstVideo = 'https://www.youtube.com/watch?v=aaaaaaaaaaa';
+      const secondVideo = 'https://www.youtube.com/watch?v=bbbbbbbbbbb';
+      const stale = deferredResponse();
+
+      global.fetch = jest
+        .fn()
+        .mockImplementationOnce(() => stale.promise)
+        .mockResolvedValueOnce(
+          apiResponse({
+            url: secondVideo,
+            youtube: { video_id: 'bbbbbbbbbbb', title: 'Second' },
+          })
+        ) as typeof fetch;
+
+      const { result } = renderHook(() => useNewPostModal({ open: true, onClose: jest.fn() }));
+
+      let firstCall!: Promise<void>;
+
+      act(() => {
+        firstCall = result.current.parseYouTube(firstVideo);
+      });
+
+      await act(async () => {
+        await result.current.parseYouTube(secondVideo);
+      });
+
+      await waitFor(() => {
+        expect(result.current.youtubeMetadata?.video_id).toBe('bbbbbbbbbbb');
+      });
+
+      stale.resolve(
+        apiResponse({
+          url: firstVideo,
+          youtube: { video_id: 'aaaaaaaaaaa', title: 'First' },
+        })
+      );
+
+      await act(async () => {
+        await firstCall;
+      });
+
+      expect(result.current.youtubeMetadata?.video_id).toBe('bbbbbbbbbbb');
+      expect(result.current.youtubeUrl).toBe(secondVideo);
+    });
+
+    it('keeps Escape from closing the composer while a parse is busy', async () => {
+      const pending = deferredResponse();
+
+      global.fetch = jest
+        .fn()
+        .mockImplementationOnce(() => pending.promise) as typeof fetch;
+
+      const onClose = jest.fn();
+      const { result } = renderHook(() =>
+        useNewPostModal({ open: true, onClose })
+      );
+
+      let parseCall!: Promise<void>;
+
+      act(() => {
+        parseCall = result.current.parseLink('https://example.com/slow');
+      });
+
+      await waitFor(() => {
+        expect(result.current.busy).toBe(true);
+      });
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(onClose).not.toHaveBeenCalled();
+
+      pending.resolve(
+        apiResponse({
+          url: 'https://example.com/slow',
+          title: 'Late preview',
+        })
+      );
+
+      await act(async () => {
+        await parseCall;
+      });
+
+      await waitFor(() => {
+        expect(result.current.busy).toBe(false);
+      });
+
+      fireEvent.keyDown(document, { key: 'Escape' });
+
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a link parse that finishes after the composer closed', async () => {
+      const pending = deferredResponse();
+
+      global.fetch = jest.fn().mockImplementationOnce(() => pending.promise) as typeof fetch;
+
+      const onClose = jest.fn();
+      const { result, rerender } = renderHook(
+        (props: { open: boolean }) => useNewPostModal({ open: props.open, onClose }),
+        { initialProps: { open: true } }
+      );
+
+      let parseCall!: Promise<void>;
+
+      act(() => {
+        parseCall = result.current.parseLink('https://example.com/slow');
+      });
+
+      await act(async () => {
+        rerender({ open: false });
+      });
+
+      pending.resolve(
+        apiResponse({
+          url: 'https://example.com/slow',
+          title: 'Late preview',
+        })
+      );
+
+      await act(async () => {
+        await parseCall;
+      });
+
+      expect(result.current.links).toHaveLength(0);
+      expect(result.current.isParsingLink).toBe(false);
+    });
+
+    it('keeps successful images when another upload fails', async () => {
+      const successful = new File(['ok'], 'one.png', {
+        type: 'image/png',
+      });
+      const failed = new File(['nope'], 'two.png', {
+        type: 'image/png',
+      });
+
+      global.fetch = jest
+        .fn()
+        .mockResolvedValueOnce(
+          apiResponse({
+            success: true,
+            file: { url: 'https://cdn.example.com/one.png' },
+          })
+        )
+        .mockResolvedValueOnce(
+          apiResponse({ success: false, error: 'two.png is too large' })
+        ) as typeof fetch;
+
+      const { result } = renderHook(() => useNewPostModal({ open: true, onClose: jest.fn() }));
+
+      const input = document.createElement('input');
+
+      Object.defineProperty(input, 'files', {
+        value: [successful, failed],
+        configurable: true,
+      });
+
+      await act(async () => {
+        await result.current.handleImageUpload({
+          target: input,
+        } as unknown as React.ChangeEvent<HTMLInputElement>);
+      });
+
+      expect(result.current.images).toHaveLength(1);
+      expect(result.current.images[0].url).toBe('https://cdn.example.com/one.png');
+      expect(result.current.error).toBe('1 image(s) uploaded. two.png is too large');
+      expect(result.current.isUploadingImage).toBe(false);
+    });
+
+    it('clears every composer field through the existing Clear action', async () => {
+      global.fetch = jest.fn().mockResolvedValue(
+        apiResponse({
+          url: 'https://example.com/article',
+          domain: 'example.com',
+          title: 'Example article',
+        })
+      ) as typeof fetch;
+
+      const { result } = renderHook(() =>
+        useNewPostModal({ open: true, onClose: jest.fn() })
+      );
+
+      act(() => {
+        result.current.setTitle('Draft title');
+        result.current.setBodyMd('Draft body');
+      });
+
+      await act(async () => {
+        await result.current.parseLink('https://example.com/article');
+      });
+
+      await waitFor(() => {
+        expect(result.current.links).toHaveLength(1);
+      });
+
+      expect(result.current.canClear).toBe(true);
+
+      await act(async () => {
+        await result.current.clearDraft();
+      });
+
+      expect(result.current.title).toBe('');
+      expect(result.current.bodyMd).toBe('');
+      expect(result.current.links).toHaveLength(0);
+      expect(result.current.youtubeMetadata).toBeNull();
+      expect(result.current.images).toHaveLength(0);
+      expect(result.current.error).toBeNull();
+      expect(result.current.canClear).toBe(false);
+    });
+
     it.each([
       { label: 'English edition', lang: 'en' as const, image: 'https://cdn.example.com/en-photo.jpg' },
       { label: 'Russian edition', lang: 'ru' as const, image: 'https://cdn.example.com/ru-photo.jpg' },
@@ -421,5 +754,103 @@ describe('Flow link preview', () => {
       expect(savedPayload?.metadata.link_previews).toHaveLength(1);
       expect(savedPayload?.metadata.links).toBeUndefined();
     });
+  });
+});
+
+describe('Flow composer dialog accessibility', () => {
+  it('keeps a visible keyboard focus state on attachment removal', async () => {
+    const originalFetch = global.fetch;
+
+    global.fetch = jest.fn().mockResolvedValue(
+      apiResponse({
+        item: {
+          id: 'item-1',
+          title: 'Existing photo',
+          body_md: '',
+          metadata: { images: ['https://cdn.example.com/existing.jpg'] },
+        },
+      })
+    ) as typeof fetch;
+
+    try {
+      render(<NewPostModal open itemId="item-1" onClose={jest.fn()} />);
+
+      const removeButton = await screen.findByRole('button', {
+        name: 'Remove image',
+      });
+
+      expect(removeButton.className).toContain('focus-visible:opacity-100');
+      expect(removeButton.className).toContain('focus-visible:ring-2');
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it('exposes a modal dialog, traps Tab inside it and restores focus', async () => {
+    const trigger = document.createElement('button');
+    trigger.textContent = 'Open composer';
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const onClose = jest.fn();
+    const { rerender } = render(<NewPostModal open onClose={onClose} />);
+
+    const dialog = screen.getByRole('dialog');
+
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveAttribute('aria-label', 'New Flow post');
+    expect(dialog.style.getPropertyValue('--pi-composer-height')).toBe(
+      `${window.innerHeight}px`
+    );
+    expect(dialog.style.getPropertyValue('--pi-composer-offset')).toBe('0px');
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Post text')).toHaveFocus();
+    });
+
+    const closeButton = screen.getByRole('button', {
+      name: 'Close composer',
+    });
+    const attachButton = screen.getByRole('button', {
+      name: 'Attach images',
+    });
+
+    await waitFor(() => {
+      expect(attachButton).toBeEnabled();
+    });
+
+    attachButton.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(closeButton).toHaveFocus();
+
+    fireEvent.keyDown(document, {
+      key: 'Tab',
+      shiftKey: true,
+    });
+
+    expect(attachButton).toHaveFocus();
+
+    rerender(<NewPostModal open={false} onClose={onClose} />);
+
+    await waitFor(() => {
+      expect(trigger).toHaveFocus();
+    });
+
+    trigger.remove();
+  });
+
+  it('closes on Escape when the composer is idle', async () => {
+    const onClose = jest.fn();
+
+    render(<NewPostModal open onClose={onClose} />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Post text')).toHaveFocus();
+    });
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
