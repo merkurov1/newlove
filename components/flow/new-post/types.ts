@@ -55,6 +55,8 @@ export type NewPostModalProps = {
   onClose: () => void;
   onCreated?: (item: Item, crosspost?: unknown) => void;
   itemId?: string | null;
+  /** Language of the edition that opened the composer (EN/RU). */
+  lang?: string | null;
 };
 
 export type SaveState =

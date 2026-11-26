@@ -108,6 +108,88 @@ describe('shared Flow publication service', () => {
     expect(store.inserted[0].published_at).toBeTruthy();
   });
 
+  it('preserves the EN language for a photo item', async () => {
+    const store = fakeStore();
+
+    const result = await createFlowItem(store.client, {
+      body_md: '',
+      type: 'photo',
+      lang: 'en',
+      status: 'published',
+      visibility: 'public',
+      metadata: { images: ['https://cdn.example.com/photo-en.jpg'] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(store.inserted[0]).toMatchObject({
+      type: 'photo',
+      lang: 'en',
+      metadata: {
+        images: ['https://cdn.example.com/photo-en.jpg'],
+      },
+    });
+  });
+
+  it('preserves the RU language for a photo item', async () => {
+    const store = fakeStore();
+
+    await createFlowItem(store.client, {
+      body_md: '',
+      type: 'photo',
+      lang: 'ru',
+      status: 'published',
+      visibility: 'public',
+      metadata: { images: ['https://cdn.example.com/photo-ru.jpg'] },
+    });
+
+    expect(store.inserted[0]).toMatchObject({
+      type: 'photo',
+      lang: 'ru',
+    });
+  });
+
+  it('normalizes a valid language tag without rewriting EN to RU', async () => {
+    const store = fakeStore();
+
+    await createFlowItem(store.client, {
+      body_md: '',
+      type: 'photo',
+      lang: 'EN',
+      status: 'published',
+      visibility: 'public',
+      metadata: { images: ['https://cdn.example.com/photo.jpg'] },
+    });
+
+    expect(store.inserted[0].lang).toBe('en');
+  });
+
+  it('keeps existing non-photo publication language behaviour', async () => {
+    const cases = [
+      { type: 'note', lang: 'en' },
+      { type: 'article', lang: 'ru' },
+      { type: 'link', lang: 'en' },
+      { type: 'video', lang: 'ru' },
+      { type: 'quote', lang: 'en' },
+    ] as const;
+
+    for (const testCase of cases) {
+      const store = fakeStore();
+
+      await createFlowItem(store.client, {
+        body_md: 'Body copy',
+        type: testCase.type,
+        lang: testCase.lang,
+        status: 'published',
+        visibility: 'public',
+      });
+
+      expect(store.inserted[0]).toMatchObject({
+        type: testCase.type,
+        lang: testCase.lang,
+      });
+    }
+  });
+
   it('does not crosspost a draft', async () => {
     const store = fakeStore();
 

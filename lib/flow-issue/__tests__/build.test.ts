@@ -354,6 +354,121 @@ describe('buildIssuePayload', () => {
     expect(payload.videos.every((entry) => entry.image)).toBe(true);
   });
 
+  it('selects only the photos declared for the EN or RU issue language', async () => {
+    const photoAnalysis = {
+      role: 'visual' as const,
+      editorialValue: 5,
+      originality: 5,
+      specificity: 5,
+      readerValue: 5,
+      confidence: 0.95,
+    };
+
+    const items = [
+      withAnalysis(
+        item({
+          id: 'photo-en',
+          type: 'photo',
+          lang: 'en',
+          title: 'English frame',
+          body_md: '',
+          metadata: {
+            public_url: 'https://cdn.example.com/en-photo.jpg',
+            alt: 'English frame',
+          },
+          published_at: '2026-10-20T10:00:00.000Z',
+        }),
+        photoAnalysis
+      ),
+      withAnalysis(
+        item({
+          id: 'photo-ru',
+          type: 'photo',
+          lang: 'ru',
+          title: 'Русский кадр',
+          body_md: '',
+          metadata: {
+            public_url: 'https://cdn.example.com/ru-photo.jpg',
+            alt: 'Русский кадр',
+          },
+          published_at: '2026-10-19T10:00:00.000Z',
+        }),
+        photoAnalysis
+      ),
+      withAnalysis(
+        item({
+          id: 'note-en',
+          lang: 'en',
+          title: 'English note',
+          published_at: '2026-10-18T10:00:00.000Z',
+        }),
+        { role: 'supporting' }
+      ),
+      withAnalysis(
+        item({
+          id: 'note-ru',
+          lang: 'ru',
+          title: 'Русская заметка',
+          published_at: '2026-10-17T10:00:00.000Z',
+        }),
+        { role: 'supporting' }
+      ),
+    ];
+
+    const supabase = fakeSupabase(items);
+    const en = await buildIssuePayload(supabase as any, 'en', start, end);
+    const ru = await buildIssuePayload(supabase as any, 'ru', start, end);
+    const selectedPhotoIds = (payload: IssuePayload) => [
+      payload.lead?.type === 'photo' ? payload.lead.id : null,
+      ...payload.photos.map((entry) => entry.id),
+    ].filter((id): id is string => Boolean(id));
+
+    expect(selectedPhotoIds(en)).toContain('photo-en');
+    expect(selectedPhotoIds(en)).not.toContain('photo-ru');
+    expect(en.items.map((entry) => entry.id)).toContain('photo-en');
+    expect(en.items.map((entry) => entry.id)).not.toContain('photo-ru');
+
+    expect(selectedPhotoIds(ru)).toContain('photo-ru');
+    expect(selectedPhotoIds(ru)).not.toContain('photo-en');
+    expect(ru.items.map((entry) => entry.id)).toContain('photo-ru');
+    expect(ru.items.map((entry) => entry.id)).not.toContain('photo-en');
+
+    // Non-photo material keeps its existing canonical behaviour: both notes
+    // remain visible to both editions for the translation pipeline.
+    expect(en.items.map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(['note-en', 'note-ru'])
+    );
+    expect(ru.items.map((entry) => entry.id)).toEqual(
+      expect.arrayContaining(['note-en', 'note-ru'])
+    );
+  });
+
+  it('keeps legacy photos without an explicit EN/RU language in both editions', async () => {
+    const items = [
+      withAnalysis(
+        item({
+          id: 'photo-legacy',
+          type: 'photo',
+          lang: null,
+          title: 'Legacy frame',
+          body_md: '',
+          metadata: {
+            public_url: 'https://cdn.example.com/legacy-photo.jpg',
+            alt: 'Legacy frame',
+          },
+        }),
+        { role: 'visual' }
+      ),
+    ];
+
+    const supabase = fakeSupabase(items);
+    const en = await buildIssuePayload(supabase as any, 'en', start, end);
+    const ru = await buildIssuePayload(supabase as any, 'ru', start, end);
+
+    expect(en.items.map((entry) => entry.id)).toContain('photo-legacy');
+    expect(ru.items.map((entry) => entry.id)).toContain('photo-legacy');
+  });
+
   it('keeps old payloads rendering through the existing HTML/email contract', async () => {
     const items = [
       withAnalysis(

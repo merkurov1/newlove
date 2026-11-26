@@ -10,6 +10,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { normalizeFlowItem } from './content';
+import { normalizeFlowLanguage } from './language';
 import { crosspostFlowItem, type CrosspostResult } from './crosspost';
 import {
   ensurePublishedFlowContext,
@@ -102,7 +103,10 @@ export async function createFlowItem(
     typeof input.visibility === 'string' && ALLOWED_VISIBILITIES.includes(input.visibility)
       ? input.visibility
       : 'public';
-  const lang = typeof input.lang === 'string' && input.lang.trim() ? input.lang.trim() : 'ru';
+  // Preserve an explicitly supplied language. Normalization only collapses a
+  // valid tag (`EN`, `en-US`) to the canonical `en`/`ru` stored in items.lang;
+  // it never rewrites a valid English item to Russian.
+  const lang = normalizeFlowLanguage(input.lang);
   const bodyMd = typeof input.body_md === 'string' ? input.body_md : '';
   const sourceUrl = typeof input.source_url === 'string' ? input.source_url : null;
   const inputMetadata =

@@ -549,6 +549,7 @@ export default function FlowWorkspace() {
 
       <NewPostModal
         open={composerOpen}
+        lang="ru"
         onClose={() => setComposerOpen(false)}
         onCreated={() => {
           setComposerOpen(false);
@@ -560,6 +561,7 @@ export default function FlowWorkspace() {
         <NewPostModal
           open
           itemId={editingId}
+          lang="ru"
           onClose={() => setEditingId(null)}
           onCreated={() => {
             setEditingId(null);
