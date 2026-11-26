@@ -140,7 +140,7 @@ export default async function LetterPage({ params }: PageProps) {
   };
 
   return (
-    <div className="min-h-screen bg-white text-zinc-900 selection:bg-black selection:text-white font-serif">
+    <div className="min-h-screen overflow-x-clip bg-[#FAF8F5] text-[#1C1A1B] selection:bg-[#1C1A1B] selection:text-[#FAF8F5] font-serif">
       <JsonLd
         data={
           isNewsArticle
@@ -155,39 +155,39 @@ export default async function LetterPage({ params }: PageProps) {
           { name: String(letter.title || 'Article'), path: articlePath },
         ])}
       />
-      <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-zinc-100 py-4 px-6 md:px-12 flex justify-between items-center">
+      <nav className="sticky top-0 z-50 bg-[#FAF8F5]/95 backdrop-blur-md border-b border-[#DAD3CC] py-4 px-6 md:px-12 flex justify-between items-center">
         <Link 
           href="/journal" 
-          className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-zinc-500 hover:text-black transition-colors"
+          className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest text-[#5B5658] hover:text-[#7A2233] transition-colors"
         >
           <ArrowLeft size={14} /> 
           <span>All Articles</span>
         </Link>
       </nav>
 
-      <article className="max-w-3xl mx-auto px-6 py-16 md:py-24">
+      <article className="max-w-3xl mx-auto min-w-0 px-6 py-16 md:py-24">
         <header className="mb-16 md:mb-20 text-center">
-          <h1 className="text-4xl md:text-6xl font-serif font-medium leading-tight mb-8 text-black">
+          <h1 className="text-4xl md:text-6xl font-serif font-normal leading-[1.08] tracking-[-0.02em] mb-8 text-balance break-words text-[#1C1A1B]">
             {letter.title}
           </h1>
-          <div className="flex justify-center items-center gap-4 text-xs font-mono uppercase tracking-widest text-zinc-500">
+          <div className="flex flex-wrap justify-center items-center gap-4 text-xs font-mono uppercase tracking-widest text-[#5B5658]">
              <span>{dateStr}</span>
-             <span className="w-1 h-1 bg-zinc-300 rounded-full"></span>
+             <span className="w-1 h-1 bg-[#DAD3CC] rounded-full"></span>
              <span>{letterAuthor?.name || 'Anton Merkurov'}</span>
           </div>
         </header>
 
-        <div className="prose prose-lg md:prose-xl prose-stone max-w-none 
-          prose-headings:font-serif prose-headings:font-medium prose-headings:text-black
-          prose-p:font-serif prose-p:text-zinc-800 prose-p:leading-[1.8]
-          prose-a:text-black prose-a:underline prose-a:decoration-1 hover:prose-a:opacity-70
-          prose-blockquote:border-l-2 prose-blockquote:border-black prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-zinc-800
-          prose-code:font-mono prose-code:text-sm prose-code:bg-zinc-100 prose-code:px-1 prose-code:rounded
+        <div className="prose prose-lg md:prose-xl prose-stone max-w-none min-w-0
+          prose-headings:font-serif prose-headings:font-normal prose-headings:text-[#1C1A1B]
+          prose-p:font-serif prose-p:text-[#33302F] prose-p:leading-[1.8]
+          prose-a:text-[#7A2233] prose-a:underline prose-a:decoration-1 hover:prose-a:opacity-70
+          prose-blockquote:border-l-2 prose-blockquote:border-[#7A2233] prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-[#33302F]
+          prose-code:font-mono prose-code:text-sm prose-code:bg-[#F1ECE5] prose-code:px-1 prose-code:rounded
           mb-24">
             {blocks && blocks.length > 0 ? (
               <BlockRenderer blocks={blocks} />
             ) : (
-              <div className="text-center py-12 text-zinc-400 font-mono text-xs">
+              <div className="text-center py-12 text-[#8A8380] font-mono text-xs">
                  Content loading...
               </div>
             )}
@@ -195,18 +195,18 @@ export default async function LetterPage({ params }: PageProps) {
 
         <div className="flex justify-center mb-20">
            <div className="text-center">
-              <span className="font-serif italic text-2xl text-zinc-400">A.M.</span>
+              <span className="font-serif italic text-2xl text-[#8A8380]">A.M.</span>
            </div>
         </div>
 
-        <section className="border-t border-zinc-100 pt-16">
+        <section className="border-t border-[#DAD3CC] pt-16">
             <div className="flex items-center gap-3 mb-8">
-               <MessageSquare size={18} className="text-zinc-400" />
-               <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-black">
+               <MessageSquare size={18} className="text-[#8A8380]" />
+               <h3 className="text-sm font-mono font-bold uppercase tracking-widest text-[#1C1A1B]">
                  Discussion
                </h3>
             </div>
-            <div className="bg-zinc-50 rounded-xl p-6 md:p-8">
+            <div className="bg-[#F1ECE5] rounded-xl p-6 md:p-8">
                 <LetterCommentsClient slug={slug} />
             </div>
         </section>

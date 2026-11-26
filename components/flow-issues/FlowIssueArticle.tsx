@@ -92,7 +92,16 @@ export default function FlowIssueArticle({
         }
         /* The global site header is fixed; start the issue below it. */
         .flow-issue-page {
+          --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+          --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          max-width: 100%;
+          overflow-x: clip;
           padding-top: 6rem;
+        }
+        .flow-issue-page img,
+        .flow-issue-page video,
+        .flow-issue-page iframe {
+          max-width: 100%;
         }
         @media (min-width: 640px) {
           .flow-issue-page {

@@ -238,7 +238,7 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
   return (
     <div
       lang={lang}
-      className="min-h-screen bg-[#FAF8F5] font-sans text-[#1C1A1B] selection:bg-black selection:text-white"
+      className="min-h-screen overflow-x-clip bg-[#FAF8F5] font-sans text-[#1C1A1B] selection:bg-black selection:text-white"
     >
       <HtmlLanguage lang={lang} />
       <PageEvent name="section_view" params={{ section: 'journal', language: lang }} />
