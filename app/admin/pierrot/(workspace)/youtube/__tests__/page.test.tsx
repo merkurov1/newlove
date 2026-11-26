@@ -21,9 +21,7 @@ const { default: YouTubeManagementPage } = require('../page') as {
 const PROJECT_SLUGS = ['art-engine', 'unframed', 'pierrot', 'heart-and-angel'];
 
 async function renderPage(searchParams: Record<string, string> = {}) {
-  return renderToStaticMarkup(
-    (await YouTubeManagementPage({ searchParams })) as never
-  );
+  return renderToStaticMarkup((await YouTubeManagementPage({ searchParams })) as never);
 }
 
 describe('Dedicated YouTube project workspace route', () => {
@@ -62,5 +60,30 @@ describe('Dedicated YouTube project workspace route', () => {
     expect(html).toContain('data-project="pierrot"');
     expect(html).toContain('Управление YouTube подключено');
     expect(html).toContain('Pierrot channel');
+  });
+
+  it('turns a connect preflight failure into a human-readable notice with the safe reason', async () => {
+    const html = await renderPage({
+      project: 'art-engine',
+      youtube_channels: 'error',
+      reason: 'redirect_uri_mismatch',
+    });
+
+    expect(html).toContain('data-project="art-engine"');
+    expect(html).toContain('Redirect URI не зарегистрирован');
+    expect(html).toContain('код: redirect_uri_mismatch');
+  });
+
+  it('explains a missing multi-channel migration on the same project page', async () => {
+    const html = await renderPage({
+      project: 'unframed',
+      youtube_channels: 'error',
+      reason: 'migration_required',
+      missing: 'youtube_channels',
+    });
+
+    expect(html).toContain('data-project="unframed"');
+    expect(html).toContain('миграция multi-channel YouTube не применена');
+    expect(html).toContain('youtube_channels');
   });
 });

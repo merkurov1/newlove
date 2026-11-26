@@ -16,7 +16,12 @@ jest.mock('@/lib/youtube/channels', () => ({
   ],
   isYouTubeProjectSlug: (value: unknown) =>
     ['art-engine', 'unframed', 'pierrot', 'heart-and-angel'].includes(String(value)),
-  youtubeMultichannelSchemaReady: jest.fn(async () => true),
+  checkYouTubeMultichannelSchema: jest.fn(async () => ({
+    ready: true,
+    reason: 'ready',
+    missingTables: [],
+    code: null,
+  })),
   listOAuthConnections: jest.fn(async () => [
     {
       id: 'connection-1',
@@ -68,6 +73,8 @@ const serverAuth = require('@/lib/serverAuth') as {
 const channels = require('@/lib/youtube/channels') as {
   bindChannelToProject: jest.Mock;
   disconnectOAuthConnection: jest.Mock;
+  checkYouTubeMultichannelSchema: jest.Mock;
+  listOAuthConnections: jest.Mock;
 };
 
 function post(body: Record<string, unknown>): Request {
@@ -101,11 +108,57 @@ describe('multi-channel YouTube owner API', () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
+    expect(body.schemaReady).toBe(true);
+    expect(body.schema).toEqual({
+      ready: true,
+      reason: 'ready',
+      missingTables: [],
+      code: null,
+    });
     expect(body.channels).toHaveLength(2);
     expect(body.channels.map((item: { channelId: string }) => item.channelId)).toEqual([
       'UC_art',
       'UC_unframed',
     ]);
+    expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
+  });
+
+  it('reports schemaReady=false with the missing table names instead of throwing', async () => {
+    channels.checkYouTubeMultichannelSchema.mockResolvedValueOnce({
+      ready: false,
+      reason: 'missing_tables',
+      missingTables: ['youtube_channels'],
+      code: 'PGRST205',
+    });
+
+    const response = await GET(
+      new Request('https://www.merkurov.love/api/admin/youtube/channels?project=art-engine')
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.schemaReady).toBe(false);
+    expect(body.schema.missingTables).toEqual(['youtube_channels']);
+    expect(body.message).toContain('youtube_channels');
+  });
+
+  it('returns a safe JSON error with HTTP status when state cannot be read', async () => {
+    channels.listOAuthConnections.mockRejectedValueOnce(
+      Object.assign(new Error('permission denied for table youtube_oauth_connections'), {
+        code: '42501',
+      })
+    );
+
+    const response = await GET(
+      new Request('https://www.merkurov.love/api/admin/youtube/channels?project=art-engine')
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body.error).toBe('state_read_failed');
+    expect(body.code).toBe('42501');
+    expect(body.retryable).toBe(true);
+    expect(body.message).toMatch(/Не удалось прочитать состояние YouTube/);
     expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
   });
 

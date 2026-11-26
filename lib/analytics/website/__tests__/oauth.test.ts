@@ -7,6 +7,7 @@ import {
   chooseSearchConsoleSite,
   normalizeGa4AccountId,
   normalizeGa4PropertyId,
+  probeGoogleConsentUrl,
   refreshGoogleAccessToken,
 } from '../providers/oauth';
 import { YOUTUBE_MANAGEMENT_CONSENT_SCOPES, YOUTUBE_MANAGEMENT_SCOPES } from '../config';
@@ -72,14 +73,15 @@ describe('Google consent configuration', () => {
   });
 
   it('classifies a revoked refresh token as invalid_grant without echoing the token', async () => {
-    global.fetch = jest.fn(async () =>
-      new Response(
-        JSON.stringify({
-          error: 'invalid_grant',
-          error_description: 'Token has been expired or revoked.',
-        }),
-        { status: 400, headers: { 'content-type': 'application/json' } }
-      )
+    global.fetch = jest.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: 'invalid_grant',
+            error_description: 'Token has been expired or revoked.',
+          }),
+          { status: 400, headers: { 'content-type': 'application/json' } }
+        )
     ) as unknown as typeof fetch;
 
     let caught: unknown;
@@ -196,5 +198,45 @@ describe('Google consent configuration', () => {
     );
 
     expect(site?.siteUrl).toBe('sc-domain:merkurov.love');
+  });
+});
+
+describe('Google consent preflight', () => {
+  it('accepts a normal consent page without treating it as a failure', async () => {
+    global.fetch = jest.fn(
+      async () => new Response('<html>Sign in</html>', { status: 200 })
+    ) as unknown as typeof fetch;
+
+    await expect(
+      probeGoogleConsentUrl('https://accounts.google.com/o/oauth2/v2/auth')
+    ).resolves.toEqual({ ok: true, reason: null });
+  });
+
+  it('detects a redirect_uri_mismatch returned as a 400 page', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response('<html><body>Error 400: redirect_uri_mismatch</body></html>', { status: 400 })
+    ) as unknown as typeof fetch;
+
+    await expect(
+      probeGoogleConsentUrl('https://accounts.google.com/o/oauth2/v2/auth')
+    ).resolves.toEqual({ ok: false, reason: 'redirect_uri_mismatch' });
+  });
+
+  it('detects an invalid client in the redirect location', async () => {
+    global.fetch = jest.fn(
+      async () =>
+        new Response(null, {
+          status: 302,
+          headers: {
+            location:
+              'https://accounts.google.com/signin/oauth/error?authError=aW52YWxpZF9jbGllbnQ',
+          },
+        })
+    ) as unknown as typeof fetch;
+
+    await expect(
+      probeGoogleConsentUrl('https://accounts.google.com/o/oauth2/v2/auth')
+    ).resolves.toEqual({ ok: false, reason: 'invalid_client' });
   });
 });

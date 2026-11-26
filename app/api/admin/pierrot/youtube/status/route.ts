@@ -11,6 +11,7 @@ import {
   getYouTubeManagementRedirectUri,
   getYouTubeTimezone,
 } from '@/lib/youtube/config';
+import { checkYouTubeMultichannelSchema } from '@/lib/youtube/channels';
 import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
 import { getYouTubeSharedProjects } from '@/lib/youtube/projects';
 
@@ -44,6 +45,7 @@ export async function GET(request: Request) {
   }
 
   const store = getServerSupabaseClient({ useServiceRole: true });
+  const schema = await checkYouTubeMultichannelSchema(store);
   const connection = await loadYouTubeConnectionState(store);
   const google = getGoogleOAuthConfig();
 
@@ -61,6 +63,10 @@ export async function GET(request: Request) {
   return json({
     ok: true,
     generatedAt: new Date().toISOString(),
+    // Multi-channel readiness is verified against every additive table with the
+    // service-role client, so a stale PostgREST cache is visible here too.
+    schemaReady: schema.ready,
+    schema,
     timezone: getYouTubeTimezone(),
     sharedProjects: getYouTubeSharedProjects(),
     configured: {

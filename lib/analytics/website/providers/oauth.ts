@@ -621,6 +621,16 @@ export function redirectUriHint(): string {
  * missing redirect URI is a configuration error, not a reason to show the
  * owner a generic Google error page.
  */
+function oauthErrorReason(value: string): string | null {
+  if (/redirect_uri_mismatch/i.test(value)) return 'redirect_uri_mismatch';
+  if (/invalid_client/i.test(value)) return 'invalid_client';
+  if (/access_denied|admin_policy_enforced|org_internal/i.test(value)) return 'access_denied';
+  if (/invalid_request|invalid_scope|invalid_grant/i.test(value)) {
+    return 'oauth_configuration_error';
+  }
+  return null;
+}
+
 export async function probeGoogleConsentUrl(
   consentUrl: string
 ): Promise<{ ok: boolean; reason: string | null }> {
@@ -631,9 +641,8 @@ export async function probeGoogleConsentUrl(
     });
     const location = response.headers.get('location') || '';
 
-    if (location.includes('redirect_uri_mismatch')) {
-      return { ok: false, reason: 'redirect_uri_mismatch' };
-    }
+    const locationReason = oauthErrorReason(location);
+    if (locationReason) return { ok: false, reason: locationReason };
 
     if (location.includes('/signin/oauth/error') || location.includes('authError=')) {
       let decoded = '';
@@ -649,18 +658,31 @@ export async function probeGoogleConsentUrl(
         // Fall through to the generic configuration error.
       }
 
-      if (decoded.includes('redirect_uri_mismatch')) {
-        return { ok: false, reason: 'redirect_uri_mismatch' };
-      }
-      if (decoded.includes('invalid_client')) {
-        return { ok: false, reason: 'invalid_client' };
-      }
+      return {
+        ok: false,
+        reason: oauthErrorReason(decoded) || 'oauth_configuration_error',
+      };
+    }
 
-      return { ok: false, reason: 'oauth_configuration_error' };
+    // Google returns a 400 page (not always a redirect) for an unregistered
+    // redirect URI or a bad client. Reading only the Location header used to
+    // report `ok:true`, sending the owner to a Google error page.
+    if (response.status >= 400) {
+      const body = await response.text().catch(() => '');
+      const bodyReason = oauthErrorReason(`${location}\n${body.slice(0, 4000)}`);
+
+      if (bodyReason) return { ok: false, reason: bodyReason };
+
+      // An explicit provider rejection is safer to surface than failing open.
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        return { ok: false, reason: 'oauth_configuration_error' };
+      }
     }
 
     return { ok: true, reason: null };
   } catch {
+    // A network timeout must not block a consent attempt: the owner can still
+    // reach Google directly, and the callback validates the result.
     return { ok: true, reason: null };
   }
 }
