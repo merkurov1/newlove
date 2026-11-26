@@ -25,6 +25,31 @@ function installBottomButton() {
   return button;
 }
 
+/**
+ * Shape of the real `WebApp.MainButton` exposed by the official SDK. It has
+ * no `BottomButton` sibling, which is what production Telegram actually sends.
+ */
+function installMainButton() {
+  const button = {
+    isVisible: false,
+    isActive: false,
+    show: jest.fn(),
+    hide: jest.fn(),
+    enable: jest.fn(),
+    disable: jest.fn(),
+    setText: jest.fn(),
+    setParams: jest.fn(),
+    onClick: jest.fn(),
+    offClick: jest.fn(),
+  };
+
+  (window as unknown as { Telegram?: unknown }).Telegram = {
+    WebApp: { initData: 'signed', MainButton: button },
+  };
+
+  return button;
+}
+
 beforeEach(() => {
   delete (window as unknown as { Telegram?: unknown }).Telegram;
   resetBottomButtonOwnership();
@@ -34,6 +59,115 @@ describe('Telegram BottomButton lifecycle', () => {
   it('reports unsupported when the client lacks the native button', () => {
     expect(isTelegramBottomButtonSupported()).toBe(false);
     expect(acquireBottomButton(Symbol('a'), { text: 'WRITE', visible: true, onClick: jest.fn() })).toBeNull();
+  });
+
+  it('uses the real MainButton API exposed by Telegram', () => {
+    const button = installMainButton();
+
+    expect(isTelegramBottomButtonSupported()).toBe(true);
+
+    const onClick = jest.fn();
+    const controller = acquireBottomButton(Symbol('vigil'), {
+      text: 'SEND SPARK',
+      visible: true,
+      enabled: true,
+      onClick,
+    });
+
+    expect(controller).not.toBeNull();
+    expect(button.setParams).toHaveBeenLastCalledWith({
+      text: 'SEND SPARK',
+      is_active: true,
+      is_visible: true,
+    });
+
+    const handler = button.onClick.mock.calls[0][0] as () => void;
+    handler();
+    expect(onClick).toHaveBeenCalledTimes(1);
+
+    controller?.update({
+      text: 'SPARK RETURNS IN 1H',
+      visible: true,
+      enabled: false,
+      onClick,
+    });
+    expect(button.setParams).toHaveBeenLastCalledWith({
+      text: 'SPARK RETURNS IN 1H',
+      is_active: false,
+      is_visible: true,
+    });
+
+    controller?.dispose();
+    expect(button.offClick).toHaveBeenCalledWith(handler);
+    expect(button.hide).toHaveBeenCalled();
+  });
+
+  it('prefers MainButton when a client exposes both names', () => {
+    const main = {
+      show: jest.fn(),
+      hide: jest.fn(),
+      setParams: jest.fn(),
+      onClick: jest.fn(),
+      offClick: jest.fn(),
+    };
+    const bottom = {
+      show: jest.fn(),
+      hide: jest.fn(),
+      setParams: jest.fn(),
+      onClick: jest.fn(),
+      offClick: jest.fn(),
+    };
+
+    (window as unknown as { Telegram?: unknown }).Telegram = {
+      WebApp: { initData: 'signed', MainButton: main, BottomButton: bottom },
+    };
+
+    const controller = acquireBottomButton(Symbol('vigil'), {
+      text: 'SEND SPARK',
+      visible: true,
+      onClick: jest.fn(),
+    });
+
+    expect(controller).not.toBeNull();
+    expect(main.setParams).toHaveBeenCalled();
+    expect(bottom.setParams).not.toHaveBeenCalled();
+  });
+
+  it('falls back to granular methods when setParams is missing', () => {
+    const button = {
+      show: jest.fn(),
+      hide: jest.fn(),
+      enable: jest.fn(),
+      disable: jest.fn(),
+      setText: jest.fn(),
+      onClick: jest.fn(),
+      offClick: jest.fn(),
+    };
+
+    (window as unknown as { Telegram?: unknown }).Telegram = {
+      WebApp: { initData: 'signed', MainButton: button },
+    };
+
+    const controller = acquireBottomButton(Symbol('vigil'), {
+      text: 'SEND SPARK',
+      visible: true,
+      enabled: false,
+      onClick: jest.fn(),
+    });
+
+    expect(controller).not.toBeNull();
+    expect(button.setText).toHaveBeenLastCalledWith('SEND SPARK');
+    expect(button.disable).toHaveBeenCalled();
+    expect(button.show).toHaveBeenCalled();
+
+    controller?.update({
+      text: 'SEND SPARK',
+      visible: false,
+      enabled: true,
+      onClick: jest.fn(),
+    });
+
+    expect(button.hide).toHaveBeenCalled();
   });
 
   it('shows, relabels, disables and hides with the route state', () => {

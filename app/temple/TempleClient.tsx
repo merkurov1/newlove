@@ -835,14 +835,17 @@ export default function TempleClient({
     };
   }, []);
 
-  // In Telegram, the native BottomButton is the single primary Temple action.
-  // It is hidden while an in-page modal/payment surface owns the screen so it
-  // never competes with the modal's own actions.
+  // In Telegram, the native MainButton is the single primary Temple action.
+  // It is hidden while an in-page modal/payment surface owns the screen — and
+  // while an intercepted ritual route (for example /vigil) is open above the
+  // Temple — so the ritual's own Send Spark button can own the native action
+  // instead of leaving a stale "KEEP THE VIGIL" label on screen.
   const modalOpen = isChroniclesOpen;
+  const templeActionOwnsRoute = pathname === '/temple' && !modalOpen;
 
   useTelegramBottomButton({
     text: 'KEEP THE VIGIL',
-    visible: isTelegramApp && !modalOpen,
+    visible: isTelegramApp && templeActionOwnsRoute,
     enabled: hasVigilState,
     onClick: () => {
       hapticImpact('vigil');

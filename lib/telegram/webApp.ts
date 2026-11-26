@@ -14,15 +14,27 @@ export type TelegramInset = {
   left?: number;
 };
 
-export type TelegramBottomButton = {
+/**
+ * The subset shared by Telegram's native `MainButton` (the real API exposed by
+ * every current client) and the older/custom `BottomButton` some builds may
+ * provide. Keeping one shape lets the route-level owner operate either button
+ * without branching on the client version.
+ */
+export type TelegramNativeActionButton = {
   isVisible?: boolean;
+  isActive?: boolean;
   show?: () => void;
   hide?: () => void;
+  enable?: () => void;
+  disable?: () => void;
   setText?: (text: string) => void;
   setParams?: (params: { text?: string; is_active?: boolean; is_visible?: boolean }) => void;
   onClick?: (handler: () => void) => void;
   offClick?: (handler: () => void) => void;
 };
+
+/** @deprecated Prefer `TelegramNativeActionButton`; kept for existing imports. */
+export type TelegramBottomButton = TelegramNativeActionButton;
 
 export type TelegramThemeParams = {
   bg_color?: string;
@@ -77,7 +89,14 @@ export type TelegramWebApp = {
     notificationOccurred?: (type: 'error' | 'success' | 'warning') => void;
     selectionChanged?: () => void;
   };
-  BottomButton?: TelegramBottomButton;
+  /**
+   * The real native primary action on current Telegram clients.
+   *
+   * The Telegram WebApp SDK exposes `MainButton`; `BottomButton` is not part of
+   * the official object, so it stays as a compatibility fallback only.
+   */
+  MainButton?: TelegramNativeActionButton;
+  BottomButton?: TelegramNativeActionButton;
   BackButton?: {
     isVisible?: boolean;
     show?: () => void;
@@ -137,6 +156,7 @@ export function isTelegramVersionAtLeast(version: unknown, minimum: string): boo
 }
 
 export type TelegramCapabilities = {
+  /** Native primary action is available (MainButton, or legacy BottomButton). */
   bottomButton: boolean;
   haptics: boolean;
   shareToStory: boolean;
@@ -150,7 +170,11 @@ export function detectTelegramCapabilities(webApp?: TelegramWebApp | null): Tele
   const tg = webApp === undefined ? getTelegramWebApp() : webApp;
 
   return {
-    bottomButton: typeof tg?.BottomButton?.show === 'function',
+    // `MainButton` is the documented API; accept the legacy `BottomButton`
+    // name too so custom WebViews keep working.
+    bottomButton:
+      typeof tg?.MainButton?.show === 'function' ||
+      typeof tg?.BottomButton?.show === 'function',
     haptics: Boolean(
       tg?.HapticFeedback &&
         (typeof tg.HapticFeedback.impactOccurred === 'function' ||

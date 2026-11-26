@@ -16,6 +16,41 @@ import { hapticNotification } from '@/lib/telegram/webApp';
 const FLAME_ID = 1;
 const CLOCK_REFRESH_MS = 30_000;
 const CLAIM_TIMEOUT_MS = 20_000;
+const TOKEN_READ_TIMEOUT_MS = 8_000;
+
+/**
+ * Read the browser session without letting a stalled storage/auth lock keep
+ * the Send Spark action in "Sending…" forever. A timeout falls through to the
+ * server-issued Telegram token (or no token); the claim route then returns a
+ * clear 401 instead of leaving the UI pending.
+ */
+async function readSupabaseSessionToken(): Promise<string | null> {
+  try {
+    const session = await new Promise<{ access_token?: string } | null>(
+      (resolve) => {
+        let settled = false;
+
+        const finish = (value: { access_token?: string } | null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(value);
+        };
+
+        const timer = setTimeout(() => finish(null), TOKEN_READ_TIMEOUT_MS);
+
+        supabase.auth.getSession().then(
+          ({ data }) => finish(data.session ?? null),
+          () => finish(null)
+        );
+      }
+    );
+
+    return session?.access_token ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Supplementary heart display data only. The shared flame clock itself comes
@@ -85,6 +120,7 @@ export function useVigilController() {
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [authExpired, setAuthExpired] = useState(false);
+  const [authRetryNonce, setAuthRetryNonce] = useState(0);
   const [cooldownRemainingMs, setCooldownRemainingMs] = useState<number | null>(
     null
   );
@@ -92,6 +128,7 @@ export function useVigilController() {
   const userName = identity.displayName;
   const identityIsLoading = identity.isLoading;
   const identityIsTelegram = identity.isTelegram;
+  const identitySource = identity.source;
   const refreshIdentity = identity.refresh;
   const getIdentityToken = identity.getAuthToken;
 
@@ -228,19 +265,19 @@ export function useVigilController() {
   }, [refreshData, updateClock]);
 
   const readBearerToken = useCallback(async (): Promise<string | null> => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+    const telegramToken = getIdentityToken();
 
-      if (session?.access_token) return session.access_token;
-    } catch {
-      // A failed Supabase session read falls back to the verified Telegram
-      // token, which is server-issued and safe to use as a bearer.
-    }
+    // A verified Telegram identity is anchored to the server-issued signed
+    // session. A stale Supabase session in the same WebView must not shadow it
+    // and turn a valid Mini App visit into a 401.
+    if (identitySource === 'telegram' && telegramToken) return telegramToken;
 
-    return getIdentityToken();
-  }, [getIdentityToken]);
+    const supabaseToken = await readSupabaseSessionToken();
+
+    if (supabaseToken) return supabaseToken;
+
+    return telegramToken;
+  }, [getIdentityToken, identitySource]);
 
   // Ask the server for this identity's own cooldown. The public flame timer is
   // never used to infer whether this visitor may spark.
@@ -252,7 +289,10 @@ export function useVigilController() {
     // A new identity gets one fresh server exchange attempt.
     statusRetryRef.current = false;
 
-    const loadStatus = async (): Promise<VigilStatusResponse | null> => {
+    const loadStatus = async (): Promise<{
+      status: VigilStatusResponse | null;
+      hadToken: boolean;
+    }> => {
       try {
         const token = await readBearerToken();
 
@@ -263,35 +303,61 @@ export function useVigilController() {
           headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 
-        if (!response.ok) return null;
+        if (!response.ok) return { status: null, hadToken: Boolean(token) };
 
-        return (await response.json().catch(() => null)) as
-          | VigilStatusResponse
-          | null;
+        return {
+          status: (await response.json().catch(() => null)) as
+            | VigilStatusResponse
+            | null,
+          hadToken: Boolean(token),
+        };
       } catch {
-        return null;
+        return { status: null, hadToken: false };
       }
     };
 
     const resolveStatus = async () => {
-      let status = await loadStatus();
+      let { status, hadToken } = await loadStatus();
 
-      // A cached identity name can survive while the signed session expired.
-      // Re-exchange the signed initData once, then retry.
       if (
         !cancelled &&
         status &&
         status.authenticated === false &&
-        identityIsTelegram &&
         !statusRetryRef.current
       ) {
+        // A cached display name can survive while the signed session expired.
+        // Re-exchange exactly once, then let the UI show a recoverable state
+        // instead of leaving an enabled action that always fails.
         statusRetryRef.current = true;
-        const refreshed = await refreshIdentity({ force: true });
 
-        if (refreshed && !cancelled) status = await loadStatus();
+        if (identityIsTelegram) {
+          const refreshed = await refreshIdentity({ force: true });
+
+          if (refreshed && !cancelled) {
+            ({ status, hadToken } = await loadStatus());
+          }
+        } else if (identitySource === 'supabase') {
+          try {
+            const { data } = await supabase.auth.refreshSession();
+
+            if (data.session?.access_token && !cancelled) {
+              ({ status, hadToken } = await loadStatus());
+            }
+          } catch {
+            // Fall through to the expired-session state below.
+          }
+        }
       }
 
-      if (cancelled || !status?.authenticated) return;
+      if (cancelled) return;
+
+      if (!status?.authenticated) {
+        // Only a server rejection of an actual credential is an expired
+        // session. A token read that timed out must not lock out a valid
+        // session; the claim itself will surface a clear error if needed.
+        if (status && (hadToken || identityIsTelegram)) setAuthExpired(true);
+        return;
+      }
 
       setAuthExpired(false);
       applyCooldown(
@@ -306,12 +372,22 @@ export function useVigilController() {
     };
   }, [
     applyCooldown,
+    authRetryNonce,
     identityIsLoading,
     identityIsTelegram,
+    identitySource,
     readBearerToken,
     refreshIdentity,
     userName,
   ]);
+
+  const retrySession = useCallback(() => {
+    // Explicit user recovery: re-check the server with a freshly exchanged
+    // session instead of leaving a dead "expired" action on screen.
+    setAuthExpired(false);
+    setRateLimitMsg(null);
+    setAuthRetryNonce((value) => value + 1);
+  }, []);
 
   const measureHeartTarget = useCallback(() => {
     if (!heartRef.current) return null;
@@ -593,6 +669,7 @@ export function useVigilController() {
     rateLimitMsg,
     successMessage,
     authExpired,
+    retrySession,
     spark,
     userName,
     triggerRitual,

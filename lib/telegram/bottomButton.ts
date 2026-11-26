@@ -1,12 +1,19 @@
 /**
- * Route-scoped ownership of Telegram's native BottomButton.
+ * Route-scoped ownership of Telegram's native primary action button.
  *
  * Only one route may own the native button at a time. A second claimant gets
  * `null` instead of silently replacing the first screen's action, which
  * prevents duplicate native handlers and competing CTAs.
+ *
+ * Telegram's documented API is `WebApp.MainButton`. Some custom/older WebViews
+ * expose a `BottomButton` instead, so both names are accepted with MainButton
+ * taking precedence.
  */
 
-import { getTelegramWebApp, type TelegramBottomButton } from './webApp';
+import {
+  getTelegramWebApp,
+  type TelegramNativeActionButton,
+} from './webApp';
 
 export type BottomButtonConfig = {
   text: string;
@@ -22,50 +29,85 @@ export type BottomButtonController = {
 
 let activeOwner: symbol | null = null;
 
-function button(): TelegramBottomButton | null {
+type ResolvedButton = {
+  button: TelegramNativeActionButton;
+  kind: 'main' | 'bottom';
+};
+
+function resolveButton(): ResolvedButton | null {
   const tg = getTelegramWebApp();
 
-  return tg?.BottomButton && typeof tg.BottomButton.show === 'function'
-    ? tg.BottomButton
-    : null;
+  if (!tg) return null;
+
+  const main = tg.MainButton;
+
+  if (
+    main &&
+    (typeof main.show === 'function' ||
+      typeof main.setParams === 'function')
+  ) {
+    return { button: main, kind: 'main' };
+  }
+
+  const bottom = tg.BottomButton;
+
+  if (
+    bottom &&
+    (typeof bottom.show === 'function' ||
+      typeof bottom.setParams === 'function')
+  ) {
+    return { button: bottom, kind: 'bottom' };
+  }
+
+  return null;
 }
 
-function apply(bottom: TelegramBottomButton, config: BottomButtonConfig) {
+function apply(button: TelegramNativeActionButton, config: BottomButtonConfig) {
   const text = config.text.trim();
 
   if (!text) return;
 
+  const active = config.enabled !== false;
+
   try {
-    if (typeof bottom.setParams === 'function') {
-      bottom.setParams({
+    if (typeof button.setParams === 'function') {
+      button.setParams({
         text,
-        is_active: config.enabled !== false,
+        is_active: active,
         is_visible: config.visible,
       });
       return;
     }
 
-    bottom.setText?.(text);
+    // Older clients only expose granular methods.
+    button.setText?.(text);
 
-    if (config.visible) bottom.show?.();
-    else bottom.hide?.();
+    if (config.visible) {
+      if (active) button.enable?.();
+      else button.disable?.();
+      button.show?.();
+    } else {
+      button.hide?.();
+    }
   } catch {
     /* Optional Telegram methods must never break the screen. */
   }
 }
 
 export function isTelegramBottomButtonSupported(): boolean {
-  return button() !== null;
+  return resolveButton() !== null;
 }
 
 export function acquireBottomButton(
   owner: symbol,
   initial: BottomButtonConfig
 ): BottomButtonController | null {
-  const bottom = button();
+  const resolved = resolveButton();
 
-  if (!bottom) return null;
+  if (!resolved) return null;
   if (activeOwner && activeOwner !== owner) return null;
+
+  const { button } = resolved;
 
   activeOwner = owner;
 
@@ -78,31 +120,31 @@ export function acquireBottomButton(
     try {
       current.onClick();
     } catch (error) {
-      console.warn('[telegram] BottomButton action failed:', error);
+      console.warn('[telegram] native action failed:', error);
     }
   };
 
   try {
-    bottom.onClick?.(handleClick);
+    button.onClick?.(handleClick);
   } catch {
     /* Optional Telegram method. */
   }
 
-  apply(bottom, current);
+  apply(button, current);
 
   return {
     update(next) {
       if (disposed) return;
       current = next;
-      apply(bottom, current);
+      apply(button, current);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
 
       try {
-        bottom.offClick?.(handleClick);
-        bottom.hide?.();
+        button.offClick?.(handleClick);
+        button.hide?.();
       } catch {
         /* Optional Telegram method. */
       }

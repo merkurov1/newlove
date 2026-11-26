@@ -51,6 +51,15 @@ describe('Telegram capability detection', () => {
     expect(capabilities.haptics).toBe(false);
   });
 
+  it('recognises the documented MainButton as the native primary action', () => {
+    installTelegram({
+      initData: 'signed',
+      MainButton: { show: jest.fn(), setParams: jest.fn() },
+    });
+
+    expect(detectTelegramCapabilities().bottomButton).toBe(true);
+  });
+
   it('parses Telegram versions defensively', () => {
     expect(parseTelegramVersion('8.0')).toEqual([8, 0]);
     expect(parseTelegramVersion('7.10.3')).toEqual([7, 10]);
