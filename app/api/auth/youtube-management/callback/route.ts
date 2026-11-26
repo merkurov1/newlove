@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const STATE_COOKIE = 'pierrot_youtube_management_oauth';
-const RETURN_PATH = '/admin/pierrot/analytics';
+const RETURN_PATH = '/admin/pierrot/youtube';
 
 type OAuthState = {
   uid: string;
@@ -142,6 +142,7 @@ export async function GET(request: Request) {
   const response = redirect(request, {
     youtube_management: result.status === 'connected' ? 'success' : result.status,
     youtube_management_project: state.project,
+    project: state.project,
     ...(result.status === 'connected'
       ? { yt_channel: result.channelTitle || result.channelId || '' }
       : { reason: result.code || 'management_discovery_failed' }),

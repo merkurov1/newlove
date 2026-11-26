@@ -18,7 +18,7 @@ The repository already had a working single-channel YouTube stack:
 - Write operations for videos, playlists, comments and captions
   (`lib/youtube/management.ts`) with an explicit confirmation token for writes
   and an append-only audit table (`youtube_management_audit`).
-- Legacy admin page `/admin/pierrot/analytics` and a shared-channel manager.
+- A legacy shared-channel manager, no longer mounted on the analytics page.
 
 Two callback URIs already existed and remain separate:
 
@@ -131,8 +131,9 @@ now shows, per project:
 - paginated video catalog;
 - metadata analysis, diff, explicit confirmation and apply.
 
-The old shared-channel manager remains on `/admin/pierrot/analytics` so
-existing flows keep working.
+`/admin/pierrot/analytics` keeps read-only YouTube source health and analytics
+only. The old shared-channel manager is not mounted there; all channel
+connections, discovery and project bindings stay in the dedicated workspace.
 
 ## Google Cloud checklist
 
@@ -197,6 +198,6 @@ YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
 ## Out of scope (unchanged)
 
 Video upload/publication, Shorts upload, scheduling, comments and live streams
-are not part of this task. The legacy management UI still contains older
-upload/comment/caption forms; they are not used by the new project workspace
-and no new upload flow was added.
+are not part of this task. The legacy management component still contains older
+upload/comment/caption forms; it is not mounted in analytics, is not used by the
+new project workspace and no new upload flow was added.

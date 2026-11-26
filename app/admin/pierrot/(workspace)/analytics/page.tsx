@@ -17,7 +17,6 @@ import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config'
 import type { ProviderHealth } from '@/lib/analytics/website/types';
 import Sparkline from '@/components/pierrot/workspace/Sparkline';
 import SearchConsoleMonitor from '@/components/analytics/SearchConsoleMonitor';
-import YouTubeChannelManager from '@/components/youtube/YouTubeChannelManager';
 
 import './analytics.css';
 
@@ -150,27 +149,8 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
   const sync = one(params, 'sync');
   const disconnected = one(params, 'disconnected');
   const discovery = discoveryBanner(params);
-  const youtubeManagement = one(params, 'youtube_management');
 
   if (discovery) return discovery;
-
-  if (youtubeManagement === 'success') {
-    return {
-      tone: 'ok',
-      text: `Управление YouTube подключено отдельным incremental consent. Канал: ${
-        one(params, 'yt_channel') || 'общий канал Pierrot + UNFRAMED'
-      }. Аналитический grant не изменён.`,
-    };
-  }
-
-  if (youtubeManagement && youtubeManagement !== 'success') {
-    return {
-      tone: 'bad',
-      text: `Управление YouTube не подключено: ${explainError(
-        one(params, 'reason') || youtubeManagement
-      )}. Аналитика продолжает работать с прежним grant.`,
-    };
-  }
 
   if (connect === 'success') {
     return {
@@ -477,8 +457,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
   const blueskyPeriodPosts = blueskyDashboard?.period.posts ?? [];
   const recentRuns = health.runs.slice(0, 12);
   const youtubeStatusHref = '/api/admin/pierrot/youtube/status';
-  const youtubeConnectHref = '/api/admin/analytics/connect?provider=youtube';
-  const youtubeProject = one(params, 'project') === 'unframed' ? 'unframed' : 'pierrot';
 
   return (
     <div className="pw-page pw-analytics">
@@ -496,6 +474,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
 
           <nav className="pw-segmented" aria-label="Разделы">
             <Link href="/admin/pierrot/dash">DASH</Link>
+            <Link href="/admin/pierrot/youtube">YOUTUBE</Link>
             <Link href="/admin/observatory">OBSERVATORY</Link>
           </nav>
         </header>
@@ -593,8 +572,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
 
               {youtube.missingScopes.length > 0 && (
                 <p className="pw-analytics-action">
-                  Не хватает read-only scopes: {youtube.missingScopes.join(', ')}. Переподключите
-                  Google, чтобы приватная аналитика стала доступна.
+                  Не хватает read-only scopes: {youtube.missingScopes.join(', ')}. Приватная
+                  аналитика недоступна до повторного read-only consent.
                 </p>
               )}
 
@@ -611,35 +590,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 </a>
               </p>
 
-              <div className="pw-analytics-card-actions">
-                <a className="pw-analytics-button" href={youtubeConnectHref}>
-                  {youtube.connected ? 'Переподключить Google' : 'Подключить общий канал'}
-                </a>
-                <a
-                  className="pw-analytics-button pw-analytics-button--quiet"
-                  href={`/admin/pierrot/youtube?project=${youtubeProject}`}
-                >
-                  Управление каналом
-                </a>
-                {youtube.connected && (
-                  <form action="/api/admin/analytics/disconnect" method="post">
-                    <input type="hidden" name="provider" value="youtube" />
-                    <button
-                      className="pw-analytics-button pw-analytics-button--quiet"
-                      type="submit"
-                    >
-                      Отключить
-                    </button>
-                  </form>
-                )}
-              </div>
+              <p className="pw-analytics-hint">
+                Подключение Google-аккаунтов, обнаружение каналов и привязка проектов выполняются в
+                отдельном workspace <code>/admin/pierrot/youtube</code>.
+              </p>
             </article>
           </section>
         )}
-
-        <section className="pw-analytics-grid" aria-label="Управление общим YouTube-каналом">
-          <YouTubeChannelManager project={youtubeProject} />
-        </section>
 
         <section className="pw-analytics-grid" aria-label="Рассылки и инфраструктура">
           <article className="pw-analytics-card">
