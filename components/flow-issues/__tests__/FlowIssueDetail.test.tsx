@@ -62,4 +62,40 @@ describe('Flow issue Previous / Next navigation', () => {
 
     expect(screen.queryByRole('navigation', { name: 'Навигация по выпускам' })).toBeNull();
   });
+
+  it('keeps the published headline and issue links while protecting the layout', () => {
+    const { container } = render(
+      <FlowIssueDetail
+        issue={{
+          ...current,
+          htmlWeb:
+            '<html><head><style>.issue-custom{color:#7A2233}</style></head><body><h1>A complete issue headline that must not be cut</h1></body></html>',
+        }}
+        canonical="https://www.merkurov.love/flow-issues/ru-2"
+        indexHref="/flow-issues"
+      />
+    );
+
+    expect(
+      screen.getByRole('heading', {
+        level: 1,
+        name: 'A complete issue headline that must not be cut',
+      })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Flow' })).toHaveAttribute('href', '/flow');
+    expect(screen.getByRole('link', { name: 'Все выпуски' })).toHaveAttribute(
+      'href',
+      '/flow-issues'
+    );
+    expect(screen.getByRole('link', { name: 'Постоянная ссылка' })).toHaveAttribute(
+      'href',
+      '/letters/ru-2'
+    );
+
+    const page = container.querySelector('.flow-issue-page') as HTMLElement;
+    expect(page.className).toContain('bg-[#FAF8F5]');
+    expect(page.textContent).toContain('.issue-custom{color:#7A2233}');
+    expect(page.textContent).toContain('overflow-x: clip');
+    expect(page.textContent).toContain('--font-serif');
+  });
 });

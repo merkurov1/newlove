@@ -348,4 +348,28 @@ describe('Journal FrontPage editorial composition', () => {
       '/ru/journal'
     );
   });
+
+  it('renders exactly one page-level language switcher', () => {
+    const { container } = renderPage('en');
+
+    expect(container.querySelectorAll('nav[aria-label="Language selection"]')).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'English (EN)' })).toHaveLength(1);
+    expect(screen.getAllByRole('link', { name: 'Russian (RU)' })).toHaveLength(1);
+  });
+
+  it('keeps the featured headline complete and unwrapped by truncation utilities', () => {
+    renderPage('en');
+    const headline = screen.getByRole('heading', { level: 2, name: 'The English headline' });
+
+    expect(headline.className).toContain('break-words');
+    expect(headline.className).not.toMatch(/truncate|line-clamp|overflow-hidden/);
+    expect(headline).toHaveTextContent('The English headline');
+  });
+
+  it('keeps the page from creating a second horizontal scroll container', () => {
+    const { container } = renderPage('en');
+    const page = container.firstElementChild as HTMLElement;
+
+    expect(page.className).toContain('overflow-x-clip');
+  });
 });

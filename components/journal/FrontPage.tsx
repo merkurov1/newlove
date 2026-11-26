@@ -40,7 +40,7 @@ function SectionHead({
 }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-t-2 border-neutral-900 pb-3 pt-3">
-      <h2 className="font-serif text-2xl font-normal tracking-tight text-neutral-900">{title}</h2>
+      <h2 className="font-serif text-2xl font-normal tracking-tight text-neutral-900 break-words">{title}</h2>
       <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         {note && <p className={kicker}>{note}</p>}
         {href && (
@@ -236,14 +236,14 @@ export default function FrontPage({
     : null;
 
   return (
-    <div lang={lang} className="mx-auto max-w-6xl px-5 pb-24 pt-16 sm:px-8 md:pt-24">
+    <div lang={lang} className="mx-auto max-w-6xl min-w-0 overflow-x-clip px-5 pb-24 pt-16 sm:px-8 md:pt-24">
       <header className="pb-7">
         <div className="flex flex-wrap items-end justify-between gap-x-12 gap-y-6">
           <div className="min-w-0">
             <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[#7A2233]">
               {copy.masthead.kicker}
             </p>
-            <h1 className="mt-2 font-serif text-5xl font-normal tracking-tight md:text-7xl">
+            <h1 className="mt-2 font-serif text-5xl font-normal tracking-tight md:text-7xl break-words">
               {copy.masthead.title}
             </h1>
           </div>
