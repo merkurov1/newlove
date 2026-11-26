@@ -105,10 +105,20 @@ test.describe('Journal editorial front page', () => {
           await expect(issue).toContainText(RU_SUMMARY);
         }
 
-        // The main story offers its own action, while the full issue is a
-        // separate, unmissable button inside the contents block.
+        // Issue identity lives in its own rail; the main story module below it
+        // never repeats the issue label or number as part of the headline.
+        const issueRail = page.locator('#current-issue-heading');
+        await expect(issueRail).toContainText(lang === 'en' ? 'Current issue' : 'Текущий выпуск');
+        await expect(issueRail).toContainText(lang === 'en' ? '№18' : '№26');
         const mainStory = page.locator('#issues [data-role="main-material"]');
         await expect(mainStory).toBeVisible();
+        await expect(mainStory).not.toContainText(
+          lang === 'en' ? 'Current issue' : 'Текущий выпуск'
+        );
+        await expect(mainStory).not.toContainText(lang === 'en' ? '№18' : '№26');
+
+        // The main story offers its own action; the full issue is a separate,
+        // unmissable bar that closes the issue object after the selection.
         await expect(
           mainStory.getByRole('link', { name: /Open material|Открыть материал/ })
         ).toBeVisible();
@@ -118,10 +128,12 @@ test.describe('Journal editorial front page', () => {
         await expect(page.locator('a[href="/unframed/spectral-tiger"]')).toHaveCount(1);
 
         // Contents is a compact selection: one main story plus at most one
-        // material per format, never a duplicate of the cover story.
+        // material per format, never a duplicate of the cover story. The
+        // full-issue action closes the whole issue object after that selection.
         const contents = page.locator('#contents');
-        const fullIssue = contents.locator('[data-role="full-issue"]');
+        const fullIssue = page.locator('#issues [data-role="full-issue"]');
         await expect(fullIssue).toHaveCount(1);
+        await expect(contents.locator('[data-role="full-issue"]')).toHaveCount(0);
         await expect(fullIssue).toHaveAttribute(
           'href',
           lang === 'en'
@@ -131,6 +143,14 @@ test.describe('Journal editorial front page', () => {
         await expect(fullIssue).toContainText(
           lang === 'en' ? 'Read the full issue' : 'Читать полный выпуск'
         );
+        const selectionComesFirst = await contents.evaluate(
+          (selection, action) =>
+            Boolean(
+              selection.compareDocumentPosition(action as Node) & Node.DOCUMENT_POSITION_FOLLOWING
+            ),
+          await fullIssue.elementHandle()
+        );
+        expect(selectionComesFirst).toBe(true);
 
         await expect(contents).toContainText('Merkurov x Pierrot');
         await expect(contents).toContainText(
@@ -214,11 +234,34 @@ test.describe('Journal editorial front page', () => {
         }
 
         await scrollToSectionStart(page, '#contents');
+        await page.screenshot({
+          path: path.join(ARTIFACT_DIR, `${viewport.label}-${lang}-contents.png`),
+        });
+
+        // The rendered vertical order is issue → main story → selection →
+        // full issue, even though all four live inside one bordered sheet.
+        const hierarchy = await page.evaluate(() => {
+          const topOf = (selector: string) => {
+            const element = document.querySelector(selector);
+            return element ? element.getBoundingClientRect().top + window.scrollY : Number.NaN;
+          };
+          return [
+            topOf('#current-issue-heading'),
+            topOf('[data-role="main-material"]'),
+            topOf('#contents'),
+            topOf('#full-issue'),
+          ];
+        });
+        expect(hierarchy[0]).toBeLessThan(hierarchy[1]);
+        expect(hierarchy[1]).toBeLessThan(hierarchy[2]);
+        expect(hierarchy[2]).toBeLessThan(hierarchy[3]);
+
+        await scrollToSectionStart(page, '#full-issue');
         await expect(fullIssue).toBeInViewport();
         const fullIssueBox = await fullIssue.boundingBox();
         expect(fullIssueBox?.height ?? 0).toBeGreaterThanOrEqual(40);
         await page.screenshot({
-          path: path.join(ARTIFACT_DIR, `${viewport.label}-${lang}-contents.png`),
+          path: path.join(ARTIFACT_DIR, `${viewport.label}-${lang}-full-issue.png`),
         });
 
         await scrollToSectionStart(page, '#archive');

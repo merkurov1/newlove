@@ -1,20 +1,13 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import SectionLanguageSwitcher from '@/components/i18n/SectionLanguageSwitcher';
-import IssueHighlights from './IssueHighlights';
+import IssueEdition from './IssueEdition';
 import JournalArchiveList from './JournalArchiveList';
 import type { FlowEntry, FrontIssue } from './types';
 import type { JournalMaterial } from '@/lib/journal/issue';
-import { materialHref } from '@/lib/journal/issue';
 import { findIssueCounterpart, sortJournalIssues } from '@/lib/journal/archive';
-import { normalizeJournalTitle, selectJournalHighlights } from '@/lib/journal/selection';
-import { dateLong, items as itemCountLabel, period, stamp } from '@/lib/journal/format';
-import {
-  JOURNAL_COPY,
-  journalArchiveHref,
-  journalIssueHref,
-  type JournalLanguage,
-} from '@/lib/i18n/journal';
+import { stamp } from '@/lib/journal/format';
+import { JOURNAL_COPY, journalArchiveHref, type JournalLanguage } from '@/lib/i18n/journal';
 
 export type { FlowEntry, FrontIssue, Lang } from './types';
 
@@ -64,203 +57,6 @@ function SectionHead({
   );
 }
 
-function MaterialAction({ href, children }: { href: string; children: ReactNode }) {
-  if (href.startsWith('/')) {
-    return (
-      <Link
-        href={href}
-        className="inline-flex items-baseline gap-2 border-b border-[#1D1B18] pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-      >
-        {children}
-      </Link>
-    );
-  }
-
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-baseline gap-2 border-b border-[#1D1B18] pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-    >
-      {children}
-    </a>
-  );
-}
-
-function IssueCover({
-  issue,
-  counterpart,
-  leadMaterial,
-  uiLang,
-}: {
-  issue: FrontIssue;
-  counterpart: FrontIssue | null;
-  leadMaterial: JournalMaterial | null;
-  uiLang: JournalLanguage;
-}) {
-  const copy = JOURNAL_COPY[uiLang];
-  const when =
-    period(issue.periodStart, issue.periodEnd, uiLang) || dateLong(issue.publishedAt, uiLang);
-  const headline = normalizeJournalTitle(leadMaterial?.title || issue.headline, {
-    siteName: leadMaterial?.siteName,
-  });
-  const titleLang = leadMaterial && leadMaterial.lang !== 'other' ? leadMaterial.lang : issue.lang;
-  const body = (
-    leadMaterial?.description ||
-    leadMaterial?.body ||
-    issue.lead ||
-    issue.excerpt ||
-    ''
-  ).trim();
-  const editorialSummary = issue.editorialSummary || '';
-  const breakdown = issue.typeCounts
-    ? (['note', 'link', 'article', 'video', 'photo', 'other'] as const)
-        .filter((kind) => Number(issue.typeCounts?.[kind]) > 0)
-        .map((kind) => `${copy.inside.types[kind]} ${issue.typeCounts?.[kind]}`)
-        .join(', ')
-    : issue.summary;
-  const leadHref = leadMaterial ? materialHref(leadMaterial.url) : null;
-
-  return (
-    <article aria-labelledby="current-issue-title" className="pt-4 md:pt-5">
-      <div
-        className={`flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[#1D1B18] pb-3 pt-3 ${kicker}`}
-      >
-        <span className={accent}>{copy.featured.currentEdition}</span>
-        {issue.number ? (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>
-              {copy.featured.issue} №{issue.number}
-            </span>
-          </>
-        ) : null}
-        {when && (
-          <>
-            <span aria-hidden="true">·</span>
-            <time dateTime={issue.periodStart || issue.publishedAt || undefined}>{when}</time>
-          </>
-        )}
-      </div>
-
-      <div
-        className={`grid gap-x-12 gap-y-7 pb-7 pt-5 ${
-          leadMaterial?.image
-            ? 'lg:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] lg:items-start'
-            : ''
-        }`}
-      >
-        <div className="min-w-0" data-role="main-material">
-          <p className={`${kicker} ${accent} mb-2`}>{copy.featured.mainStory}</p>
-          <h2
-            id="current-issue-title"
-            lang={titleLang}
-            className="max-w-[22ch] break-words text-balance font-serif text-[clamp(2rem,4.2vw,3.5rem)] font-normal leading-[0.98] tracking-[-0.025em] text-[#1D1B18]"
-          >
-            {headline}
-          </h2>
-
-          {editorialSummary && (
-            <p
-              lang={issue.lang}
-              className="mt-4 max-w-[40rem] break-words font-serif text-[clamp(1.05rem,1.6vw,1.35rem)] font-normal italic leading-snug text-[#3C3934]"
-            >
-              {editorialSummary}
-            </p>
-          )}
-
-          {body && (
-            <div className="mt-4 max-w-[44rem]">
-              <p className={`${kicker} mb-1`}>{copy.featured.leadLabel}</p>
-              <p
-                lang={titleLang}
-                className="line-clamp-4 break-words font-serif text-[16px] leading-[1.7] text-[#4B4741] md:text-[17px]"
-              >
-                {body}
-              </p>
-            </div>
-          )}
-
-          <div className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-3">
-            {leadHref && <MaterialAction href={leadHref}>{copy.inside.open} ↗</MaterialAction>}
-
-            {counterpart && (
-              <span className="flex max-w-[20rem] flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-[9px] uppercase leading-5 tracking-[0.14em] text-[#6F6A60]">
-                <span>{copy.featured.otherEdition}</span>
-                <Link
-                  href={journalIssueHref(counterpart.lang, counterpart.slug)}
-                  hrefLang={counterpart.lang}
-                  aria-label={`${copy.featured.otherEdition}: ${copy.languages[counterpart.lang]}`}
-                  className="border-b border-[#A39A8C] pb-0.5 text-[#3C3934] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-                >
-                  {copy.languages[counterpart.lang]} →
-                </Link>
-              </span>
-            )}
-          </div>
-
-          <p className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1 border-t border-[#D8D2C4] pt-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
-            <span>
-              {copy.featured.originalLanguage}:{' '}
-              <span lang={issue.lang} className="text-[#3C3934]">
-                {copy.languages[issue.lang]}
-              </span>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span className="text-[#3C3934]">
-              {issue.published != null
-                ? itemCountLabel(issue.published, uiLang)
-                : copy.inside.empty}
-            </span>
-            {breakdown && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span className="text-[#3C3934]">{breakdown}</span>
-              </>
-            )}
-          </p>
-        </div>
-
-        {leadMaterial?.image && (
-          <figure className="min-w-0">
-            <img
-              src={leadMaterial.image}
-              alt={leadMaterial.imageAlt || headline}
-              loading="eager"
-              className="aspect-[16/10] w-full object-cover"
-            />
-            <figcaption className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
-              <span>{leadMaterial.siteName || copy.inside.lead}</span>
-              {leadMaterial.publishedAt && (
-                <time dateTime={leadMaterial.publishedAt}>
-                  {dateLong(leadMaterial.publishedAt, uiLang)}
-                </time>
-              )}
-            </figcaption>
-          </figure>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function EmptyFeature({ uiLang }: { uiLang: JournalLanguage }) {
-  const copy = JOURNAL_COPY[uiLang];
-
-  return (
-    <article className="border-t border-[#1D1B18] py-10">
-      <p className={kicker}>{copy.featured.currentEdition}</p>
-      <p className="mt-4 max-w-xl font-serif text-3xl italic leading-tight text-[#6F6A60]">
-        {copy.featured.emptyTitle}
-      </p>
-      <p className="mt-3 max-w-md font-serif text-[16px] leading-relaxed text-[#6F6A60]">
-        {copy.featured.emptyBody}
-      </p>
-    </article>
-  );
-}
-
 export default function FrontPage({
   lang,
   featured,
@@ -281,8 +77,7 @@ export default function FrontPage({
     ? archive.filter((issue) => String(issue.id) !== String(counterpart.id))
     : archive;
 
-  const { main, supporting } = selectJournalHighlights(materials);
-  const contentsVisible = Boolean(featured?.slug || main || materials.length > 0);
+  const contentsVisible = Boolean(featured);
 
   return (
     <div
@@ -336,28 +131,12 @@ export default function FrontPage({
       </nav>
 
       <main>
-        <section id="issues" aria-label={copy.featured.currentEdition} className="pb-8">
-          {featured && featured.slug ? (
-            <IssueCover
-              issue={featured}
-              counterpart={counterpart}
-              leadMaterial={main}
-              uiLang={lang}
-            />
-          ) : (
-            <EmptyFeature uiLang={lang} />
-          )}
-        </section>
-
-        {contentsVisible && (
-          <IssueHighlights
-            materials={supporting}
-            lang={lang}
-            hasMain={Boolean(main)}
-            issueHref={featured?.slug ? journalIssueHref(featured.lang, featured.slug) : null}
-            issueLabel={copy.featured.read}
-          />
-        )}
+        <IssueEdition
+          lang={lang}
+          issue={featured}
+          counterpart={counterpart}
+          materials={materials}
+        />
 
         <section id="stream" className={`border-b ${rule} py-8`}>
           <SectionHead title={copy.flow.title} href="/flow" hrefLabel={copy.flow.cta} />

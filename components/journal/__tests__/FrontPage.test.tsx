@@ -215,12 +215,14 @@ describe('Journal FrontPage editorial composition', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'The Journal' })).toBeInTheDocument();
     expect(screen.getByText('Current issue')).toBeInTheDocument();
-    expect(screen.getByText(/Issue №18/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /Current issue/ })).toHaveTextContent(
+      '№18'
+    );
     expect(screen.getByText(/Original language/)).toBeInTheDocument();
     expect(screen.getAllByText('In English').length).toBeGreaterThan(0);
 
     const headline = screen.getByRole('heading', {
-      level: 2,
+      level: 3,
       name: 'UNFRAMED // Episode 0: The Spectral Tiger',
     });
     expect(headline).toHaveAttribute('lang', 'en');
@@ -234,7 +236,7 @@ describe('Journal FrontPage editorial composition', () => {
   it('keeps the main story title free of site, author and service suffixes in both languages', () => {
     const ru = renderPage('ru');
 
-    const headline = screen.getByRole('heading', { level: 2, name: 'Русский заголовок' });
+    const headline = screen.getByRole('heading', { level: 3, name: 'Русский заголовок' });
     expect(headline).toHaveAttribute('lang', 'ru');
     expect(headline).not.toHaveTextContent('Антон Меркуров');
 
@@ -277,7 +279,11 @@ describe('Journal FrontPage editorial composition', () => {
 
     const fullIssue = screen.getByRole('link', { name: /Read the full issue/ });
     expect(fullIssue).toHaveAttribute('href', '/en/flow-issues/issue-en');
-    expect(fullIssue.closest('#contents')).not.toBeNull();
+    expect(fullIssue.closest('#issues')).not.toBeNull();
+    expect(fullIssue.closest('#contents')).toBeNull();
+    expect(container.querySelector('#contents')?.compareDocumentPosition(fullIssue)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING
+    );
     expect(container.querySelector('a[href="/unframed/spectral-tiger"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow/post-1"]')).not.toBeNull();
     expect(container.querySelector('a[href="https://www.artnews.com/story"]')).not.toBeNull();
@@ -288,14 +294,19 @@ describe('Journal FrontPage editorial composition', () => {
   it('separates the main-material action from the full-issue action', () => {
     const { container } = renderPage('en');
 
-    const mainAction = screen.getByRole('link', { name: /Open material/ });
+    const mainAction = screen
+      .getAllByRole('link', { name: /Open material/ })
+      .find((link) => link.closest('[data-role="main-material"]'));
     const fullIssue = screen.getByRole('link', { name: /Read the full issue/ });
 
-    expect(mainAction.closest('[data-role="main-material"]')).not.toBeNull();
+    expect(mainAction).toBeDefined();
+
+    expect(mainAction?.closest('[data-role="main-material"]')).not.toBeNull();
     expect(fullIssue).toHaveAttribute('data-role', 'full-issue');
     expect(fullIssue.className).toContain('bg-[#1D1B18]');
-    expect(mainAction.className).not.toContain('bg-[#1D1B18]');
-    expect(container.querySelector('#issues [data-role="full-issue"]')).toBeNull();
+    expect(mainAction?.className).not.toContain('bg-[#1D1B18]');
+    expect(container.querySelector('#issues [data-role="full-issue"]')).not.toBeNull();
+    expect(container.querySelector('#contents [data-role="full-issue"]')).toBeNull();
   });
 
   it('labels the main story and keeps the inside selection explicitly partial', () => {
@@ -443,7 +454,7 @@ describe('Journal FrontPage editorial composition', () => {
   it('keeps the featured headline complete and unwrapped by truncation utilities', () => {
     renderPage('en');
     const headline = screen.getByRole('heading', {
-      level: 2,
+      level: 3,
       name: 'UNFRAMED // Episode 0: The Spectral Tiger',
     });
 
