@@ -1299,37 +1299,84 @@ body.flow-reader-focus .flow-home-screen--reader {
 
 /* ---------------------------------------------------------------
  * Fullscreen image viewer.
+ *
+ * The viewer is portalled to <body>. It deliberately owns its viewport
+ * variables instead of inheriting the reader's transformed `.flow-item`, and
+ * every control is an overlay: the photograph is centred in the full safe
+ * viewport and no bar can push it down or shrink it.
  * ------------------------------------------------------------- */
 
 .flow-viewer {
+  --flow-viewer-paper: #f4efe6;
+  --flow-viewer-ink: #1d1b18;
+  --flow-viewer-body: #4b463e;
+  --flow-viewer-muted: #6b665e;
+  --flow-viewer-line: rgba(29, 27, 24, 0.16);
+  --flow-viewer-surface: rgba(255, 252, 247, 0.82);
+  --flow-viewer-band: 5rem;
+  --flow-viewer-safe-top: env(safe-area-inset-top, 0px);
+  --flow-viewer-safe-right: env(safe-area-inset-right, 0px);
+  --flow-viewer-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --flow-viewer-safe-left: env(safe-area-inset-left, 0px);
+  /* A single block inset keeps the photograph on the exact optical centre even
+   * when the top and bottom safe areas differ (notch + home indicator). */
+  --flow-viewer-safe-block: max(var(--flow-viewer-safe-top), var(--flow-viewer-safe-bottom));
+
   position: fixed;
   inset: 0;
   z-index: 140;
-  display: flex;
-  flex-direction: column;
-  background: #0c0b0a;
-  color: #f5f0e8;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--flow-viewer-paper);
+  background-image: linear-gradient(180deg, #f7f3ec 0%, #f1ebe1 100%);
+  color: var(--flow-viewer-ink);
   outline: none;
   overscroll-behavior: contain;
+  -webkit-tap-highlight-color: transparent;
   animation: flow-viewer-enter 160ms ease-out both;
 }
 
+/* Telegram reports its own stable viewport and safe-area insets. Ordinary
+ * browsers keep the CSS dynamic viewport and never read these variables. */
+body.telegram-app .flow-viewer {
+  height: var(--tg-viewport-stable-height, 100dvh);
+  --flow-viewer-safe-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-top, 0px));
+  --flow-viewer-safe-right: max(env(safe-area-inset-right, 0px), var(--tg-safe-area-right, 0px));
+  --flow-viewer-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-bottom, 0px));
+  --flow-viewer-safe-left: max(env(safe-area-inset-left, 0px), var(--tg-safe-area-left, 0px));
+}
+
+/* Toolbar and counter float above the stage. They occupy no layout row. */
 .flow-viewer__bar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: calc(0.5rem + max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)))
-    calc(0.75rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px))) 0.35rem
-    calc(0.75rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  padding: calc(var(--flow-viewer-safe-top) + 0.5rem) calc(var(--flow-viewer-safe-right) + 0.85rem)
+    0.35rem calc(var(--flow-viewer-safe-left) + 0.85rem);
+  pointer-events: none;
+}
+
+.flow-viewer__bar > * {
+  pointer-events: auto;
 }
 
 .flow-viewer__counter {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   margin: 0;
+  padding: 0 0.1rem;
   font-family: var(--flow-mono);
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   letter-spacing: 0.2em;
-  color: rgba(245, 240, 232, 0.68);
+  color: var(--flow-viewer-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .flow-viewer__close {
@@ -1338,114 +1385,189 @@ body.flow-reader-focus .flow-home-screen--reader {
   height: 44px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(245, 240, 232, 0.22);
+  border: 1px solid var(--flow-viewer-line);
   border-radius: 999px;
-  background: rgba(12, 11, 10, 0.6);
-  color: #f5f0e8;
-  backdrop-filter: blur(8px);
+  background: var(--flow-viewer-surface);
+  color: var(--flow-viewer-ink);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
 }
 
 .flow-viewer__close:hover {
-  background: rgba(245, 240, 232, 0.12);
+  border-color: rgba(29, 27, 24, 0.3);
+  background: #fffdf9;
 }
 
+/* The stage fills the viewport. Its symmetric top/bottom bands keep the
+ * photograph centred while leaving the toolbar and hint their own quiet area. */
 .flow-viewer__stage {
-  position: relative;
-  display: flex;
-  flex: 1 1 auto;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  padding: 0.5rem calc(0.5rem + max(env(safe-area-inset-right), var(--tg-safe-area-right, 0px)))
-    0.5rem calc(0.5rem + max(env(safe-area-inset-left), var(--tg-safe-area-left, 0px)));
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  padding: calc(var(--flow-viewer-safe-block) + var(--flow-viewer-band))
+    calc(var(--flow-viewer-safe-right) + 0.75rem)
+    calc(var(--flow-viewer-safe-block) + var(--flow-viewer-band))
+    calc(var(--flow-viewer-safe-left) + 0.75rem);
   touch-action: none;
   overflow: hidden;
 }
 
+/* The figure is only a semantic wrapper; its image and caption participate
+ * directly in the stage grid, so the caption can live in the reserved bottom
+ * band without ever overlapping or reflowing the photograph. */
 .flow-viewer__figure {
-  display: flex;
-  height: 100%;
-  width: 100%;
-  min-height: 0;
+  display: contents;
   margin: 0;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
 }
 
 .flow-viewer__image {
   display: block;
+  grid-area: 1 / 1;
+  width: auto;
+  height: auto;
   max-width: 100%;
-  max-height: calc(
-    var(--tg-viewport-stable-height, 100dvh) - 11rem -
-      max(env(safe-area-inset-top), var(--tg-safe-area-top, 0px)) -
-      max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px))
-  );
+  max-height: 100%;
+  max-inline-size: 100%;
+  max-block-size: 100%;
   object-fit: contain;
+  border-radius: 1px;
+  box-shadow:
+    0 0 0 1px rgba(29, 27, 24, 0.06),
+    0 10px 32px rgba(29, 27, 24, 0.09);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
+  pointer-events: auto;
   will-change: transform;
 }
 
 .flow-viewer__caption {
-  max-width: 34rem;
-  padding: 0 1rem;
+  position: absolute;
+  bottom: calc(var(--flow-viewer-safe-bottom) + 0.4rem);
+  left: 50%;
+  z-index: 1;
+  width: min(34rem, calc(100% - 2rem));
+  max-height: calc(var(--flow-viewer-band) - 0.5rem);
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 2px;
+  background: rgba(255, 252, 247, 0.7);
+  box-shadow: 0 0 0 1px rgba(29, 27, 24, 0.04);
+  color: var(--flow-viewer-body);
   font-family: var(--flow-serif);
   font-size: 0.9rem;
   font-style: italic;
-  line-height: 1.45;
+  line-height: 1.4;
   text-align: center;
-  color: rgba(245, 240, 232, 0.74);
+  text-wrap: pretty;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+}
+
+/* Multi-image galleries keep the arrows in the bottom band on phones, so the
+ * caption narrows to the space between them instead of covering the photo. */
+.flow-viewer[data-multiple='true'] .flow-viewer__caption {
+  width: min(34rem, calc(100% - 2 * (44px + 1.2rem)));
 }
 
 .flow-viewer__nav {
   position: absolute;
-  top: 50%;
+  top: auto;
+  bottom: calc(var(--flow-viewer-safe-bottom) + 0.4rem);
   z-index: 2;
   display: inline-flex;
   width: 44px;
   height: 44px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(245, 240, 232, 0.2);
+  border: 1px solid var(--flow-viewer-line);
   border-radius: 999px;
-  background: rgba(12, 11, 10, 0.55);
-  color: #f5f0e8;
+  background: var(--flow-viewer-surface);
+  color: var(--flow-viewer-ink);
   font-size: 1rem;
-  transform: translateY(-50%);
-  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    opacity 140ms ease;
+}
+
+.flow-viewer__nav:hover:not(:disabled) {
+  border-color: rgba(29, 27, 24, 0.3);
+  background: #fffdf9;
 }
 
 .flow-viewer__nav:disabled {
-  opacity: 0.3;
+  opacity: 0.28;
 }
 
 .flow-viewer__nav--prev {
-  left: max(0.5rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px));
+  left: calc(var(--flow-viewer-safe-left) + 0.6rem);
 }
 
 .flow-viewer__nav--next {
-  right: max(0.5rem, env(safe-area-inset-right), var(--tg-safe-area-right, 0px));
-}
-
-.flow-viewer__hint {
-  margin: 0;
-  padding: 0.35rem 1rem
-    calc(0.75rem + max(env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px)));
-  font-family: var(--flow-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  text-align: center;
-  color: rgba(245, 240, 232, 0.45);
+  right: calc(var(--flow-viewer-safe-right) + 0.6rem);
 }
 
 .flow-viewer__close:focus-visible,
 .flow-viewer__nav:focus-visible {
-  outline: 2px solid #f5f0e8;
+  outline: 2px solid var(--flow-viewer-ink);
   outline-offset: 3px;
+}
+
+/* Portrait phones give the caption a taller reserved band so a normal
+ * two-to-four-line editorial caption is fully visible. The band is symmetric,
+ * so the photograph keeps the exact centre of the screen. */
+@media (max-width: 719px) {
+  .flow-viewer {
+    --flow-viewer-band: 7.5rem;
+  }
+}
+
+/* Short landscape phones cannot afford a tall band; the caption scrolls
+ * inside a smaller one instead of shrinking the photograph. */
+@media (max-height: 520px) {
+  .flow-viewer {
+    --flow-viewer-band: 4.25rem;
+  }
+}
+
+/* From tablet width upward the arrows sit in the side gutters, clear of the
+ * photograph. Phones keep them in the bottom band where thumbs reach them. */
+@media (min-width: 720px) {
+  .flow-viewer[data-multiple='true'] .flow-viewer__stage {
+    padding-inline: calc(var(--flow-viewer-safe-left) + 4rem)
+      calc(var(--flow-viewer-safe-right) + 4rem);
+  }
+
+  .flow-viewer__nav {
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+  }
+
+  .flow-viewer__nav--prev {
+    left: calc(var(--flow-viewer-safe-left) + 0.85rem);
+  }
+
+  .flow-viewer__nav--next {
+    right: calc(var(--flow-viewer-safe-right) + 0.85rem);
+  }
+
+  .flow-viewer[data-multiple='true'] .flow-viewer__caption {
+    width: min(34rem, calc(100% - 2rem));
+  }
 }
 
 @keyframes flow-reader-enter {

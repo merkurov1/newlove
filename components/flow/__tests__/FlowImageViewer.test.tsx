@@ -40,6 +40,41 @@ describe('FlowImageViewer', () => {
     expect(screen.getByText('2 / 3')).toBeInTheDocument();
   });
 
+  it('portals the overlay to document.body so transformed reader ancestors cannot contain it', () => {
+    const { container } = render(
+      <div data-testid="transformed-article" style={{ transform: 'translateY(0)' }}>
+        <FlowImageViewer images={IMAGES} index={0} onClose={jest.fn()} onIndexChange={jest.fn()} />
+      </div>
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Image viewer' });
+
+    expect(dialog.parentElement).toBe(document.body);
+    expect(container.querySelector('[data-testid="transformed-article"]')?.contains(dialog)).toBe(
+      false
+    );
+    expect(dialog).toHaveAttribute('data-multiple', 'true');
+  });
+
+  it('keeps long captions inside the overlay without changing the image markup', () => {
+    const caption =
+      'A long editorial caption that continues for several lines so the viewer must keep the photograph centred, uncropped and untouched while the caption scrolls inside its own quiet band.';
+
+    render(
+      <FlowImageViewer
+        images={[{ src: 'https://images.example.com/long.jpg', alt: 'Long caption', caption }]}
+        index={0}
+        onClose={jest.fn()}
+        onIndexChange={jest.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Image viewer' });
+
+    expect(screen.getByText(caption)).toBeInTheDocument();
+    expect(dialog).toHaveAttribute('data-multiple', 'false');
+  });
+
   it('locks background scrolling while open and restores it on unmount', () => {
     const { unmount } = renderViewer();
 
@@ -79,7 +114,7 @@ describe('FlowImageViewer', () => {
   it('supports horizontal swipe and swipe-down dismissal', () => {
     const swipe = renderViewer(1);
 
-    const stage = screen.getByText('The second room').closest('.flow-viewer__stage');
+    const stage = screen.getByAltText('Second room').closest('.flow-viewer__stage');
 
     expect(stage).not.toBeNull();
 
