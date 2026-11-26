@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 import { hapticGallery, hapticReader } from '@/lib/telegram/webApp';
@@ -40,6 +41,10 @@ function clampScale(value: number) {
  * double-tap are implemented with explicit fallbacks. Telegram's BackButton is
  * handled by `FlowReaderShell`; Escape, Arrow keys, browser Back and the close
  * affordance all end the same way.
+ *
+ * The overlay is portalled to <body>: the reader article keeps a transform
+ * from its entrance animation, which would otherwise become the containing
+ * block for a fixed overlay and size it to the article rather than the screen.
  */
 export default function FlowImageViewer({ images, index, onClose, onIndexChange }: Props) {
   const current = images[index] ?? images[0];
@@ -143,10 +148,7 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
   // Browser Back closes the viewer instead of leaving the publication.
   useEffect(() => {
     try {
-      window.history.pushState(
-        { ...(window.history.state || {}), __flowImageViewer: true },
-        ''
-      );
+      window.history.pushState({ ...(window.history.state || {}), __flowImageViewer: true }, '');
       pushedHistoryRef.current = true;
     } catch {
       pushedHistoryRef.current = false;
@@ -311,6 +313,7 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
   };
 
   if (!current) return null;
+  if (typeof document === 'undefined') return null;
 
   const caption = current.caption || '';
   const hasMultiple = images.length > 1;
@@ -321,7 +324,7 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
         ? `translate3d(${drag.x * 0.35}px, ${drag.y * 0.35}px, 0)`
         : undefined;
 
-  return (
+  return createPortal(
     <div
       ref={dialogRef}
       role="dialog"
@@ -332,84 +335,94 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
       className="flow-viewer"
       onKeyDown={handleKeyDown}
       onDoubleClick={() => setScale((value) => (value > 1 ? 1 : DOUBLE_TAP_SCALE))}
+      onClick={(event) => {
+        if (event.target === event.currentTarget && scale === 1) close();
+      }}
     >
-      <div className="flow-viewer__bar">
-        <p className="flow-viewer__counter" aria-live="polite">
-          {hasMultiple ? `${index + 1} / ${images.length}` : 'Image'}
-        </p>
+      <div className="flow-viewer__panel" data-testid="flow-image-viewer-panel">
+        <div className="flow-viewer__bar">
+          <p className="flow-viewer__counter" aria-live="polite">
+            {hasMultiple ? `${index + 1} / ${images.length}` : 'Image'}
+          </p>
 
-        <button
-          ref={closeButtonRef}
-          type="button"
-          className="flow-viewer__close"
-          onClick={close}
-          aria-label="Close image viewer"
+          <div className="flow-viewer__actions">
+            {hasMultiple && (
+              <button
+                type="button"
+                className="flow-viewer__nav flow-viewer__nav--prev"
+                onClick={() => goTo(index - 1)}
+                disabled={index === 0}
+                aria-label="Previous image"
+              >
+                ←
+              </button>
+            )}
+
+            {hasMultiple && (
+              <button
+                type="button"
+                className="flow-viewer__nav flow-viewer__nav--next"
+                onClick={() => goTo(index + 1)}
+                disabled={index === images.length - 1}
+                aria-label="Next image"
+              >
+                →
+              </button>
+            )}
+
+            <button
+              ref={closeButtonRef}
+              type="button"
+              className="flow-viewer__close"
+              onClick={close}
+              aria-label="Close image viewer"
+            >
+              <X size={20} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+
+        <div
+          className="flow-viewer__stage"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && scale === 1) close();
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
         >
-          <X size={20} strokeWidth={1.6} aria-hidden="true" />
-        </button>
-      </div>
+          <figure className="flow-viewer__figure">
+            <div className="flow-viewer__frame">
+              {/* A single full-resolution image, not a second gallery renderer. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                key={current.src}
+                src={current.src}
+                alt={current.alt}
+                className="flow-viewer__image"
+                draggable={false}
+                style={{
+                  transform,
+                  transition: dragging ? 'none' : 'transform 180ms ease',
+                  cursor: scale > 1 ? 'zoom-out' : 'zoom-in',
+                }}
+              />
+            </div>
 
-      <div
-        className="flow-viewer__stage"
-        onClick={(event) => {
-          if (event.target === event.currentTarget && scale === 1) close();
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-      >
-        {hasMultiple && (
-          <button
-            type="button"
-            className="flow-viewer__nav flow-viewer__nav--prev"
-            onClick={() => goTo(index - 1)}
-            disabled={index === 0}
-            aria-label="Previous image"
-          >
-            ←
-          </button>
-        )}
-
-        <figure className="flow-viewer__figure">
-          {/* A single full-resolution image, not a second gallery renderer. */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            key={current.src}
-            src={current.src}
-            alt={current.alt}
-            className="flow-viewer__image"
-            draggable={false}
-            style={{
-              transform,
-              transition: dragging ? 'none' : 'transform 180ms ease',
-              cursor: scale > 1 ? 'zoom-out' : 'zoom-in',
-            }}
-          />
-
-          {(caption || current.alt) && (
-            <figcaption className="flow-viewer__caption">{caption || current.alt}</figcaption>
-          )}
-        </figure>
+            {(caption || current.alt) && (
+              <figcaption className="flow-viewer__caption">{caption || current.alt}</figcaption>
+            )}
+          </figure>
+        </div>
 
         {hasMultiple && (
-          <button
-            type="button"
-            className="flow-viewer__nav flow-viewer__nav--next"
-            onClick={() => goTo(index + 1)}
-            disabled={index === images.length - 1}
-            aria-label="Next image"
-          >
-            →
-          </button>
+          <p className="flow-viewer__hint" aria-hidden="true">
+            Swipe to move · double tap to zoom
+          </p>
         )}
       </div>
-
-      {hasMultiple && (
-        <p className="flow-viewer__hint" aria-hidden="true">
-          Swipe to move · double tap to zoom
-        </p>
-      )}
-    </div>
+    </div>,
+    document.body
   );
 }

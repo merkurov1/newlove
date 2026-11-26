@@ -131,4 +131,50 @@ describe('FlowImageViewer', () => {
     expect(onIndexChange).not.toHaveBeenCalled();
     expect(screen.getByAltText('First room')).toHaveStyle({ cursor: 'zoom-out' });
   });
+
+  it('portals the viewer to the body so a transformed reader ancestor cannot constrain it', () => {
+    const { container } = renderViewer();
+
+    const viewer = screen.getByTestId('flow-image-viewer');
+
+    expect(container).not.toContainElement(viewer);
+    expect(viewer.parentElement).toBe(document.body);
+  });
+
+  it('keeps the image inside a bounded frame and the caption outside that frame', () => {
+    renderViewer(0);
+
+    const panel = screen.getByTestId('flow-image-viewer-panel');
+    const frame = document.querySelector('.flow-viewer__frame');
+    const image = screen.getByAltText('First room');
+    const caption = screen.getByText('The first room');
+
+    expect(panel).toBeInTheDocument();
+    expect(frame).not.toBeNull();
+    expect(frame).toContainElement(image);
+    expect(frame).not.toContainElement(caption);
+    expect(image).not.toHaveAttribute('width');
+    expect(image).not.toHaveAttribute('height');
+  });
+
+  it('shows gallery navigation only when there is more than one image', () => {
+    const first = renderViewer();
+
+    expect(screen.getByRole('button', { name: 'Next image' })).toBeInTheDocument();
+
+    first.unmount();
+
+    render(
+      <FlowImageViewer
+        images={[IMAGES[0]]}
+        index={0}
+        onClose={jest.fn()}
+        onIndexChange={jest.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Next image' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Previous image' })).not.toBeInTheDocument();
+    expect(screen.getByText('Image')).toBeInTheDocument();
+  });
 });
