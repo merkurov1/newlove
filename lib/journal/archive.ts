@@ -76,6 +76,11 @@ export function uniqueJournalIssues<T extends JournalIssueLike>(issues: T[]): T[
  * Interface language is intentionally ignored here. `/journal` and
  * `/ru/journal` must present the same current issue; language only changes the
  * page chrome and the language of the counterpart link, if one exists.
+ *
+ * The editorial front page uses `selectJournalEdition` instead: it keeps the
+ * same global issue context but picks the published edition in the reader's
+ * language when one exists. This function remains the language-independent
+ * catalogue primitive and is still used by the archive and older callers.
  */
 export function selectJournalIssues<T extends JournalIssueLike>(
   issues: T[],
@@ -88,6 +93,41 @@ export function selectJournalIssues<T extends JournalIssueLike>(
     : catalogue;
 
   return { featured, archive };
+}
+
+/**
+ * Pick the current issue for one interface language without losing the global
+ * issue context.
+ *
+ * The newest published issue globally defines the issue being presented. If
+ * that issue has a published edition in the reader's language (matched by the
+ * exact issue period), the front page shows that edition's real materials.
+ * When no such edition exists the original edition is shown unchanged — the
+ * page never invents or machine-translates an "approved" translation.
+ */
+export function selectJournalEdition<T extends JournalIssueLike>(
+  issues: T[],
+  uiLang: JournalLanguage
+): { featured: T | null; archive: T[]; counterpart: T | null } {
+  const catalogue = sortJournalIssues(uniqueJournalIssues(issues));
+  const globalIssue = catalogue[0] ?? null;
+
+  if (!globalIssue) {
+    return { featured: null, archive: [], counterpart: null };
+  }
+
+  const edition =
+    globalIssue.lang === uiLang
+      ? globalIssue
+      : findIssueCounterpart(globalIssue, catalogue, uiLang) || globalIssue;
+
+  const counterpart = findIssueCounterpart(edition, catalogue, edition.lang === 'en' ? 'ru' : 'en');
+
+  return {
+    featured: edition,
+    archive: catalogue.filter((issue) => String(issue.id) !== String(edition.id)),
+    counterpart,
+  };
 }
 
 function hasPeriod(issue: JournalIssueLike): boolean {
@@ -104,9 +144,7 @@ function samePeriod(left: JournalIssueLike, right: JournalIssueLike): boolean {
 }
 
 function issueNumber(issue: JournalIssueLike): number | null {
-  return typeof issue.number === 'number' && Number.isFinite(issue.number)
-    ? issue.number
-    : null;
+  return typeof issue.number === 'number' && Number.isFinite(issue.number) ? issue.number : null;
 }
 
 /**
@@ -130,8 +168,7 @@ export function findIssueCounterpart<T extends JournalIssueLike>(
   if (issue.lang === targetLang) return null;
 
   const candidates = issues.filter(
-    (candidate) =>
-      String(candidate.id) !== String(issue.id) && candidate.lang === targetLang
+    (candidate) => String(candidate.id) !== String(issue.id) && candidate.lang === targetLang
   );
 
   if (candidates.length === 0) return null;

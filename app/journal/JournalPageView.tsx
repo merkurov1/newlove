@@ -1,16 +1,12 @@
 import { headers } from 'next/headers';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { PageEvent } from '@/components/analytics/PageEvent';
-import {
-  breadcrumbJsonLd,
-  collectionPageJsonLd,
-  itemListJsonLd,
-} from '@/lib/structuredData';
+import { breadcrumbJsonLd, collectionPageJsonLd, itemListJsonLd } from '@/lib/structuredData';
 import { createClient } from '@/lib/supabase/server';
 import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, { type FrontIssue, type FlowEntry } from '@/components/journal/FrontPage';
 import { JOURNAL_COPY, journalIssueHref, type JournalLanguage } from '@/lib/i18n/journal';
-import { selectJournalIssues } from '@/lib/journal/archive';
+import { selectJournalEdition } from '@/lib/journal/archive';
 import {
   loadAllJournalIssues,
   loadJournalIssueDetail,
@@ -178,10 +174,12 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
 
   const issues = issueRows.map(toIssue);
 
-  // One global current issue for both /journal and /ru/journal. The interface
-  // language changes only the page chrome and the counterpart link, never
-  // which issue is considered current.
-  const selection = selectJournalIssues(issues, lang);
+  // One global current issue for both /journal and /ru/journal. The selection
+  // keeps that issue period but prefers its published edition in the reader's
+  // language, so the Russian page shows the real Russian edition rather than a
+  // translated shell around English materials. If no edition exists, the
+  // original issue is shown unchanged.
+  const selection = selectJournalEdition(issues, lang);
   let featured = selection.featured;
   const archive = selection.archive;
 
@@ -199,13 +197,12 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
         const payloadLang =
           payload.lang === 'ru' || payload.lang === 'en' ? payload.lang : featured.lang;
         const lead = clean(payload.lead?.body) || featured.lead || '';
-        const contentLead = detail?.content
-          ? extractPreview(detail.content, payload, 1400)
-          : '';
+        const contentLead = detail?.content ? extractPreview(detail.content, payload, 1400) : '';
 
         featured = {
           ...featured,
           lang: payloadLang,
+          headline: clean(payload.lead?.title) || featured.headline,
           lead: lead || contentLead || featured.lead,
           editorialSummary: clean(payload.summary) || undefined,
         };
@@ -238,7 +235,7 @@ export default async function JournalPageView({ lang }: { lang: JournalLanguage 
   return (
     <div
       lang={lang}
-      className="min-h-screen overflow-x-clip bg-[#FAF8F5] font-sans text-[#1C1A1B] selection:bg-black selection:text-white"
+      className="min-h-screen bg-[#F5F2EB] font-sans text-[#1D1B18] selection:bg-[#1D1B18] selection:text-[#F5F2EB]"
     >
       <HtmlLanguage lang={lang} />
       <PageEvent name="section_view" params={{ section: 'journal', language: lang }} />

@@ -44,6 +44,7 @@ export type JournalCopy = {
     kicker: string;
     empty: string;
     lead: string;
+    leadAbove: string;
     open: string;
     contents: string;
     types: Record<string, string>;
@@ -121,6 +122,7 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       kicker: 'What is in the issue',
       empty: 'The materials of this issue are being prepared.',
       lead: 'Lead',
+      leadAbove: 'The lead story is presented above.',
       open: 'Open material',
       contents: 'Issue contents',
       types: {
@@ -215,6 +217,7 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       kicker: 'Что внутри',
       empty: 'Материалы этого выпуска готовятся к публикации.',
       lead: 'Главное',
+      leadAbove: 'Главный материал — выше.',
       open: 'Открыть материал',
       contents: 'Содержание выпуска',
       types: {

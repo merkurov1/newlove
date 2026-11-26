@@ -170,7 +170,8 @@ describe('Journal FrontPage editorial composition', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'The Journal' })).toBeInTheDocument();
     expect(screen.getByText('Current issue')).toBeInTheDocument();
     expect(screen.getByText(/Issue №18/)).toBeInTheDocument();
-    expect(screen.getByText(/Original language: In English/)).toBeInTheDocument();
+    expect(screen.getByText('Original language')).toBeInTheDocument();
+    expect(screen.getAllByText('In English').length).toBeGreaterThan(0);
     expect(screen.getByRole('heading', { level: 2, name: 'The English headline' })).toHaveAttribute(
       'lang',
       'en'
@@ -212,9 +213,9 @@ describe('Journal FrontPage editorial composition', () => {
 
   it('groups materials only by types that actually exist', () => {
     const { container } = renderPage('en');
-    const groups = Array.from(
-      container.querySelectorAll('#contents [data-material-kind]')
-    ).map((element) => element.getAttribute('data-material-kind'));
+    const groups = Array.from(container.querySelectorAll('#contents [data-material-kind]')).map(
+      (element) => element.getAttribute('data-material-kind')
+    );
 
     expect(groups).toEqual(['note', 'link', 'video', 'photo']);
     expect(container.querySelector('[data-material-kind="article"]')).toBeNull();
@@ -223,7 +224,8 @@ describe('Journal FrontPage editorial composition', () => {
   it('labels the issue language and each material language separately', () => {
     renderPage('en');
 
-    expect(screen.getByText(/Original language: In English/)).toBeInTheDocument();
+    expect(screen.getByText('Original language')).toBeInTheDocument();
+    expect(screen.getAllByText('In English').length).toBeGreaterThan(0);
     expect(screen.getByText('Заметка о книге')).toHaveAttribute('lang', 'ru');
     expect(screen.getByText('A Kandinsky record at Christie’s')).toHaveAttribute('lang', 'en');
     expect(screen.getAllByText('In Russian').length).toBeGreaterThan(0);
@@ -250,21 +252,13 @@ describe('Journal FrontPage editorial composition', () => {
       />
     );
 
-    expect(
-      screen.queryByRole('link', { name: /Other language edition/ })
-    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Other language edition/ })).not.toBeInTheDocument();
   });
 
   it('keeps Recent Flow, Archive and Subscribe below the issue contents', () => {
     const { container } = renderPage('en');
 
-    expect(orderedIds(container)).toEqual([
-      'issues',
-      'contents',
-      'stream',
-      'archive',
-      'subscribe',
-    ]);
+    expect(orderedIds(container)).toEqual(['issues', 'contents', 'stream', 'archive', 'subscribe']);
     expect(screen.getByRole('link', { name: /Full stream/ })).toHaveAttribute('href', '/flow');
     expect(screen.getByText('A recent English note')).toBeInTheDocument();
     expect(screen.getByText('Свежая русская статья')).toBeInTheDocument();
@@ -273,7 +267,10 @@ describe('Journal FrontPage editorial composition', () => {
   it('shows a compact multilingual archive preview with a link to the full archive', () => {
     const { container } = renderPage('en');
 
-    expect(container.querySelectorAll('#archive ul li')).toHaveLength(3);
+    // The counterpart of the current issue stays in the full archive but is
+    // not repeated directly below the cover.
+    expect(container.querySelectorAll('#archive ul li')).toHaveLength(2);
+    expect(container.querySelector('#archive a[href="/flow-issues/issue-ru"]')).toBeNull();
     expect(container.querySelector('a[href="/en/flow-issues/issue-en-old"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow-issues/issue-ru-old"]')).not.toBeNull();
     expect(screen.getByText('Старый русский выпуск')).toHaveAttribute('lang', 'ru');
@@ -309,9 +306,7 @@ describe('Journal FrontPage editorial composition', () => {
       />
     );
 
-    expect(
-      screen.getByText('The materials of this issue are being prepared.')
-    ).toBeInTheDocument();
+    expect(screen.getByText('The materials of this issue are being prepared.')).toBeInTheDocument();
     expect(screen.queryByText('Notes')).not.toBeInTheDocument();
   });
 
@@ -366,10 +361,58 @@ describe('Journal FrontPage editorial composition', () => {
     expect(headline).toHaveTextContent('The English headline');
   });
 
-  it('keeps the page from creating a second horizontal scroll container', () => {
+  it('does not mask layout errors with a global overflow lock', () => {
     const { container } = renderPage('en');
     const page = container.firstElementChild as HTMLElement;
 
-    expect(page.className).toContain('overflow-x-clip');
+    expect(page.className).not.toContain('overflow-x-clip');
+    expect(page.className).not.toContain('overflow-hidden');
+  });
+
+  it('falls back to a typographic cover when the lead has no image', () => {
+    const noImageMaterials = materials.map((material) => ({ ...material, image: null }));
+    const coverIssue: FrontIssue = {
+      ...enIssue,
+      headline: 'Заметка о книге',
+    };
+
+    const { container } = render(
+      <FrontPage
+        lang="en"
+        featured={coverIssue}
+        materials={noImageMaterials}
+        flow={[]}
+        archive={[]}
+        subscribe={<div>Subscription form</div>}
+      />
+    );
+
+    expect(container.querySelector('#issues figure')).toBeNull();
+    expect(container.querySelector('#current-issue-title')).toHaveTextContent('Заметка о книге');
+  });
+
+  it('does not repeat a lead story that is already the issue cover', () => {
+    const coverIssue: FrontIssue = {
+      ...enIssue,
+      headline: 'Заметка о книге',
+    };
+
+    const { container } = render(
+      <FrontPage
+        lang="en"
+        featured={coverIssue}
+        materials={materials}
+        flow={[]}
+        archive={[]}
+        subscribe={<div>Subscription form</div>}
+      />
+    );
+
+    const issueSection = container.querySelector('#issues');
+    const contents = container.querySelector('#contents');
+
+    expect(issueSection?.textContent).toContain('Заметка о книге');
+    expect(contents?.textContent).not.toContain('Заметка о книге');
+    expect(contents?.textContent).toContain('A Kandinsky record at Christie’s');
   });
 });

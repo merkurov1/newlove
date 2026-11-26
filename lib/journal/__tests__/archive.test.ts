@@ -1,5 +1,6 @@
 import {
   findIssueCounterpart,
+  selectJournalEdition,
   selectJournalIssues,
   sortJournalIssues,
   uniqueJournalIssues,
@@ -84,6 +85,47 @@ describe('journal archive language independence', () => {
   });
 });
 
+describe('journal edition selection for the editorial front page', () => {
+  const enSameWeek = {
+    ...en,
+    id: 'en-current',
+    number: 18,
+    periodStart: ru.periodStart,
+    periodEnd: ru.periodEnd,
+  };
+
+  it('keeps one global issue context and shows its edition in the reader language', () => {
+    const catalogue = [ru, enSameWeek, olderEn, olderRu];
+
+    const enPage = selectJournalEdition(catalogue, 'en');
+    const ruPage = selectJournalEdition(catalogue, 'ru');
+
+    // ru is globally newer, so the same issue period is featured in both
+    // languages: the real EN edition on /journal and the real RU edition on
+    // /ru/journal.
+    expect(enPage.featured?.id).toBe('en-current');
+    expect(ruPage.featured?.id).toBe('ru-1');
+    expect(enPage.counterpart?.id).toBe('ru-1');
+    expect(ruPage.counterpart?.id).toBe('en-current');
+  });
+
+  it('does not invent an edition when the current issue has no counterpart', () => {
+    const catalogue = [ru, olderEn, olderRu];
+
+    const enPage = selectJournalEdition(catalogue, 'en');
+
+    expect(enPage.featured?.id).toBe('ru-1');
+    expect(enPage.counterpart).toBeNull();
+  });
+
+  it('keeps the complete catalogue in the archive but never repeats the featured edition', () => {
+    const { featured, archive } = selectJournalEdition([ru, enSameWeek, olderEn, olderRu], 'en');
+
+    expect(archive.map((issue) => issue.id)).toEqual(['ru-1', 'en-2', 'ru-2']);
+    expect(archive.some((issue) => issue.id === featured?.id)).toBe(false);
+  });
+});
+
 describe('journal issue language counterparts', () => {
   // RU and EN editions are numbered independently. The production catalogue
   // has EN issue 17 next to RU issue 25 for the same week, while RU issue 17
@@ -97,12 +139,12 @@ describe('journal issue language counterparts', () => {
   };
 
   it('links editions that share an exact period, even when numbers differ', () => {
-    expect(
-      findIssueCounterpart(ru, [ru, enSameWeek, en, olderEn, olderRu], 'en')?.id
-    ).toBe('en-26');
-    expect(
-      findIssueCounterpart(enSameWeek, [ru, enSameWeek, en, olderEn, olderRu], 'ru')?.id
-    ).toBe('ru-1');
+    expect(findIssueCounterpart(ru, [ru, enSameWeek, en, olderEn, olderRu], 'en')?.id).toBe(
+      'en-26'
+    );
+    expect(findIssueCounterpart(enSameWeek, [ru, enSameWeek, en, olderEn, olderRu], 'ru')?.id).toBe(
+      'ru-1'
+    );
   });
 
   it('never links by number alone when the periods differ', () => {

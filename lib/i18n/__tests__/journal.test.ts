@@ -46,6 +46,7 @@ describe('Journal bilingual configuration', () => {
       expect(copy.meta.description.trim()).not.toBe('');
       expect(copy.nav.ariaLabel.trim()).not.toBe('');
       expect(copy.featured.read.trim()).not.toBe('');
+      expect(copy.inside.leadAbove.trim()).not.toBe('');
       expect(copy.flow.types.note.trim()).not.toBe('');
       expect(copy.archive.title.trim()).not.toBe('');
       expect(copy.subscribe.title.trim()).not.toBe('');
