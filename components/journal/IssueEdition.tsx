@@ -17,13 +17,20 @@ type Props = {
   materials: JournalMaterial[];
 };
 
-const kicker = 'font-mono text-[10px] uppercase tracking-[0.16em] text-[#6F6A60]';
+const kicker = 'font-mono text-[10px] uppercase tracking-[0.18em] text-[#6F6A60]';
 const micro = 'font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60]';
-const rule = 'border-[#D8D2C4]';
 const accent = 'text-[#7A2233]';
 
 function materialBody(material: JournalMaterial): string {
   return material.description || material.body;
+}
+
+function languageMark(
+  material: JournalMaterial,
+  copy: (typeof JOURNAL_COPY)[JournalLanguage]
+): string {
+  if (material.lang === 'other') return copy.languages.other;
+  return material.lang.toUpperCase();
 }
 
 function MaterialLink({
@@ -62,31 +69,26 @@ function MaterialLink({
   );
 }
 
-function MaterialAction({ href, children }: { href: string; children: ReactNode }) {
+function MainAction({ href, children }: { href: string; children: ReactNode }) {
+  const className =
+    'inline-flex items-baseline gap-2 border-b border-[#1D1B18] pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]';
+
   if (href.startsWith('/')) {
     return (
-      <Link
-        href={href}
-        className="inline-flex items-baseline gap-2 border-b border-[#1D1B18] pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-      >
+      <Link href={href} className={className}>
         {children}
       </Link>
     );
   }
 
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-baseline gap-2 border-b border-[#1D1B18] pb-1 font-mono text-[10px] uppercase tracking-[0.16em] text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
       {children}
     </a>
   );
 }
 
-function IssueRail({
+function IssueMasthead({
   issue,
   counterpart,
   uiLang,
@@ -102,74 +104,72 @@ function IssueRail({
     ? (['note', 'link', 'article', 'video', 'photo', 'other'] as const)
         .filter((kind) => Number(issue.typeCounts?.[kind]) > 0)
         .map((kind) => `${copy.inside.types[kind]} ${issue.typeCounts?.[kind]}`)
-        .join(', ')
+        .join(' · ')
     : issue.summary;
 
   return (
-    <header className="grid border-b border-[#1D1B18] lg:grid-cols-[minmax(0,1fr)_minmax(17rem,0.44fr)]">
-      <div className="min-w-0 px-5 py-5 sm:px-7 sm:py-6 lg:px-8">
-        <h2 id="current-issue-heading" className="min-w-0">
-          <span className={`block ${kicker} ${accent}`}>{copy.featured.currentEdition}</span>
-          <span className="mt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span className="font-serif text-[clamp(3.25rem,7vw,5.75rem)] font-normal leading-[0.8] tracking-[-0.055em] text-[#1D1B18]">
-              {issue.number != null ? (
-                <>
-                  <span className="sr-only">{copy.featured.issue} </span>№{issue.number}
-                </>
-              ) : (
-                copy.featured.issue
-              )}
-            </span>
-            {issue.published != null && (
-              <span className={`${kicker} pb-1 text-[#3C3934]`}>
-                {itemCountLabel(issue.published, uiLang)}
-              </span>
+    <header className="grid grid-cols-2 gap-x-6 gap-y-5 border-t-2 border-[#1D1B18] pt-4 sm:gap-x-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.75fr)_minmax(0,0.9fr)] lg:items-end">
+      <h2 id="current-issue-heading" className="col-span-2 min-w-0 lg:col-span-1">
+        <span className={`block ${kicker} ${accent}`}>{copy.featured.currentEdition}</span>
+        <span className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+          <span className="font-serif text-[clamp(2.35rem,4.4vw,3.5rem)] font-normal leading-[0.82] tracking-[-0.045em] text-[#1D1B18]">
+            {issue.number != null ? (
+              <>
+                <span className="sr-only">{copy.featured.issue} </span>№{issue.number}
+              </>
+            ) : (
+              copy.featured.issue
             )}
           </span>
-        </h2>
-        {breakdown && <p className={`${micro} mt-3 break-words text-[#3C3934]`}>{breakdown}</p>}
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-[#D8D2C4] px-5 py-5 sm:px-7 lg:grid-cols-1 lg:border-l lg:border-t-0 lg:px-8 lg:py-6">
-        {when && (
-          <div className="min-w-0">
-            <p className={micro}>{copy.featured.periodLabel}</p>
-            <time
-              dateTime={issue.periodStart || issue.publishedAt || undefined}
-              className="mt-1 block font-serif text-[15px] leading-snug text-[#1D1B18]"
-            >
-              {when}
-            </time>
-          </div>
+          {issue.published != null && (
+            <span className={`${micro} pb-1 text-[#3C3934]`}>
+              {itemCountLabel(issue.published, uiLang)}
+            </span>
+          )}
+        </span>
+        {breakdown && (
+          <span className={`${micro} mt-2 block max-w-sm break-words leading-relaxed`}>
+            {breakdown}
+          </span>
         )}
+      </h2>
 
-        <div className="min-w-0">
-          <p className={micro}>{copy.featured.originalLanguage}</p>
-          <p lang={issue.lang} className="mt-1 font-serif text-[15px] leading-snug text-[#1D1B18]">
-            {copy.languages[issue.lang]}
-          </p>
+      {when && (
+        <div className="min-w-0 self-start lg:self-end">
+          <p className={micro}>{copy.featured.periodLabel}</p>
+          <time
+            dateTime={issue.periodStart || issue.publishedAt || undefined}
+            className="mt-1 block max-w-[15rem] font-serif text-[16px] leading-snug text-[#1D1B18]"
+          >
+            {when}
+          </time>
         </div>
+      )}
 
+      <div className="min-w-0 self-start lg:self-end">
+        <p className={micro}>{copy.featured.originalLanguage}</p>
+        <p lang={issue.lang} className="mt-1 font-serif text-[16px] leading-snug text-[#1D1B18]">
+          {copy.languages[issue.lang]}
+        </p>
         {counterpart && (
-          <div className="col-span-2 min-w-0 sm:col-span-1 lg:col-span-1">
-            <p className={micro}>{copy.featured.otherEdition}</p>
+          <p className="mt-2 font-serif text-[14px] leading-snug text-[#6F6A60]">
             <Link
               href={journalIssueHref(counterpart.lang, counterpart.slug)}
               hrefLang={counterpart.lang}
               aria-label={`${copy.featured.otherEdition}: ${copy.languages[counterpart.lang]}`}
-              className="mt-1 inline-flex items-baseline gap-2 border-b border-[#A39A8C] pb-0.5 font-serif text-[15px] leading-snug text-[#3C3934] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
+              className="border-b border-[#A39A8C] pb-0.5 transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
             >
               <span lang={counterpart.lang}>{copy.languages[counterpart.lang]}</span>
-              <span aria-hidden="true">→</span>
+              <span aria-hidden="true"> →</span>
             </Link>
-          </div>
+          </p>
         )}
       </div>
     </header>
   );
 }
 
-function MainMaterial({
+function Cover({
   issue,
   leadMaterial,
   uiLang,
@@ -197,73 +197,58 @@ function MainMaterial({
   return (
     <div
       data-role="main-material"
-      className="grid border-b border-[#1D1B18] lg:grid-cols-[minmax(0,1.35fr)_minmax(0,0.85fr)]"
+      className={`mt-7 grid gap-x-10 gap-y-6 lg:mt-9 ${
+        image ? 'lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)] lg:items-stretch' : ''
+      }`}
     >
-      <div className="min-w-0 px-5 pb-6 pt-5 sm:px-7 sm:pb-8 sm:pt-6 lg:px-8 lg:pb-9">
-        <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2 border-t-2 border-[#7A2233] pt-3">
-          <p className={`${kicker} ${accent}`}>
-            <span aria-hidden="true">01 / </span>
-            <span>{copy.featured.mainStory}</span>
-          </p>
-          {leadMaterial?.siteName && (
-            <p className={`${micro} max-w-[20rem] truncate text-[#6F6A60]`}>
-              {leadMaterial.siteName}
+      <div className="flex min-w-0 flex-col justify-between">
+        <div>
+          <h3
+            id="current-issue-title"
+            lang={titleLang}
+            className="max-w-[22ch] break-words text-balance font-serif text-[clamp(2.2rem,4.6vw,3.9rem)] font-normal leading-[0.96] tracking-[-0.035em] text-[#1D1B18]"
+          >
+            {headline}
+          </h3>
+
+          {editorialSummary && (
+            <p
+              lang={issue.lang}
+              className="mt-4 max-w-[34rem] break-words font-serif text-[clamp(1.05rem,1.7vw,1.35rem)] font-normal italic leading-snug text-[#3C3934]"
+            >
+              {editorialSummary}
+            </p>
+          )}
+
+          {body && (
+            <p
+              lang={titleLang}
+              className="mt-4 line-clamp-4 max-w-[38rem] break-words font-serif text-[16px] leading-[1.7] text-[#4B4741] md:text-[17px]"
+            >
+              {body}
             </p>
           )}
         </div>
 
-        <h3
-          id="current-issue-title"
-          lang={titleLang}
-          className="mt-4 max-w-[20ch] break-words text-balance font-serif text-[clamp(2rem,4.2vw,3.5rem)] font-normal leading-[0.98] tracking-[-0.03em] text-[#1D1B18]"
-        >
-          {headline}
-        </h3>
-
-        {editorialSummary && (
-          <p
-            lang={issue.lang}
-            className="mt-4 max-w-[38rem] break-words font-serif text-[clamp(1.05rem,1.6vw,1.35rem)] font-normal italic leading-snug text-[#3C3934]"
-          >
-            {editorialSummary}
-          </p>
-        )}
-
-        {body && (
-          <div className="mt-4 max-w-[42rem]">
-            <p className={`${micro} mb-1`}>{copy.featured.leadLabel}</p>
-            <p
-              lang={titleLang}
-              className="line-clamp-4 break-words font-serif text-[16px] leading-[1.7] text-[#4B4741] md:text-[17px]"
-            >
-              {body}
-            </p>
-          </div>
-        )}
-
-        <div className="mt-5 flex flex-wrap items-center gap-x-6 gap-y-3">
-          {leadHref && <MaterialAction href={leadHref}>{copy.inside.open} ↗</MaterialAction>}
-          <Link
-            href="#contents"
-            className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#6F6A60] transition-colors hover:text-[#7A2233]"
-          >
-            {copy.inside.selectedTitle}
-            <span aria-hidden="true">↓</span>
-          </Link>
+        <div className="mt-7 flex flex-wrap items-center gap-x-7 gap-y-3">
+          {leadHref && <MainAction href={leadHref}>{copy.inside.open} ↗</MainAction>}
+          {leadMaterial && (
+            <span className={`${micro} text-[#3C3934]`}>{copy.featured.mainStory}</span>
+          )}
         </div>
       </div>
 
       {image && (
-        <figure className="flex min-w-0 flex-col border-t border-[#D8D2C4] lg:border-l lg:border-t-0">
-          <div className="relative flex-1 overflow-hidden bg-[#E7E0D5]">
+        <figure className="flex min-w-0 flex-col">
+          <div className="flex-1 overflow-hidden bg-[#E7E0D5]">
             <img
               src={image}
               alt={leadMaterial?.imageAlt || headline}
               loading="eager"
-              className="aspect-[16/10] h-full w-full object-cover"
+              className="aspect-[4/3] h-full w-full object-cover sm:aspect-[16/10] lg:aspect-auto"
             />
           </div>
-          <figcaption className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-[#D8D2C4] px-4 py-3 font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
+          <figcaption className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
             <span>{leadMaterial?.siteName || copy.inside.lead}</span>
             {leadMaterial?.publishedAt && (
               <time dateTime={leadMaterial.publishedAt}>
@@ -277,76 +262,20 @@ function MainMaterial({
   );
 }
 
-function SelectionMedia({
-  material,
-  format,
-  copy,
-}: {
-  material: JournalMaterial;
-  format: ReturnType<typeof journalFormat>;
-  copy: (typeof JOURNAL_COPY)[JournalLanguage];
-}) {
-  if (format === 'post') return null;
-
-  if (format === 'link') {
-    return (
-      <span
-        aria-hidden="true"
-        className="flex h-14 w-14 shrink-0 items-center justify-center border border-[#1D1B18] font-serif text-[22px] leading-none text-[#1D1B18] transition-colors group-hover:border-[#7A2233] group-hover:text-[#7A2233] sm:h-16 sm:w-16"
-      >
-        ↗
-      </span>
-    );
-  }
-
-  if (format === 'photo') {
-    return material.image ? (
-      <img
-        src={material.image}
-        alt={material.imageAlt || material.title}
-        loading="lazy"
-        className="aspect-[4/5] w-24 shrink-0 object-cover sm:w-28 lg:w-32"
-      />
-    ) : (
-      <span
-        aria-hidden="true"
-        className="flex aspect-[4/5] w-24 shrink-0 items-center justify-center border border-[#D8D2C4] font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60] sm:w-28 lg:w-32"
-      >
-        {copy.inside.formats.photo}
-      </span>
-    );
-  }
-
+function PlayMark() {
   return (
-    <span className="relative block w-40 shrink-0 overflow-hidden bg-[#E7E0D5] sm:w-48 lg:w-52">
-      {material.image ? (
-        <img
-          src={material.image}
-          alt={material.imageAlt || material.title}
-          loading="lazy"
-          className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-        />
-      ) : (
-        <span
-          aria-hidden="true"
-          className="flex aspect-video w-full items-center justify-center border border-[#D8D2C4] font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60]"
-        >
-          {copy.inside.formats.video}
-        </span>
-      )}
-      <span
-        aria-hidden="true"
-        className="absolute inset-0 flex items-center justify-center bg-black/10"
-      >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F5F2EB]/90 pl-0.5 text-[11px] text-[#1D1B18] shadow-sm">
-          ▶
-        </span>
+    <span
+      aria-hidden="true"
+      className="absolute inset-0 flex items-center justify-center bg-[#1D1B18]/5"
+    >
+      <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#F5F2EB]/80 bg-[#F5F2EB]/90 pl-0.5 text-[11px] text-[#1D1B18] shadow-sm">
+        ▶
       </span>
     </span>
   );
 }
 
-function SelectionRow({
+function SelectionItem({
   material,
   index,
   lang,
@@ -358,74 +287,107 @@ function SelectionRow({
   copy: (typeof JOURNAL_COPY)[JournalLanguage];
 }) {
   const format = journalFormat(material.kind);
-  const body = materialBody(material);
   const title =
     normalizeJournalTitle(material.title, { siteName: material.siteName }) ||
     copy.inside.formats[format];
+  const body = materialBody(material);
   const kindLabel = copy.inside.types[material.kind] || copy.inside.types.other;
   const when = dateLong(material.publishedAt, lang);
   const href = materialHref(material.url);
-  const titleSize =
-    format === 'post'
-      ? 'text-[clamp(1.35rem,2.2vw,1.9rem)]'
-      : 'text-[clamp(1.15rem,1.7vw,1.45rem)]';
+  const hasMedia = format === 'photo' || format === 'video';
 
   return (
     <li
-      className={`group border-t ${rule}`}
+      className="min-w-0 border-t border-[#1D1B18]"
       data-material-kind={material.kind}
       data-material-format={format}
       data-material-id={material.id}
     >
       <MaterialLink
         material={material}
-        className="grid grid-cols-[2rem_minmax(0,1fr)] gap-x-4 py-5 sm:grid-cols-[2.5rem_minmax(0,1fr)] sm:gap-x-6 lg:py-6"
+        className="group grid gap-x-8 gap-y-4 py-7 sm:grid-cols-[7.5rem_minmax(0,1fr)] sm:py-8"
       >
-        <span className={`${micro} pt-0.5 text-[#7A2233]`}>{String(index).padStart(2, '0')}</span>
-
-        <span className="min-w-0">
-          <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className={`${micro} ${accent}`}>{kindLabel}</span>
-            {material.siteName && (
-              <span className={`${micro} min-w-0 max-w-[18rem] truncate`}>{material.siteName}</span>
-            )}
+        <div
+          className={`${micro} flex flex-wrap items-baseline gap-x-3 gap-y-1 sm:flex-col sm:items-start sm:gap-y-1.5`}
+        >
+          <span className={`${accent} text-[10px]`}>
+            <span className="sr-only">{index}. </span>
+            {kindLabel}
           </span>
+          {when && (
+            <time dateTime={material.publishedAt || undefined} className="text-[#3C3934]">
+              {when}
+            </time>
+          )}
+          <span aria-label={copy.languages[material.lang]}>{languageMark(material, copy)}</span>
+        </div>
 
-          <span className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="min-w-0 flex-1">
-              <span
-                lang={material.lang === 'other' ? undefined : material.lang}
-                className={`block break-words font-serif font-normal leading-snug tracking-tight text-[#1D1B18] transition-colors group-hover:text-[#7A2233] ${titleSize}`}
-              >
-                {title}
-              </span>
-
-              {body && (
+        <div
+          className={`min-w-0 ${
+            hasMedia ? 'grid gap-x-8 gap-y-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center' : ''
+          }`}
+        >
+          <div className="min-w-0">
+            <h4
+              lang={material.lang === 'other' ? undefined : material.lang}
+              className={`break-words font-serif font-normal leading-snug tracking-tight text-[#1D1B18] transition-colors group-hover:text-[#7A2233] ${
+                format === 'post'
+                  ? 'text-[clamp(1.6rem,2.6vw,2.25rem)]'
+                  : 'text-[clamp(1.3rem,2vw,1.7rem)]'
+              }`}
+            >
+              {title}
+              {href && (
                 <span
-                  lang={material.lang === 'other' ? undefined : material.lang}
-                  className="mt-1.5 line-clamp-2 block break-words font-serif text-[14px] leading-relaxed text-[#5B5651]"
+                  aria-hidden="true"
+                  className="ml-2 inline-block align-baseline font-sans text-[0.62em] text-[#6F6A60] transition-colors group-hover:text-[#7A2233]"
                 >
-                  {body}
+                  {href.startsWith('/') ? '→' : '↗'}
                 </span>
               )}
+            </h4>
 
-              <span className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
-                {when && <time dateTime={material.publishedAt || undefined}>{when}</time>}
-                {when && <span aria-hidden="true">·</span>}
-                <span>{copy.languages[material.lang]}</span>
-                {href && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span className="text-[#3C3934]">{copy.inside.open}</span>
-                    <span aria-hidden="true">{href.startsWith('/') ? '→' : '↗'}</span>
-                  </>
-                )}
-              </span>
+            {body && (
+              <p
+                lang={material.lang === 'other' ? undefined : material.lang}
+                className="mt-2 line-clamp-3 max-w-2xl break-words font-serif text-[14px] leading-relaxed text-[#5B5651]"
+              >
+                {body}
+              </p>
+            )}
+
+            {format === 'link' && material.siteName && (
+              <span className={`${micro} mt-3 block text-[#3C3934]`}>{material.siteName}</span>
+            )}
+          </div>
+
+          {format === 'photo' && material.image && (
+            <img
+              src={material.image}
+              alt={material.imageAlt || title}
+              loading="lazy"
+              className="aspect-[4/5] w-full object-cover transition-transform duration-500 group-hover:scale-[1.015] sm:max-w-[18rem] lg:w-[15rem]"
+            />
+          )}
+
+          {format === 'video' && (
+            <span className="relative block w-full overflow-hidden bg-[#E7E0D5] lg:w-[22rem]">
+              {material.image ? (
+                <img
+                  src={material.image}
+                  alt={material.imageAlt || title}
+                  loading="lazy"
+                  className="aspect-video w-full object-cover transition-transform duration-500 group-hover:scale-[1.015]"
+                />
+              ) : (
+                <span className="flex aspect-video w-full items-center justify-center border border-[#D8D2C4] font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60]">
+                  {copy.inside.formats.video}
+                </span>
+              )}
+              <PlayMark />
             </span>
-
-            <SelectionMedia material={material} format={format} copy={copy} />
-          </span>
-        </span>
+          )}
+        </div>
       </MaterialLink>
     </li>
   );
@@ -435,27 +397,27 @@ function EmptyIssue({ uiLang }: { uiLang: JournalLanguage }) {
   const copy = JOURNAL_COPY[uiLang];
 
   return (
-    <section id="issues" aria-labelledby="current-issue-heading" className="pt-6">
-      <div className="border border-[#1D1B18] bg-[#FBF8F2] px-5 py-7 sm:px-7 sm:py-8 lg:px-8">
+    <section id="issues" aria-labelledby="current-issue-heading" className="pt-7">
+      <header className="border-t-2 border-[#1D1B18] pt-4">
         <h2 id="current-issue-heading" className="max-w-2xl">
           <span className={`block ${kicker} ${accent}`}>{copy.featured.currentEdition}</span>
-          <span className="mt-4 block font-serif text-[clamp(1.75rem,3vw,2.5rem)] italic leading-tight text-[#6F6A60]">
+          <span className="mt-4 block font-serif text-[clamp(1.9rem,3.2vw,2.7rem)] italic leading-tight text-[#6F6A60]">
             {copy.featured.emptyTitle}
           </span>
         </h2>
         <p className="mt-3 max-w-md font-serif text-[16px] leading-relaxed text-[#6F6A60]">
           {copy.featured.emptyBody}
         </p>
-      </div>
+      </header>
     </section>
   );
 }
 
 /**
- * The current issue as one editorial object: issue identity, leading story,
- * selected materials and the full-issue action share one frame and one
- * numbered rhythm. It never invents a story, image or issue number; missing
- * data falls back to the localized empty states.
+ * The current issue as an open editorial cover: issue identity, leading story,
+ * selected materials and the full-issue invitation share one reading column and
+ * one rhythm, without a surrounding card. It never invents a story, image or
+ * issue number; missing data falls back to the localized empty states.
  */
 export default function IssueEdition({ lang, issue, counterpart, materials }: Props) {
   const copy = JOURNAL_COPY[lang];
@@ -469,82 +431,75 @@ export default function IssueEdition({ lang, issue, counterpart, materials }: Pr
     issue.published != null ? itemCountLabel(issue.published, lang) : itemCountLabel(count, lang);
 
   return (
-    <section id="issues" aria-labelledby="current-issue-heading" className="pt-6">
-      <div className="border border-[#1D1B18] bg-[#FBF8F2]">
-        <IssueRail issue={issue} counterpart={counterpart} uiLang={lang} />
-        <MainMaterial issue={issue} leadMaterial={main} uiLang={lang} />
+    <section id="issues" aria-labelledby="current-issue-heading" className="pt-7 sm:pt-8">
+      <IssueMasthead issue={issue} counterpart={counterpart} uiLang={lang} />
+      <Cover issue={issue} leadMaterial={main} uiLang={lang} />
 
-        <section
-          id="contents"
-          aria-labelledby="issue-contents-title"
-          className="border-b border-[#1D1B18] px-5 py-6 sm:px-7 sm:py-7 lg:px-8 lg:py-8"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3">
-            <div className="min-w-0">
-              <p className={`${kicker} ${accent}`}>{copy.inside.kicker}</p>
-              <h3
-                id="issue-contents-title"
-                className="mt-1 font-serif text-[clamp(1.6rem,2.6vw,2.15rem)] font-normal leading-tight tracking-tight text-[#1D1B18]"
-              >
-                {copy.inside.selectedTitle}
-              </h3>
-            </div>
-            <p className={`${micro} text-[#3C3934]`}>{itemCountLabel(count, lang)}</p>
-          </div>
-
-          <p className="mt-2 max-w-xl font-serif text-[15px] leading-relaxed text-[#5B5651]">
-            {copy.inside.selectedNote}
-          </p>
-
-          {supporting.length === 0 ? (
-            <p className="mt-5 max-w-xl border-t border-[#D8D2C4] pt-4 font-serif text-[16px] italic text-[#6F6A60]">
-              {main ? copy.inside.leadAbove : copy.inside.empty}
-            </p>
-          ) : (
-            <ul className="mt-5">
-              {supporting.map((material, index) => (
-                <SelectionRow
-                  key={material.id}
-                  material={material}
-                  index={index + 2}
-                  lang={lang}
-                  copy={copy}
-                />
-              ))}
-            </ul>
-          )}
-        </section>
-
-        {fullIssueHref && (
-          <Link
-            id="full-issue"
-            href={fullIssueHref}
-            data-role="full-issue"
-            className="group flex flex-col gap-4 bg-[#1D1B18] px-5 py-5 text-[#F5F2EB] transition-colors hover:bg-[#7A2233] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7A2233] sm:flex-row sm:items-center sm:justify-between sm:px-7 lg:px-8"
+      <section
+        id="contents"
+        aria-labelledby="issue-contents-title"
+        className="mt-12 border-t-2 border-[#1D1B18] pt-4 sm:mt-14"
+      >
+        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2">
+          <h3
+            id="issue-contents-title"
+            className="font-serif text-[clamp(1.8rem,3vw,2.5rem)] font-normal leading-tight tracking-tight text-[#1D1B18]"
           >
-            <span className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-4">
-              <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-[#D8D2C4]">
-                {copy.featured.issue}
-                {issue.number != null ? ` №${issue.number}` : ''}
-              </span>
-              <span className="break-words font-serif text-[clamp(1.4rem,2.4vw,2rem)] leading-tight">
-                {copy.featured.read}
-              </span>
-            </span>
-            <span className="flex items-center justify-between gap-6 sm:justify-start">
-              <span className="font-mono text-[9px] uppercase tracking-[0.16em] text-[#D8D2C4]">
-                {fullIssueCount}
-              </span>
-              <span
-                aria-hidden="true"
-                className="font-serif text-[24px] leading-none transition-transform group-hover:translate-x-1"
-              >
-                →
-              </span>
-            </span>
-          </Link>
+            {copy.inside.selectedTitle}
+          </h3>
+          <p className={`${micro} text-[#3C3934]`}>{itemCountLabel(count, lang)}</p>
+        </div>
+
+        <p className="mt-2 max-w-xl font-serif text-[15px] leading-relaxed text-[#5B5651]">
+          {copy.inside.selectedNote}
+        </p>
+
+        {supporting.length === 0 ? (
+          <p className="mt-5 max-w-xl border-t border-[#D8D2C4] pt-4 font-serif text-[16px] italic text-[#6F6A60]">
+            {main ? copy.inside.leadAbove : copy.inside.empty}
+          </p>
+        ) : (
+          <ul className="mt-6">
+            {supporting.map((material, index) => (
+              <SelectionItem
+                key={material.id}
+                material={material}
+                index={index + 2}
+                lang={lang}
+                copy={copy}
+              />
+            ))}
+          </ul>
         )}
-      </div>
+      </section>
+
+      {fullIssueHref && (
+        <Link
+          id="full-issue"
+          href={fullIssueHref}
+          data-role="full-issue"
+          className="group mt-10 flex flex-col gap-3 border-t border-[#1D1B18] pt-5 text-[#1D1B18] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#7A2233] sm:mt-12 sm:flex-row sm:items-end sm:justify-between"
+        >
+          <span className="min-w-0">
+            <span className={`${micro} block text-[#6F6A60]`}>
+              {copy.featured.issue}
+              {issue.number != null ? ` №${issue.number}` : ''}
+            </span>
+            <span className="mt-1 block break-words font-serif text-[clamp(1.7rem,3vw,2.35rem)] leading-tight tracking-tight transition-colors group-hover:text-[#7A2233]">
+              {copy.featured.read}
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-5 pb-1">
+            <span className={`${micro} text-[#3C3934]`}>{fullIssueCount}</span>
+            <span
+              aria-hidden="true"
+              className="font-serif text-[clamp(1.6rem,2.4vw,2rem)] leading-none transition-transform group-hover:translate-x-1"
+            >
+              →
+            </span>
+          </span>
+        </Link>
+      )}
     </section>
   );
 }

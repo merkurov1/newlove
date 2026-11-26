@@ -10,6 +10,8 @@ type Props = {
   limit?: number;
 };
 
+const micro = 'font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60]';
+
 /**
  * Compact archive preview for the Journal front page.
  *
@@ -35,35 +37,31 @@ export default function JournalArchiveList({ issues, lang, limit = 6 }: Props) {
           <li key={issue.id} className="border-t border-[#D8D2C4]">
             <Link
               href={journalIssueHref(issue.lang, issue.slug)}
-              className="group grid gap-x-6 gap-y-2 py-4 sm:grid-cols-[9rem_1fr_auto] sm:items-baseline"
+              className="group grid gap-x-6 gap-y-1 py-4 sm:grid-cols-[8.5rem_minmax(0,1fr)_auto] sm:items-baseline"
             >
-              <span className="font-mono text-[9px] uppercase leading-5 tracking-[0.14em] text-[#6F6A60]">
-                <time dateTime={issue.publishedAt || undefined}>{when || '—'}</time>
-                <span className="block">
+              <span className={`${micro} leading-5`}>
+                <span className="block text-[#3C3934]">
                   {copy.archive.issue}
                   {issue.number ? ` №${issue.number}` : ''}
                 </span>
-              </span>
-
-              <span className="min-w-0">
-                <span
-                  lang={issue.lang}
-                  className="block break-words font-serif text-[18px] leading-snug text-[#3C3934] transition-colors group-hover:text-[#7A2233]"
-                >
-                  {issue.headline}
-                </span>
-                {issue.published != null && (
-                  <span className="mt-1 block font-mono text-[9px] uppercase tracking-[0.12em] text-[#6F6A60]">
-                    {items(issue.published, lang)}
-                  </span>
-                )}
+                <time dateTime={issue.publishedAt || undefined}>{when || '—'}</time>
               </span>
 
               <span
                 lang={issue.lang}
-                className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#6F6A60]"
+                className="block min-w-0 break-words font-serif text-[18px] leading-snug text-[#3C3934] transition-colors group-hover:text-[#7A2233]"
               >
-                {copy.languages[issue.lang]}
+                {issue.headline}
+              </span>
+
+              <span
+                className={`${micro} flex flex-wrap items-baseline gap-x-2 gap-y-1 sm:justify-end`}
+              >
+                {issue.published != null && <span>{items(issue.published, lang)}</span>}
+                {issue.published != null && <span aria-hidden="true">·</span>}
+                <span lang={issue.lang} className="text-[#3C3934]">
+                  {copy.languages[issue.lang]}
+                </span>
               </span>
             </Link>
           </li>
