@@ -475,7 +475,7 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   border-color: var(--flow-reader-line);
 }
 
-.flow-post-page--reader :is(.flow-reader__back, .flow-reader__identity, .flow-reader__meta) {
+.flow-post-page--reader :is(.flow-reader__back, .flow-reader__meta) {
   color: var(--flow-reader-muted);
 }
 
@@ -484,8 +484,7 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
 }
 
 .flow-post-page--reader .flow-reader__sources,
-.flow-post-page--reader .flow-reader__sources a,
-.flow-post-page--reader .flow-reader__sources-label {
+.flow-post-page--reader .flow-reader__sources a {
   color: var(--flow-reader-muted);
 }
 
@@ -562,14 +561,6 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   color: var(--flow-ink);
 }
 
-.flow-reader__identity {
-  font-family: var(--flow-serif);
-  font-size: 0.8rem;
-  font-style: italic;
-  letter-spacing: 0.02em;
-  color: var(--flow-muted);
-}
-
 .flow-reader__meta {
   display: flex;
   flex-wrap: wrap;
@@ -620,11 +611,6 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
 
 .flow-reader__sources a:hover {
   color: var(--flow-ink);
-}
-
-.flow-reader__sources-label {
-  color: #9a948a;
-  letter-spacing: 0.18em;
 }
 
 .flow-reader__pager {
@@ -784,7 +770,6 @@ body.flow-reader-focus:not(.telegram-app) .flow-post-page--reader {
   padding-top: 2rem;
 }
 
-body.flow-reader-focus .flow-reader__identity,
 body.flow-reader-focus .flow-reader__meta,
 body.flow-reader-focus .flow-reader__sources,
 body.flow-reader-focus .flow-home-screen--reader {

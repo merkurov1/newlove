@@ -346,6 +346,16 @@ test.describe('Flow reader — Telegram', () => {
 
     await expect(appearance).toBeVisible();
     await expect(page.getByRole('button', { name: 'Contents' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Focus mode' })).toBeVisible();
+
+    // The reader header and sources keep their accessible meaning while the
+    // redundant visible "Flow" identity and "Elsewhere" label are gone.
+    await expect(page.locator('.flow-reader__identity')).toHaveCount(0);
+    await expect(page.getByText('Elsewhere', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.flow-reader__sources')).toHaveAttribute(
+      'aria-label',
+      'This publication elsewhere'
+    );
 
     // Controls sit above the publication text in normal flow, not over it.
     const controlBox = await page.locator('.flow-reader__controls').boundingBox();
