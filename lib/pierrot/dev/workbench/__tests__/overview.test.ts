@@ -26,6 +26,7 @@ jest.mock('../finalization', () => ({
 import * as lifecycle from '../lifecycle';
 import * as store from '../store';
 import { getWorkbenchOverview, selectReviewTasks } from '../overview';
+import { WorkbenchStageTimer } from '../telemetry';
 
 function asMock(value: unknown): jest.Mock {
   return value as jest.Mock;
@@ -162,5 +163,32 @@ describe('workbench overview recovery ordering', () => {
     ];
 
     expect(selectReviewTasks(tasks).map((task) => task.id)).toEqual(['review']);
+  });
+
+  it('records every overview stage in the caller telemetry', async () => {
+    const timer = new WorkbenchStageTimer({ label: 'overview-test' });
+
+    await getWorkbenchOverview('11111111-1111-4111-8111-111111111111', {
+      skipReap: true,
+      telemetry: timer,
+    });
+
+    const stages = timer.stages.map((stage) => stage.stage);
+    expect(stages).toEqual(
+      expect.arrayContaining([
+        'overview.schema',
+        'overview.lifecycle',
+        'overview.finalization_report',
+        'overview.tasks',
+        'overview.queue_state',
+        'overview.costs',
+        'overview.attempts',
+        'overview.batches',
+        'overview.workers',
+        'overview.active_attempt',
+        'overview.events',
+      ])
+    );
+    expect(timer.stages.every((stage) => stage.durationMs >= 0)).toBe(true);
   });
 });

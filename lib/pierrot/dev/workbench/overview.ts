@@ -17,6 +17,7 @@ import { getLifecycleSnapshot } from './lifecycle';
 import { getFinalizationReport } from './finalization';
 import { estimateTaskCost } from './costs';
 import { deriveWorkerHealth } from './workerHealth';
+import { WorkbenchStageTimer } from './telemetry';
 import type { DevCostEstimate, DevWorkbenchOverview, DevWorkbenchTask } from './types';
 
 assertServerOnly('lib/pierrot/dev/workbench/overview');
@@ -33,10 +34,16 @@ let lastReapAt = 0;
 
 export type WorkbenchOverviewOptions = {
   /**
-   * The caller already ran reapExpiredAttempts in this request. Skip the
-   * throttled duplicate RPC while still building the post-reap snapshot.
+   * The caller already ran reapExpiredAttempts in this request (or is a
+   * read-only endpoint and must not mutate state). Skip the throttled RPC while
+   * still building the snapshot.
    */
   skipReap?: boolean;
+  /**
+   * Optional stage timer owned by the caller. When omitted the overview creates
+   * its own so durations are still emitted to structured telemetry.
+   */
+  telemetry?: WorkbenchStageTimer;
 };
 
 /**
@@ -52,29 +59,49 @@ export async function getWorkbenchOverview(
   userId: string,
   options: WorkbenchOverviewOptions = {}
 ): Promise<DevWorkbenchOverview> {
-  const schemaReady = await isWorkbenchSchemaReady();
+  const timer =
+    options.telemetry ??
+    new WorkbenchStageTimer({ label: 'workbench-overview', source: 'overview' });
+  const ownsTimer = !options.telemetry;
+  try {
+    return await buildWorkbenchOverview(userId, options, timer);
+  } finally {
+    if (ownsTimer) timer.log();
+  }
+}
 
-  // Viewing Admin is enough to detect an expired worker lease. This is a
-  // bounded RPC, not a cron job, and it never creates work. It must finish
-  // before the lifecycle snapshot is read so Admin reports the recovered state.
+async function buildWorkbenchOverview(
+  userId: string,
+  options: WorkbenchOverviewOptions,
+  timer: WorkbenchStageTimer
+): Promise<DevWorkbenchOverview> {
+  const schemaReady = await timer.measure('overview.schema', () => isWorkbenchSchemaReady());
+
+  // Callers that intentionally recover (legacy Admin actions) may still run the
+  // bounded reap here. Read-only endpoints pass `skipReap`; the cron tick owns
+  // autonomous recovery now.
   if (schemaReady && !options.skipReap && Date.now() - lastReapAt > 30_000) {
     lastReapAt = Date.now();
-    await reapExpiredAttempts();
+    await timer.measure('overview.reap', () => reapExpiredAttempts());
   }
 
   const [lifecycle, finalization] = await Promise.all([
-    getLifecycleSnapshot(),
-    getFinalizationReport(),
+    timer.measure('overview.lifecycle', () => getLifecycleSnapshot()),
+    timer.measure('overview.finalization_report', () => getFinalizationReport()),
   ]);
   const updatedAt = new Date().toISOString();
 
   const [allTasks, paused] = await Promise.all([
-    listTaskRows({ userId, limit: 200 }),
-    schemaReady ? isQueuePaused() : Promise.resolve(false),
+    timer.measure('overview.tasks', () => listTaskRows({ userId, limit: 200 })),
+    schemaReady
+      ? timer.measure('overview.queue_state', () => isQueuePaused())
+      : Promise.resolve(false),
   ]);
 
   const storedEstimates = schemaReady
-    ? await listLatestCostEstimates(allTasks.map((task) => task.id))
+    ? await timer.measure('overview.costs', () =>
+        listLatestCostEstimates(allTasks.map((task) => task.id))
+      )
     : new Map<string, DevCostEstimate>();
   const tasks = allTasks.map((task) => ({
     ...task,
@@ -138,23 +165,29 @@ export async function getWorkbenchOverview(
   }
 
   const [attemptsByTask, batches, workers, activeAttempt, recentEvents] = await Promise.all([
-    listAttemptsForTasks(
-      historyTasks.map((task) => task.id),
-      20
+    timer.measure('overview.attempts', () =>
+      listAttemptsForTasks(
+        historyTasks.map((task) => task.id),
+        20
+      )
     ),
-    listBatches(userId),
-    listWorkers(),
-    getActiveAttempt(),
-    listEvents({ limit: 40 }),
+    timer.measure('overview.batches', () => listBatches(userId)),
+    timer.measure('overview.workers', () => listWorkers()),
+    timer.measure('overview.active_attempt', () => getActiveAttempt()),
+    timer.measure('overview.events', () => listEvents({ limit: 40 })),
   ]);
 
   const workerHealth = deriveWorkerHealth(workers, activeAttempt ? [activeAttempt] : []);
 
   let active: DevWorkbenchOverview['active'] = null;
   if (activeAttempt) {
-    const task = await getTaskRowUnscoped(activeAttempt.taskId);
+    const task = await timer.measure('overview.active_task', () =>
+      getTaskRowUnscoped(activeAttempt.taskId)
+    );
     if (task) {
-      const events = await listEvents({ attemptId: activeAttempt.id, limit: 40 });
+      const events = await timer.measure('overview.active_events', () =>
+        listEvents({ attemptId: activeAttempt.id, limit: 40 })
+      );
       active = {
         task,
         attempt: activeAttempt,

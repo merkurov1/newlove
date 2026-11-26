@@ -33,7 +33,7 @@ export default async function DevPage({
       getDevIntegrationStatus(),
       listDevTasks(user.id, 40),
       isDevRequestStoreAvailable(),
-      getWorkbenchOverview(user.id),
+      getWorkbenchOverview(user.id, { skipReap: true }),
     ]);
 
   if (rawConversation && !conversation) {

@@ -215,7 +215,8 @@ Automatic dispatch from the queue is now the standard path:
   `POST /repos/{owner}/{repo}/dispatches` with `event_type =
 pierrot-dev-task` and `client_payload.task_id` set to that exact task;
 - resuming the queue or starting a batch dispatches at most one eligible task;
-- Admin overview runs a bounded recovery pump (it never starts a Codespace);
+- the protected five-minute scheduler tick and the explicit Admin `recover`
+  action run a bounded recovery pump (they never start a Codespace);
 - a worker completion/failure/release dispatches the next eligible task, so a
   one-run-per-task workflow can progress through the queue.
 

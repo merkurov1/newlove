@@ -43,6 +43,7 @@ import {
   retryActionsDispatch,
 } from '@/lib/pierrot/dev/workbench/actions';
 import { advanceFinalization, retryFinalization } from '@/lib/pierrot/dev/workbench/finalization';
+import { runWorkbenchRecovery } from '@/lib/pierrot/dev/workbench/recovery';
 import { reconcileLegacyReviewRows } from '@/lib/pierrot/dev/workbench/reconciliation';
 import { CODESPACE_NAME_ENV } from '@/lib/pierrot/dev/workbench/setup';
 import { getWorkbenchOverview } from '@/lib/pierrot/dev/workbench/overview';
@@ -521,6 +522,19 @@ export async function POST(req: Request) {
           payload: { finalizationId: report.id, retry },
         });
         break;
+      }
+      case 'recover': {
+        // Manual fallback for environments where the pg_cron tick is not
+        // configured. This is the same bounded recovery pass as cron, with the
+        // GitHub-heavy finalization step explicitly included because the owner
+        // chose to wait for it.
+        const recovery = await runWorkbenchRecovery({
+          source: 'admin:recover',
+          steps: ['reap', 'dispatch', 'finalization'],
+          budgetMs: 20_000,
+        });
+        const overview = await getWorkbenchOverview(admin.id, { skipReap: true });
+        return json({ ok: true, recovery, overview });
       }
       case 'reconcile_legacy': {
         // One-time maintenance, not a per-task review gate. Dry-run is the

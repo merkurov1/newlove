@@ -50,6 +50,7 @@ import * as notifications from '../notifications';
 import * as store from '../store';
 import {
   ensureCodespaceForQueuedWork,
+  getLifecycleSnapshot,
   keepCodespaceAwakeForActiveWork,
   recordWorkerReady,
   requestIdleShutdown,
@@ -633,5 +634,14 @@ describe('pending start verification', () => {
       'lifecycle:last_keepalive',
       expect.objectContaining({ name: 'test-codespace', source: 'worker:progress' })
     );
+  });
+
+  it('bounds the codespace lookup so a slow GitHub call cannot hold the snapshot', async () => {
+    asMock(github.resolveCodespace).mockImplementationOnce(() => new Promise(() => {}));
+
+    const snapshot = await getLifecycleSnapshot({ codespaceTimeoutMs: 100 });
+
+    expect(snapshot.codespace).toBeNull();
+    expect(snapshot.codespaceError).toContain('Codespace lookup timed out');
   });
 });

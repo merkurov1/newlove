@@ -875,6 +875,7 @@ export type DevWorkbenchAction =
   | 'stop_worker'
   | 'release_worker'
   | 'reap'
+  | 'recover'
   | 'set_priority'
   | 'finalize_queue'
   | 'reconcile_legacy';
