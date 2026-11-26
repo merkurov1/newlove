@@ -74,6 +74,13 @@ import {
   personalAssistantHelpText,
   personalAssistantUnknownCommandText,
 } from '@/lib/pierrot/personalAssistant/telegramPolicy';
+import {
+  classifyAssistantFailure,
+  createAssistantCorrelationId,
+  logAssistantRequest,
+  pierrotCodeForAssistantFailure,
+} from '@/lib/pierrot/personalAssistant/diagnostics';
+import { requestPersonalAssistantReply } from '@/lib/pierrot/personalAssistant/gateway';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -349,17 +356,23 @@ function splitTelegramText(value: string, maxChars = 4000): string[] {
   return chunks.length > 0 ? chunks : [''];
 }
 
-async function sendPersonalAssistantReply(ctx: Context, reply: string): Promise<void> {
+async function sendPersonalAssistantReply(
+  ctx: Context,
+  reply: string,
+  onDelivered?: () => void
+): Promise<void> {
   const chunks = splitTelegramText(reply);
 
   for (const chunk of chunks) {
     try {
       await ctx.reply(toTelegramHtml(chunk), { parse_mode: 'HTML' });
+      onDelivered?.();
     } catch (error) {
       // A 400 means Telegram rejected the HTML and nothing was sent, so a
       // plain-text retry cannot duplicate the message.
       if (error instanceof GrammyError && error.error_code === 400) {
         await ctx.reply(chunk);
+        onDelivered?.();
         continue;
       }
 
@@ -368,60 +381,16 @@ async function sendPersonalAssistantReply(ctx: Context, reply: string): Promise<
   }
 }
 
-async function requestPersonalAssistant(input: {
-  senderId: number;
-  messageId: string;
-  text: string;
-}): Promise<{ reply: string }> {
-  const ids = createTelegramPierrotIds(input.senderId, input.messageId);
-  const headers: Record<string, string> = {
-    'content-type': 'application/json',
-    // The web route re-checks the allowlist and private-chat header. These
-    // headers are trusted only together with the internal service secret.
-    'x-telegram-user-id': String(input.senderId),
-    'x-telegram-sender-id': String(input.senderId),
-    'x-telegram-chat-id': String(input.senderId),
-    'x-telegram-chat-type': 'private',
-    'x-telegram-update-authentic': '1',
-  };
-
-  if (internalSecret) {
-    headers['x-pierrot-internal'] = internalSecret;
-  }
-
-  const response = await fetch(`${siteUrl}/api/pierrot-web`, {
-    method: 'POST',
-    headers,
-    signal: AbortSignal.timeout(55_000),
-    body: JSON.stringify({
-      message: input.text,
-      userMessageId: ids.userMessageId,
-      stream: false,
-      context: { pathname: '/' },
-    }),
-  });
-
-  const data = (await response.json().catch(() => ({}))) as {
-    reply?: unknown;
-    error?: unknown;
-  };
-
-  if (!response.ok) {
-    throw new Error(
-      typeof data.error === 'string' ? data.error : `Pierrot web returned ${response.status}`
-    );
-  }
-
-  return {
-    reply: typeof data.reply === 'string' ? data.reply : '',
-  };
-}
-
 async function handlePersonalAssistantText(ctx: Context, text: string): Promise<void> {
   const senderId = ctx.from?.id;
   const chatId = ctx.chat?.id;
   const messageId = ctx.message?.message_id;
   const language = detectAssistantLanguage(text);
+  const correlationId = createAssistantCorrelationId({
+    updateId: ctx.update?.update_id,
+    messageId: messageId ?? null,
+  });
+  const startedAt = Date.now();
 
   if (typeof senderId !== 'number' || typeof chatId !== 'number') return;
 
@@ -436,24 +405,85 @@ async function handlePersonalAssistantText(ctx: Context, text: string): Promise<
     return;
   }
 
+  let data: Awaited<ReturnType<typeof requestPersonalAssistantReply>>;
+  const telegramMessageId =
+    typeof messageId === 'number' ? String(messageId) : `msg-${Date.now()}`;
+  const ids = createTelegramPierrotIds(senderId, telegramMessageId);
+
   try {
     await ctx.api.sendChatAction(chatId, 'typing').catch(() => undefined);
-    const data = await requestPersonalAssistant({
+    data = await requestPersonalAssistantReply({
+      siteUrl,
+      internalSecret,
       senderId,
-      messageId: typeof messageId === 'number' ? String(messageId) : `msg-${Date.now()}`,
+      messageId: telegramMessageId,
+      userMessageId: ids.userMessageId,
       text,
+      correlationId,
+    });
+  } catch (error) {
+    // Never expose provider responses, prompts, memory or internal details.
+    // The structured line identifies the stage and error class without any
+    // request or response content.
+    const details = classifyAssistantFailure(error, { stage: 'provider_request' });
+
+    logAssistantRequest({
+      correlationId,
+      stage: details.stage,
+      outcome: 'failure',
+      durationMs: Date.now() - startedAt,
+      error,
+      details,
     });
 
-    if (!data.reply.trim()) {
-      await ctx.reply(personalAssistantErrorText(language)).catch(() => undefined);
-      return;
-    }
+    await ctx
+      .reply(personalAssistantErrorText(language, pierrotCodeForAssistantFailure(details.category)))
+      .catch(() => undefined);
+    return;
+  }
 
-    await sendPersonalAssistantReply(ctx, data.reply);
-  } catch {
-    // Never expose provider responses, prompts, memory or internal details.
-    console.error('[Pierrot Assistant TG] request failed');
-    await ctx.reply(personalAssistantErrorText(language)).catch(() => undefined);
+  let deliveredChunks = 0;
+
+  try {
+    await sendPersonalAssistantReply(ctx, data.reply, () => {
+      deliveredChunks += 1;
+    });
+
+    logAssistantRequest({
+      correlationId,
+      stage: 'completed',
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      httpStatus: data.httpStatus,
+      provider: data.provider,
+    });
+  } catch (error) {
+    logAssistantRequest({
+      correlationId,
+      stage: 'reply_delivery',
+      outcome: 'failure',
+      durationMs: Date.now() - startedAt,
+      error,
+      details: {
+        stage: 'reply_delivery',
+        category: 'telegram_delivery',
+        httpStatus: null,
+        provider: data.provider,
+        providerCode: 'telegram_reply_failed',
+        retryable: true,
+        retryAfterSeconds: null,
+      },
+    });
+
+    // Do not send a second, different message when at least one chunk was
+    // already delivered; only offer a retry when the user received nothing.
+    if (deliveredChunks === 0) {
+      await ctx
+        .reply(
+          personalAssistantErrorText(language, pierrotCodeForAssistantFailure('telegram_delivery'))
+        )
+        .catch(() => undefined);
+    }
   }
 }
 

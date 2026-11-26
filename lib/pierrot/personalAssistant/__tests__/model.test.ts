@@ -111,4 +111,30 @@ describe('personal assistant provider policy', () => {
       expect.objectContaining({ system: 'SYSTEM_PERSONA' })
     );
   });
+
+  it('attributes a provider timeout to the last provider without logging secrets', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const secret = 'SECRET_PROMPT: private user text';
+
+    openaiModule.__create
+      .mockRejectedValueOnce(
+        Object.assign(new Error(`Request timed out. ${secret}`), {
+          name: 'APIConnectionTimeoutError',
+        })
+      )
+      .mockRejectedValueOnce(
+        Object.assign(new Error(`Request timed out. ${secret}`), {
+          name: 'APIConnectionTimeoutError',
+        })
+      );
+
+    await expect(callPersonalAssistantModel('SYSTEM_PERSONA', messages)).rejects.toMatchObject({
+      pierrotProvider: 'openrouter',
+      pierrotProviderCode: 'provider_timeout',
+    });
+
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(secret);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Request timed out');
+    warn.mockRestore();
+  });
 });
