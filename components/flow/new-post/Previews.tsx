@@ -15,11 +15,11 @@ export function ShimmerPreview({
   text = "Loading preview…",
 }: ShimmerPreviewProps) {
   return (
-    <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
+    <div className="overflow-hidden rounded-xl border border-black/10 bg-black/[0.02]">
       <div className="animate-pulse">
         <div className="h-32 bg-black/[0.06]" />
 
-        <div className="space-y-2 p-3">
+        <div className="space-y-2 p-3.5">
           <div className="h-3 w-2/3 bg-black/[0.08]" />
           <div className="h-3 w-1/2 bg-black/[0.06]" />
 
@@ -53,7 +53,7 @@ export function YouTubePreview({
   const safeUrl = isHttpUrl(url) ? url : undefined;
 
   return (
-    <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
+    <div className="overflow-hidden rounded-xl border border-black/10 bg-black/[0.02]">
       <div className="relative aspect-video w-full overflow-hidden bg-black/[0.06]">
         {thumbnail ? (
           <Image
@@ -80,7 +80,7 @@ export function YouTubePreview({
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3.5">
         <div className="line-clamp-2 text-sm font-medium leading-5 text-black">
           {title}
         </div>
@@ -128,7 +128,7 @@ export function LinkPreviewCard({
   const safeUrl = isHttpUrl(url) ? url : undefined;
 
   return (
-    <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
+    <div className="overflow-hidden rounded-xl border border-black/10 bg-black/[0.02]">
       {preview.image ? (
         <div className="relative aspect-[1.91/1] w-full overflow-hidden bg-black/[0.06]">
           <Image
@@ -142,7 +142,7 @@ export function LinkPreviewCard({
         </div>
       ) : null}
 
-      <div className="p-3">
+      <div className="p-3.5">
         <div className="line-clamp-2 text-sm font-medium leading-5 text-black">
           {title}
         </div>
@@ -176,8 +176,8 @@ export function ImagePreview({
   alt = "Selected image",
 }: ImagePreviewProps) {
   return (
-    <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
-      <div className="relative aspect-[4/3] w-full overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-black/10 bg-black/[0.02]">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#F4F1EB]">
         <Image
           src={src}
           alt={alt}
