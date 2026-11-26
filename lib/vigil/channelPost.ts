@@ -2,13 +2,12 @@ import { assertServerOnly } from '@/lib/serverOnly';
 
 assertServerOnly('lib/vigil/channelPost');
 
-const FALLBACK_SITE_URL = 'https://www.merkurov.love';
 const DEFAULT_TEMPLE_CHANNEL_ID = '@heartandangel';
 const REQUEST_TIMEOUT_MS = 8_000;
 
 export const VIGIL_CHANNEL_MESSAGE = 'Зажгли ещё одно сердечко. ❤️';
 export const VIGIL_CHANNEL_LINK_LABEL = 'Открыть храм';
-export const VIGIL_CHANNEL_PATH = '/temple';
+export const VIGIL_CHANNEL_DESTINATION = 'https://t.me/Love_Temple_bot';
 
 export type VigilChannelPostResult =
   | { ok: true; messageId: number; chatId: number }
@@ -40,27 +39,6 @@ function escapeHtmlAttribute(value: string): string {
     .replace(/>/g, '&gt;');
 }
 
-function resolveSiteUrl(explicit?: string): string {
-  const candidate = (
-    explicit ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    FALLBACK_SITE_URL
-  ).trim();
-
-  try {
-    const url = new URL(candidate);
-
-    if (url.protocol === 'https:' || url.protocol === 'http:') {
-      return url.toString().replace(/\/+$/, '');
-    }
-  } catch {
-    // Fall through to the canonical public site.
-  }
-
-  return FALLBACK_SITE_URL;
-}
-
 function readTempleBotToken(): string {
   return (process.env.TEMPLE_BOT_TOKEN || '').trim();
 }
@@ -73,12 +51,12 @@ function readTempleChannelId(): string {
   ).trim();
 }
 
-export function getVigilChannelDestination(siteUrl?: string): string {
-  return `${resolveSiteUrl(siteUrl)}${VIGIL_CHANNEL_PATH}`;
+export function getVigilChannelDestination(_siteUrl?: string): string {
+  return VIGIL_CHANNEL_DESTINATION;
 }
 
-export function buildVigilChannelPost(siteUrl?: string): string {
-  const destination = getVigilChannelDestination(siteUrl);
+export function buildVigilChannelPost(_siteUrl?: string): string {
+  const destination = getVigilChannelDestination();
 
   return [
     VIGIL_CHANNEL_MESSAGE,
