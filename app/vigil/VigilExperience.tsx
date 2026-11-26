@@ -59,6 +59,7 @@ export default function VigilExperience({
     rateLimitMsg,
     successMessage,
     authExpired,
+    retrySession,
     spark,
     userName,
     triggerRitual,
@@ -80,10 +81,13 @@ export default function VigilExperience({
   });
 
   // Telegram owns the primary action only when its native button is actually
-  // available. A late SDK, an older client without BottomButton, or another
-  // mounted ritual still holding ownership must not leave the screen without
-  // any working Send Spark control.
-  const showInSceneAction = !isTelegram || !nativeActionAvailable;
+  // available *and* the identity can use it. A late SDK, an older client
+  // without a native button, another mounted ritual still holding ownership,
+  // an unresolved identity or an expired session must not leave the screen
+  // without a visible, explained fallback.
+  const nativeActionReady =
+    nativeActionAvailable && Boolean(userName) && !authExpired;
+  const showInSceneAction = !isTelegram || !nativeActionReady;
 
   // The shared flame clock is published once to the modal header. The same
   // server snapshot also drives the heart below.
@@ -526,12 +530,38 @@ export default function VigilExperience({
             </p>
           )}
 
-          {authExpired && !identity.isTelegram && (
+          {authExpired && (
             <p className={styles.notice}>
-              <Link href="/login?next=%2Fvigil" className={styles.signInLink}>
-                Sign in again
-              </Link>{' '}
-              to send a spark.
+              {identity.isTelegram ? (
+                <>
+                  Your Telegram session needs a refresh.{' '}
+                  <button
+                    type="button"
+                    onClick={() => void retrySession()}
+                    className={styles.inlineButton}
+                  >
+                    Retry
+                  </button>
+                </>
+              ) : (
+                <>
+                  Your session expired.{' '}
+                  <Link
+                    href="/login?next=%2Fvigil"
+                    className={styles.signInLink}
+                  >
+                    Sign in again
+                  </Link>{' '}
+                  to send a spark.{' '}
+                  <button
+                    type="button"
+                    onClick={() => void retrySession()}
+                    className={styles.inlineButton}
+                  >
+                    Retry
+                  </button>
+                </>
+              )}
             </p>
           )}
 

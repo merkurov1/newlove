@@ -250,6 +250,45 @@ describe('useTempleIdentity', () => {
     expect(result.current.displayName).toBe('Restored Anna');
   });
 
+  it('retries a failed exchange when the Mini App is reopened', async () => {
+    setTelegram('reopen-init-data');
+
+    let attempts = 0;
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/temple/auth')) {
+        attempts += 1;
+
+        return attempts === 1
+          ? jsonResponse({ error: 'Temporary auth outage' }, 503)
+          : jsonResponse({ success: true, displayName: 'Reopened Anna', token: 'tok' });
+      }
+
+      return jsonResponse({});
+    });
+
+    const { result } = renderHook(() => useTempleIdentity());
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('telegram-unverified');
+    });
+
+    expect(authCalls()).toHaveLength(1);
+
+    act(() => {
+      window.dispatchEvent(new Event('pageshow'));
+    });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('verified');
+    });
+
+    expect(result.current.displayName).toBe('Reopened Anna');
+    expect(authCalls()).toHaveLength(2);
+  });
+
   it('keeps the server-issued token and force-refreshes a cached exchange after a 401', async () => {
     setTelegram('signed-init-data');
 

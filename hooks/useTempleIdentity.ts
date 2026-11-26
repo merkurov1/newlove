@@ -77,6 +77,11 @@ export type TempleIdentity = {
 const TELEGRAM_FAILED_MESSAGE =
   'Telegram identity could not be verified. You can still witness the Vigil.';
 
+// A Mini App can be backgrounded and reopened without a full reload. Retry a
+// failed exchange when it returns, but not more than once per interval so a
+// genuinely invalid initData cannot hammer the auth endpoint.
+const IDENTITY_RETRY_MIN_INTERVAL_MS = 15_000;
+
 function telegramPayload(payload: unknown): TelegramIdentityPayload | null {
   return payload && typeof payload === 'object' ? (payload as TelegramIdentityPayload) : null;
 }
@@ -113,6 +118,7 @@ export function useTempleIdentity(): TempleIdentity {
   const restoreRef = useRef<Promise<boolean> | null>(null);
   const restoreAttemptedRef = useRef(false);
   const attemptIdRef = useRef(0);
+  const lastAutoRetryAtRef = useRef(0);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -348,6 +354,48 @@ export function useTempleIdentity(): TempleIdentity {
     restoreSession,
     supabaseName,
   ]);
+
+  // Telegram keeps the Mini App alive when the user switches chats or closes
+  // the overlay. On return, retry a failed exchange (or a cookie restore) so a
+  // transient failure does not leave the ritual on "could not confirm".
+  useEffect(() => {
+    if (!isTelegram || typeof document === 'undefined') return;
+
+    const retry = () => {
+      if (document.visibilityState === 'hidden') return;
+
+      const now = Date.now();
+
+      if (now - lastAutoRetryAtRef.current < IDENTITY_RETRY_MIN_INTERVAL_MS) {
+        return;
+      }
+
+      const initData = readTelegramInitData();
+
+      if (initData) {
+        if (verifiedInitDataRef.current === initData) return;
+
+        lastAutoRetryAtRef.current = now;
+        void exchangeInitData(initData);
+        return;
+      }
+
+      if (restoreAttemptedRef.current) {
+        lastAutoRetryAtRef.current = now;
+        void restoreSession(true);
+      }
+    };
+
+    window.addEventListener('focus', retry);
+    window.addEventListener('pageshow', retry);
+    document.addEventListener('visibilitychange', retry);
+
+    return () => {
+      window.removeEventListener('focus', retry);
+      window.removeEventListener('pageshow', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  }, [exchangeInitData, isTelegram, restoreSession]);
 
   const displayName = supabaseName || telegramName || '';
 

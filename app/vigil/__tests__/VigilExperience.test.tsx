@@ -117,7 +117,7 @@ jest.mock('@/lib/supabase-browser', () => {
       channel: () => channel,
       removeChannel: jest.fn(),
       auth: {
-        getSession: async () => ({ data: { session: null } }),
+        getSession: jest.fn(async () => ({ data: { session: null } })),
         refreshSession: jest.fn(async () => ({
           data: { session: null },
           error: null,
@@ -142,6 +142,7 @@ const bottomButtonModule = require('@/components/telegram/useTelegramBottomButto
 const supabaseModule = require('@/lib/supabase-browser') as {
   supabase: {
     auth: {
+      getSession: jest.Mock;
       refreshSession: jest.Mock;
     };
   };
@@ -212,6 +213,9 @@ beforeEach(() => {
   supabaseModule.supabase.auth.refreshSession.mockResolvedValue({
     data: { session: null },
     error: null,
+  });
+  supabaseModule.supabase.auth.getSession.mockResolvedValue({
+    data: { session: null },
   });
   fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
@@ -307,6 +311,27 @@ describe('/vigil shared flame surface', () => {
         visible: true,
       })
     );
+  });
+
+  it('keeps an explained in-scene fallback when a native button exists but identity is unresolved', () => {
+    useIsTelegramModule.default.mockReturnValue(true);
+    bottomButtonModule.useTelegramBottomButton.mockReturnValue(true);
+    identityModule.default.mockReturnValue(
+      identity({
+        isTelegram: true,
+        status: 'telegram-init-pending',
+        isLoading: true,
+      })
+    );
+
+    render(<VigilExperience />);
+
+    const button = screen.getByRole('button', {
+      name: /waiting for your telegram name/i,
+    });
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('data-vigil-action', 'in-scene');
   });
 
   it('renders an in-scene fallback when the native Telegram button is unavailable', async () => {
@@ -428,6 +453,106 @@ describe('/vigil shared flame surface', () => {
       'data-lifetime-total',
       '250'
     );
+  });
+
+  it('uses the verified Telegram token instead of a stale Supabase session', async () => {
+    identityModule.default.mockReturnValue(
+      identity({
+        displayName: 'Anna',
+        source: 'telegram',
+        getAuthToken: jest.fn(() => 'tg-token'),
+      })
+    );
+    supabaseModule.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'stale-supabase-token' } },
+    });
+
+    let postedAuth: string | null = null;
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            postedAuth = (init.headers as Record<string, string>)?.Authorization ?? null;
+
+            return jsonResponse({
+              ok: true,
+              record: { id: 1 },
+              cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+            });
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toBeInTheDocument();
+    });
+
+    expect(postedAuth).toBe('Bearer tg-token');
+    expect(supabaseModule.supabase.auth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('marks a Supabase session expired when the server rejects it after one refresh', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+    supabaseModule.supabase.auth.getSession.mockResolvedValue({
+      data: { session: { access_token: 'expired-token' } },
+    });
+    supabaseModule.supabase.auth.refreshSession.mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    let statusReads = 0;
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/vigil/claim')) {
+        statusReads += 1;
+        return jsonResponse({
+          authenticated: false,
+          canSpark: false,
+          remainingMs: 0,
+        });
+      }
+
+      return jsonResponse({});
+    });
+
+    render(<VigilExperience />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: /sign in again to send a spark/i,
+        })
+      ).toBeDisabled();
+    });
+
+    expect(statusReads).toBe(1);
+    expect(supabaseModule.supabase.auth.refreshSession).toHaveBeenCalledTimes(
+      1
+    );
+    expect(
+      screen.getByRole('link', { name: /^sign in again$/i })
+    ).toHaveAttribute('href', '/login?next=%2Fvigil');
   });
 
   it('renews an expired Supabase session once and retries the claim', async () => {

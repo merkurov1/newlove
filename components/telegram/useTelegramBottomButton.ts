@@ -19,7 +19,8 @@ const RETRY_MAX_MS = 2_000;
 const RETRY_WINDOW_MS = 60_000;
 
 /**
- * Keep the Telegram BottomButton in sync with a route's current state.
+ * Keep Telegram's native primary action button (`MainButton`, with a legacy
+ * `BottomButton` fallback) in sync with a route's current state.
  *
  * - one owner per mounted component;
  * - the click handler is read from a ref, so updates never leave a stale
