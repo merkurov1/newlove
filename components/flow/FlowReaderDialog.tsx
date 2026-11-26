@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 type Props = {
   onClose: () => void;
@@ -18,6 +19,18 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(',');
+
+/**
+ * Keep the sheet outside the animated `.flow-item` article. The article keeps
+ * a transform after its entry animation, which would otherwise turn it into
+ * the containing block for `position: fixed` and let article typography leak
+ * into the sheet's own headings and paragraphs.
+ */
+function getPortalTarget(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+
+  return document.querySelector<HTMLElement>('.flow-post-page--reader') ?? document.body;
+}
 
 /**
  * Accessible sheet used by the Flow reader appearance and contents controls.
@@ -98,7 +111,11 @@ export default function FlowReaderDialog({ onClose, side, labelledBy, testId, ch
     };
   }, [onClose]);
 
-  return (
+  const target = getPortalTarget();
+
+  if (!target) return null;
+
+  return createPortal(
     <div className="flow-reader-dialog" data-testid={testId}>
       <div
         className="flow-reader-dialog__backdrop"
@@ -117,6 +134,7 @@ export default function FlowReaderDialog({ onClose, side, labelledBy, testId, ch
       >
         {children}
       </aside>
-    </div>
+    </div>,
+    target
   );
 }

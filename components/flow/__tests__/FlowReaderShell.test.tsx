@@ -251,6 +251,12 @@ describe('FlowReaderShell', () => {
 
       expect(saved).toMatchObject({ theme: 'sepia', lineHeight: 2 });
     });
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue('--flow-reader-line-height')).toBe(
+        '2.00'
+      )
+    );
+    expect(within(dialog).getByText('2.00')).toBeInTheDocument();
 
     act(() => {
       fireEvent.keyDown(document, { key: 'Escape' });
@@ -258,6 +264,34 @@ describe('FlowReaderShell', () => {
 
     expect(screen.queryByRole('dialog', { name: 'Appearance' })).not.toBeInTheDocument();
     expect(appearance).toHaveFocus();
+  });
+
+  it('closes the appearance sheet from the backdrop without moving the reader', async () => {
+    render(reader());
+    setScrollY(480);
+
+    const appearance = screen.getByRole('button', { name: 'Appearance settings' });
+
+    appearance.focus();
+    fireEvent.click(appearance);
+
+    const backdrop = document.querySelector('[data-reader-backdrop]');
+
+    expect(backdrop).not.toBeNull();
+
+    fireEvent.click(backdrop!);
+
+    expect(screen.queryByRole('dialog', { name: 'Appearance' })).not.toBeInTheDocument();
+    expect(appearance).toHaveFocus();
+    expect(window.scrollY).toBe(480);
+
+    fireEvent.click(appearance);
+    act(() => {
+      fireEvent.keyDown(document, { key: 'Escape' });
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Appearance' })).not.toBeInTheDocument();
+    expect(window.scrollY).toBe(480);
   });
 
   it('restores persisted appearance and focus mode on the next visit', async () => {
