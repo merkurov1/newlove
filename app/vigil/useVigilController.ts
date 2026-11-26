@@ -55,6 +55,12 @@ export function useVigilController() {
   // The homepage and this ritual read the very same authoritative snapshot.
   const {
     supporterCount,
+    lifetimeTotal,
+    uniqueParticipants,
+    returningParticipants,
+    repeatRate,
+    analyticsSince,
+    analyticsAvailable,
     lastLitAt,
     flameExpiresAt,
     flameLit: serverFlameLit,
@@ -75,6 +81,7 @@ export function useVigilController() {
   const [isLighting, setIsLighting] = useState(false);
   const [spark, setSpark] = useState<VigilSparkPosition | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [cooldownRemainingMs, setCooldownRemainingMs] = useState<number | null>(
     null
   );
@@ -324,6 +331,7 @@ export function useVigilController() {
       if (isLighting) return;
 
       if (!userName) {
+        setSuccessMessage(null);
         setRateLimitMsg(
           identity.isTelegram
             ? identity.error || 'We could not confirm your Telegram name yet.'
@@ -333,12 +341,14 @@ export function useVigilController() {
       }
 
       if (isOnCooldown) {
+        setSuccessMessage(null);
         setRateLimitMsg(vigilCooldownMessage(cooldownRemainingMs ?? 0));
         return;
       }
 
       setIsLighting(true);
       setRateLimitMsg(null);
+      setSuccessMessage(null);
 
       // The spark begins exactly where the visitor acted. Keyboard activation
       // falls back to the centre of the button.
@@ -423,6 +433,7 @@ export function useVigilController() {
         // The cooldown is personal; the shared flame is re-read from the same
         // authoritative endpoint the homepage uses.
         applyCooldown(VIGIL_COOLDOWN_MS);
+        setSuccessMessage('Spark received · added to the shared heart');
         void refreshSharedFlame();
         void refreshData();
 
@@ -437,6 +448,7 @@ export function useVigilController() {
       } catch (error) {
         console.error('Vigil ritual error:', error);
         hapticNotification('error');
+        setSuccessMessage(null);
         setRateLimitMsg(
           'The spark did not reach the heart. Please try again.'
         );
@@ -481,11 +493,18 @@ export function useVigilController() {
     flameStatus: sharedFlameStatus,
     flameError: sharedFlameError,
     supporterCount,
+    lifetimeTotal,
+    uniqueParticipants,
+    returningParticipants,
+    repeatRate,
+    analyticsSince,
+    analyticsAvailable,
     isLighting,
     isOnCooldown,
     cooldownLabel,
     cooldownRemainingMs,
     rateLimitMsg,
+    successMessage,
     spark,
     userName,
     triggerRitual,

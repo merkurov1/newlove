@@ -23,6 +23,14 @@ const state = {
   flameLit: true,
   windowStartedAt: '2026-11-23T12:00:00.000Z',
   updatedAt: '2026-11-24T12:00:01.000Z',
+  lifetimeTotal: 220,
+  uniqueParticipants: 80,
+  returningParticipants: 16,
+  repeatRate: 0.2,
+  telegramParticipants: 50,
+  supabaseParticipants: 30,
+  analyticsSince: '2026-11-16T09:00:00.000Z',
+  analyticsAvailable: true,
 };
 
 beforeEach(() => {
@@ -48,6 +56,14 @@ describe('GET /api/vigil/state', () => {
         'flameLit',
         'windowStartedAt',
         'updatedAt',
+        'lifetimeTotal',
+        'uniqueParticipants',
+        'returningParticipants',
+        'repeatRate',
+        'telegramParticipants',
+        'supabaseParticipants',
+        'analyticsSince',
+        'analyticsAvailable',
       ].sort()
     );
   });

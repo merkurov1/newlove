@@ -167,6 +167,14 @@ async function mockTempleApis(page: Page) {
         flameLit: true,
         windowStartedAt: new Date(Date.now() - 86_400_000).toISOString(),
         updatedAt: new Date().toISOString(),
+        lifetimeTotal: 137,
+        uniqueParticipants: 96,
+        returningParticipants: 21,
+        repeatRate: 0.2188,
+        telegramParticipants: 60,
+        supabaseParticipants: 36,
+        analyticsSince: '2026-11-16T00:00:00.000Z',
+        analyticsAvailable: true,
       }),
     });
   });

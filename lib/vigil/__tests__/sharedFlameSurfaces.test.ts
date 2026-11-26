@@ -49,4 +49,19 @@ describe('shared Vigil flame surface contract', () => {
     expect(experience).toContain('data-vigil-flame-state');
     expect(experience).toContain('data-vigil-intensity');
   });
+
+  it('shows the lifetime total on both surfaces from the same state payload', () => {
+    expect(publicState).toContain('METRICS_VIEW');
+    expect(publicState).toContain('buildVigilMetrics');
+    expect(home).toContain('lifetimeTotal');
+    expect(home).toContain('formatVigilLifetimeLabel');
+    expect(controller).toContain('lifetimeTotal');
+    expect(experience).toContain('formatVigilLifetimeLabel');
+  });
+
+  it('confirms success only after the server response', () => {
+    expect(home).toContain('added to the shared heart');
+    expect(controller).toContain('added to the shared heart');
+    expect(experience).toContain('vigil-success');
+  });
 });

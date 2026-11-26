@@ -155,6 +155,14 @@ async function mockPublicApis(page: Page) {
         flameLit: true,
         windowStartedAt: new Date(Date.now() - 86_400_000).toISOString(),
         updatedAt: new Date().toISOString(),
+        lifetimeTotal: 137,
+        uniqueParticipants: 96,
+        returningParticipants: 21,
+        repeatRate: 0.2188,
+        telegramParticipants: 60,
+        supabaseParticipants: 36,
+        analyticsSince: '2026-11-16T00:00:00.000Z',
+        analyticsAvailable: true,
       }),
     });
   });
@@ -567,6 +575,87 @@ test.describe('Temple Sanctuary', () => {
     await page.waitForURL('**/vigil');
 
     expect(claimRequests).toBe(0);
+  });
+
+  test('authenticated single tap lights the shared heart without leaving the home', async ({
+    page,
+  }) => {
+    let claimRequests = 0;
+
+    await page.addInitScript(() => {
+      (window as unknown as { Telegram?: unknown }).Telegram = {
+        WebApp: {
+          initData: 'audit-init-data',
+          platform: 'ios',
+          viewportHeight: window.innerHeight,
+          viewportStableHeight: window.innerHeight,
+          safeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+          contentSafeAreaInset: { top: 0, right: 0, bottom: 0, left: 0 },
+          ready() {},
+          expand() {},
+          onEvent() {},
+          offEvent() {},
+          setHeaderColor() {},
+          setBackgroundColor() {},
+          setBottomBarColor() {},
+          HapticFeedback: { impactOccurred() {} },
+          BackButton: {
+            show() {},
+            hide() {},
+            onClick() {},
+            offClick() {},
+          },
+        },
+      };
+    });
+
+    await page.route('**/api/temple/auth', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          displayName: 'Anna',
+          source: 'telegram',
+        }),
+      });
+    });
+
+    await page.route('**/api/vigil/claim*', async (route) => {
+      if (route.request().method() === 'POST') {
+        claimRequests += 1;
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            record: { id: 1 },
+            cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+          }),
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ authenticated: true, remainingMs: 0 }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openTemple(page);
+
+    const heart = page.getByRole('link', { name: /Light the Vigil heart/ });
+
+    await expect(heart).toHaveAttribute('data-heart-auth', 'authenticated');
+    await heart.click();
+
+    await expect(
+      page.getByTestId('temple-heart-spark-status')
+    ).toContainText(/added to the shared heart/i);
+    expect(claimRequests).toBe(1);
+    await expect(page).toHaveURL(/\/temple$/);
   });
 
   test('authenticated hold sends a spark only after the server confirms it', async ({

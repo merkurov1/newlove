@@ -39,6 +39,14 @@ function snapshot(count: number) {
     flameLit: true,
     windowStartedAt: '2026-11-23T12:00:00.000Z',
     updatedAt: '2026-11-24T12:00:01.000Z',
+    lifetimeTotal: 321,
+    uniqueParticipants: 90,
+    returningParticipants: 18,
+    repeatRate: 0.2,
+    telegramParticipants: 60,
+    supabaseParticipants: 30,
+    analyticsSince: '2026-11-16T09:00:00.000Z',
+    analyticsAvailable: true,
   };
 }
 
@@ -97,6 +105,10 @@ describe('useVigilSupporters', () => {
       })
     );
     expect(result.current.supporterCount).toBe(7);
+    expect(result.current.lifetimeTotal).toBe(321);
+    expect(result.current.uniqueParticipants).toBe(90);
+    expect(result.current.returningParticipants).toBe(18);
+    expect(result.current.analyticsAvailable).toBe(true);
   });
 
   it('refreshes after a validated realtime Vigil spark', async () => {

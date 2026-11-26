@@ -15,6 +15,7 @@ import {
   resolveHeartBreathingPhase,
   type HeartBreathingPhase,
 } from '@/lib/temple/breathing';
+import { formatVigilLifetimeLabel } from '@/lib/vigil/analytics';
 import VigilShare from '@/components/vigil/VigilShare';
 
 import { useVigilController } from './useVigilController';
@@ -50,10 +51,13 @@ export default function VigilExperience({
     flameStatus,
     flameError,
     supporterCount,
+    lifetimeTotal,
+    analyticsAvailable,
     isLighting,
     isOnCooldown,
     cooldownLabel,
     rateLimitMsg,
+    successMessage,
     spark,
     userName,
     triggerRitual,
@@ -153,6 +157,10 @@ export default function VigilExperience({
       : 'The heart is waiting';
 
   const keeperLabel = supporterCount === 1 ? 'keeper' : 'keepers';
+  const lifetimeLabel =
+    analyticsAvailable && typeof lifetimeTotal === 'number'
+      ? formatVigilLifetimeLabel(lifetimeTotal)
+      : '';
 
   const identityStatus = (() => {
     if (identity.status === 'telegram-init-pending') {
@@ -431,10 +439,27 @@ export default function VigilExperience({
 
           <span className={styles.metaDivider} aria-hidden="true" />
 
-          <div className={styles.metaItem}>
-            <span className={styles.metaValue}>{flameReady ? (flameLit ? '●' : '○') : '…'}</span>
-            <span className={styles.metaLabel}>{flameLit ? 'Shared flame' : 'Candle kept'}</span>
-          </div>
+          {lifetimeLabel ? (
+            <div className={styles.metaItem}>
+              <span
+                className={styles.metaValue}
+                data-testid="vigil-lifetime-total"
+                data-lifetime-total={String(lifetimeTotal)}
+              >
+                {lifetimeTotal}
+              </span>
+              <span className={styles.metaLabel}>sparks · all time</span>
+            </div>
+          ) : (
+            <div className={styles.metaItem}>
+              <span className={styles.metaValue}>
+                {flameReady ? (flameLit ? '●' : '○') : '…'}
+              </span>
+              <span className={styles.metaLabel}>
+                {flameLit ? 'Shared flame' : 'Candle kept'}
+              </span>
+            </div>
+          )}
         </section>
 
         <section className={styles.details} aria-live="polite">
@@ -457,6 +482,16 @@ export default function VigilExperience({
           {(flameStatus === 'stale' || flameStatus === 'error') && (
             <p className={styles.notice} role="status">
               {flameError || 'The shared flame is catching up'}
+            </p>
+          )}
+
+          {successMessage && (
+            <p
+              className={styles.notice}
+              role="status"
+              data-testid="vigil-success"
+            >
+              {successMessage}
             </p>
           )}
 

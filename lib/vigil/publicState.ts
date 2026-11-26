@@ -1,6 +1,10 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { assertServerOnly } from '@/lib/serverOnly';
 import {
+  EMPTY_VIGIL_METRICS,
+  buildVigilMetrics,
+} from '@/lib/vigil/analytics';
+import {
   globalFlameExpiresAt,
   globalFlameRemainingMs,
 } from '@/lib/vigil/flame';
@@ -13,6 +17,7 @@ import {
 assertServerOnly('lib/vigil/publicState');
 
 const FLAME_ID = 1;
+const METRICS_VIEW = 'vigil_spark_metrics';
 
 type CountResult = {
   count: number | null;
@@ -21,6 +26,11 @@ type CountResult = {
 
 type FlameResult = {
   data: { last_lit_at?: string | null } | null;
+  error: { message?: string } | null;
+};
+
+type MetricsResult = {
+  data: Record<string, unknown> | null;
   error: { message?: string } | null;
 };
 
@@ -40,7 +50,7 @@ export async function getVigilPublicState(
     nowMs - VIGIL_SUPPORTER_WINDOW_MS
   ).toISOString();
 
-  const [claimResult, flameResult] = await Promise.all([
+  const [claimResult, flameResult, metricsResult] = await Promise.all([
     supabaseAdmin
       .from('vigil_spark_claims')
       .select('*', { count: 'exact', head: true })
@@ -50,6 +60,10 @@ export async function getVigilPublicState(
       .select('last_lit_at')
       .eq('id', FLAME_ID)
       .maybeSingle() as unknown as Promise<FlameResult>,
+    supabaseAdmin
+      .from(METRICS_VIEW)
+      .select('*')
+      .maybeSingle() as unknown as Promise<MetricsResult>,
   ]);
 
   if (claimResult.error) {
@@ -64,6 +78,18 @@ export async function getVigilPublicState(
     );
   }
 
+  // Analytics is additive. A missing migration or view must not take the
+  // shared flame down with it; the UI hides the lifetime row until it exists.
+  if (metricsResult.error) {
+    console.warn(
+      'Vigil metrics unavailable:',
+      metricsResult.error.message || 'unknown error'
+    );
+  }
+
+  const metrics = metricsResult.error
+    ? { ...EMPTY_VIGIL_METRICS }
+    : buildVigilMetrics(metricsResult.data);
   const lastLitAt = flameResult.data?.last_lit_at ?? null;
 
   return {
@@ -73,5 +99,6 @@ export async function getVigilPublicState(
     flameLit: globalFlameRemainingMs(lastLitAt, nowMs) > 0,
     windowStartedAt,
     updatedAt: new Date(nowMs).toISOString(),
+    ...metrics,
   };
 }

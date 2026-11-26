@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase-browser';
+import { EMPTY_VIGIL_METRICS } from '@/lib/vigil/analytics';
 import {
   parseVigilPublicState,
   type VigilPublicState,
@@ -16,6 +17,7 @@ export type VigilSupporterSnapshot = VigilPublicState & {
 
 const EMPTY_STATE: VigilSupporterSnapshot = {
   supporterCount: 0,
+  ...EMPTY_VIGIL_METRICS,
   lastLitAt: null,
   flameExpiresAt: null,
   flameLit: false,

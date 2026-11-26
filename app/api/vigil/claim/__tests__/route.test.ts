@@ -134,6 +134,32 @@ describe('/api/vigil/claim', () => {
     expect(mockChannelPost).toHaveBeenCalledTimes(1);
   });
 
+  it('sends no channel post when the claim fails before committing', async () => {
+    mockClaim.mockRejectedValueOnce(new Error('database unavailable'));
+
+    const response = await POST(makeRequest());
+
+    expect(response.status).toBe(503);
+    expect(mockChannelPost).not.toHaveBeenCalled();
+  });
+
+  it('sends no second channel post for a duplicate request', async () => {
+    mockClaim.mockResolvedValueOnce({
+      allowed: true,
+      lastSparkAt: '2026-11-04T12:00:00.000Z',
+    });
+    mockClaim.mockResolvedValueOnce({
+      allowed: false,
+      lastSparkAt: '2026-11-04T12:00:00.000Z',
+      remainingMs: 86_400_000,
+      remainingLabel: '24h',
+    });
+
+    expect((await POST(makeRequest())).status).toBe(200);
+    expect((await POST(makeRequest())).status).toBe(429);
+    expect(mockChannelPost).toHaveBeenCalledTimes(1);
+  });
+
   it('passes explicit public-name consent to the claim writer', async () => {
     const response = await POST(
       makeRequest({ id: 1, show_identity: true })
