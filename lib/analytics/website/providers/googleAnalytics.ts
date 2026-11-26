@@ -1,4 +1,5 @@
 import { assertServerOnly } from '@/lib/serverOnly';
+import { GA4_READONLY_SCOPE } from '../config';
 import { fetchJson } from './http';
 
 assertServerOnly('lib/analytics/website/providers/googleAnalytics');
@@ -160,7 +161,13 @@ export async function runGa4Report(input: {
       },
       body: JSON.stringify(body),
     },
-    { provider: 'google_analytics', retries: 3, label: input.definition.key }
+    {
+      provider: 'google_analytics',
+      retries: 3,
+      label: input.definition.key,
+      stage: `runReport:${input.definition.key}`,
+      scope: GA4_READONLY_SCOPE,
+    }
   );
 
   const dimensionNames =

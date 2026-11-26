@@ -140,9 +140,7 @@ function youtubeState() {
 }
 
 async function renderPage() {
-  return renderToStaticMarkup(
-    (await AnalyticsPage({ searchParams: {} })) as never
-  );
+  return renderToStaticMarkup((await AnalyticsPage({ searchParams: {} })) as never);
 }
 
 describe('Pierrot analytics workspace', () => {
@@ -151,6 +149,94 @@ describe('Pierrot analytics workspace', () => {
     (loadSourceHealth as unknown as jest.Mock).mockResolvedValue(health());
     (loadYouTubeConnectionState as unknown as jest.Mock).mockResolvedValue(youtubeState());
     (loadWebsiteDashboard as unknown as jest.Mock).mockResolvedValue(null);
+  });
+
+  it('explains insufficient_permissions with account, resources and owner action', async () => {
+    (loadSourceHealth as unknown as jest.Mock).mockResolvedValue({
+      sources: [
+        source('google_analytics', 'Google Analytics 4', {
+          status: 'error',
+          connected: true,
+          externalId: '244838264',
+          accountLabel: 'Merkurov · merkurov.love',
+          externalMeta: {
+            property_id: '244838264',
+            account_id: '176791840',
+            google_account_email: 'owner@example.com',
+            discovery: { stage: 'runReport:total' },
+          },
+          lastErrorCode: 'insufficient_permissions',
+          lastErrorMessage: 'The Google account does not grant access to this resource.',
+          actionRequired:
+            'Google Analytics → Admin → Property access management: выдайте owner@example.com роль Viewer (минимум) на property 244838264. После выдачи нажмите «Повторить синхронизацию».',
+          minimumRole: 'Viewer',
+        }),
+        source('search_console', 'Google Search Console', {
+          status: 'error',
+          connected: true,
+          externalId: 'sc-domain:merkurov.love',
+          accountLabel: 'sc-domain:merkurov.love',
+          externalMeta: {
+            site_url: 'sc-domain:merkurov.love',
+            google_account_email: 'owner@example.com',
+          },
+          lastErrorCode: 'insufficient_permissions',
+          lastErrorMessage: 'The Google account does not grant access to this resource.',
+          actionRequired:
+            'Search Console → Settings → Users and permissions: добавьте owner@example.com как Full user или Owner на property sc-domain:merkurov.love.',
+          minimumRole: 'Full user или Owner',
+        }),
+        source('umami', 'Umami'),
+        source('bluesky', 'Bluesky'),
+      ],
+      runs: [],
+    });
+
+    const html = await renderPage();
+
+    expect(html).toContain('Google account');
+    expect(html).toContain('owner@example.com');
+    expect(html).toContain('GA4 property');
+    expect(html).toContain('244838264');
+    expect(html).toContain('Search Console property');
+    expect(html).toContain('sc-domain:merkurov.love');
+    expect(html).toContain('Viewer');
+    expect(html).toContain('Full user или Owner');
+    expect(html).toContain('Действие владельца');
+    expect(html).toContain('Повторить синхронизацию');
+    expect(html).toContain('action="/api/admin/analytics/sync"');
+    expect(html).toContain('name="provider" value="google_analytics"');
+    expect(html).toContain('name="provider" value="search_console"');
+    expect(html).toContain('Права Google-аккаунта');
+    expect(html).not.toContain('refresh_token');
+    expect(html).not.toContain('ya29.');
+    expect(html).not.toContain('client_secret');
+  });
+
+  it('asks for reconnect when the Google grant was revoked', async () => {
+    (loadSourceHealth as unknown as jest.Mock).mockResolvedValue({
+      sources: [
+        source('google_analytics', 'Google Analytics 4', {
+          status: 'needs_reauthorization',
+          connected: true,
+          externalId: '244838264',
+          externalMeta: { property_id: '244838264' },
+          lastErrorCode: 'invalid_grant',
+          actionRequired:
+            'Нажмите «Переподключить», выберите нужный Google-аккаунт и подтвердите read-only доступ.',
+        }),
+        source('search_console', 'Google Search Console'),
+        source('umami', 'Umami'),
+        source('bluesky', 'Bluesky'),
+      ],
+      runs: [],
+    });
+
+    const html = await renderPage();
+
+    expect(html).toContain('grant отозван или истёк');
+    expect(html).toContain('Переподключить');
+    expect(html).not.toContain('роль Viewer на property 244838264');
   });
 
   it('renders read-only YouTube source health without management actions', async () => {
@@ -185,10 +271,7 @@ describe('Pierrot analytics workspace', () => {
 
   it('does not import the legacy YouTube management component', () => {
     const file = readFileSync(
-      path.join(
-        process.cwd(),
-        'app/admin/pierrot/(workspace)/analytics/page.tsx'
-      ),
+      path.join(process.cwd(), 'app/admin/pierrot/(workspace)/analytics/page.tsx'),
       'utf8'
     );
 

@@ -18,10 +18,14 @@ export const DEFAULT_INCREMENTAL_DAYS = 3;
 
 /**
  * One incremental Google grant serves website intelligence and the shared
- * YouTube channel. Every scope is read-only; monetary YouTube Analytics scopes
- * are deliberately absent.
+ * YouTube channel. Every API scope is read-only; monetary YouTube Analytics
+ * scopes are deliberately absent. `openid`/`email` are identity-only scopes so
+ * the admin can show which Google account granted the credential instead of
+ * guessing from a channel or property label.
  */
 export const GOOGLE_OAUTH_SCOPES = [
+  'openid',
+  'email',
   'https://www.googleapis.com/auth/analytics.readonly',
   'https://www.googleapis.com/auth/webmasters.readonly',
   'https://www.googleapis.com/auth/youtube.readonly',

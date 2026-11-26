@@ -5,7 +5,10 @@ import {
   resolveGoogleRefreshCredential,
   runGoogleDiscovery,
 } from '@/lib/analytics/website/discovery';
-import { refreshGoogleAccessToken } from '@/lib/analytics/website/providers/oauth';
+import {
+  fetchGoogleUserInfo,
+  refreshGoogleAccessToken,
+} from '@/lib/analytics/website/providers/oauth';
 import {
   AnalyticsProviderError,
   diagnosticFromError,
@@ -139,6 +142,8 @@ export async function POST(request: Request) {
         ? (tokens.scope || '').split(' ').filter(Boolean)
         : [...(gaConnection?.scopes ?? []), ...(gscConnection?.scopes ?? [])];
 
+    const identity = await fetchGoogleUserInfo(tokens.accessToken);
+
     const nextCredential = resolveGoogleRefreshCredential({
       newRefreshToken: tokens.refreshToken,
       existing: credential,
@@ -149,6 +154,9 @@ export async function POST(request: Request) {
       scopes: [...new Set(grantedScopes)],
       sealed: nextCredential.sealed,
       providers,
+      accountEmail: identity.email,
+      accountName: identity.name,
+      accountSubject: identity.subject,
     });
 
     if (form) {

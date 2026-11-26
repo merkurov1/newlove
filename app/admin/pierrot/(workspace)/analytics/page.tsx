@@ -11,6 +11,13 @@ import {
   getUmamiConfig,
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
+import {
+  EXPECTED_GA4_PROPERTY_ID,
+  EXPECTED_GSC_PROPERTY,
+  GA4_MINIMUM_ROLE,
+  GSC_MINIMUM_ROLE,
+  redactGoogleSecrets,
+} from '@/lib/analytics/website/googleAccess';
 import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
 import { normalizeWebsiteDashboard } from '@/lib/analytics/website/dashboardContract';
 import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
@@ -81,20 +88,22 @@ function tone(source: ProviderHealth): string {
 const ERROR_EXPLANATIONS: Record<string, string> = {
   unauthorized: 'Google-доступ истёк или отозван. Нужно заново подключить Google.',
   invalid_grant:
-    'Google больше не принимает сохранённый refresh token. Нужна повторная авторизация.',
+    'Google больше не принимает сохранённый refresh token: grant отозван или истёк. Нужна повторная авторизация. Это не ошибка роли на GA4 property или Search Console site.',
   insufficient_permissions:
-    'У Google-аккаунта нет доступа к этому ресурсу или выданы не все scopes.',
+    'Google-аккаунт авторизован, но у него нет нужной роли на resource (GA4 property или Search Console property) либо в grant не выдан read-only scope. Права на resource выдаёт владелец; scopes не ослабляются.',
   api_not_enabled: 'Нужный Google API не включён в Google Cloud Console для этого проекта.',
-  resource_not_found: 'Указанный ресурс не найден или недоступен авторизованному Google-аккаунту.',
+  resource_not_found:
+    'Указанный ресурс не найден или не виден подключённому Google-аккаунту. Проверьте выбранный account и property.',
   account_mismatch:
-    'GA4 Property принадлежит другому Account ID. Account ID и Property ID — разные ресурсы.',
+    'GA4 Property принадлежит другому Account ID или подключён не тот Google-аккаунт. Account ID и Property ID — разные ресурсы.',
   measurement_id_mismatch:
     'У GA4 Property нет web data stream с ожидаемым Measurement ID. Property ID, Account ID и Measurement ID не взаимозаменяемы.',
   invalid_property_id:
     'В external_id сохранён не числовой GA4 Property ID. Нужен ID property, а не Measurement ID или Account ID.',
   invalid_site_url:
     'В external_id сохранён не URL ресурса Search Console. Нужен точный site URL из sites.list.',
-  discovery_empty: 'Google вернул пустой список ресурсов для этого аккаунта.',
+  discovery_empty:
+    'Google вернул пустой список ресурсов для этого аккаунта. Проверьте, что подключён правильный Google-аккаунт и ему выданы права.',
   network_error: 'Не удалось связаться с Google API. Повторите попытку позже.',
   timeout: 'Google API не ответил вовремя. Повторите попытку позже.',
   rate_limited: 'Google временно ограничил частоту запросов. Повторите позже.',
@@ -109,10 +118,11 @@ const ERROR_EXPLANATIONS: Record<string, string> = {
 };
 
 function explainError(code: string | null, message?: string | null): string | null {
-  if (!code) return message || null;
+  const safeMessage = redactGoogleSecrets(message);
+  if (!code) return safeMessage || null;
   const label = ERROR_EXPLANATIONS[code];
-  if (label && message && !message.includes(label)) return `${label} ${message}`;
-  return label || message || code;
+  if (label && safeMessage && !safeMessage.includes(label)) return `${label} ${safeMessage}`;
+  return label || safeMessage || code;
 }
 
 function discoveryBanner(
@@ -201,6 +211,20 @@ function banner(params: SearchParams): { tone: 'ok' | 'warn' | 'bad'; text: stri
     };
   }
   if (sync) {
+    const entries = sync
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+    const notCompleted = entries.filter((entry) => !entry.endsWith(':completed'));
+
+    if (notCompleted.length > 0) {
+      const summary = notCompleted.join(' · ').replace(/,/g, ' · ');
+      return {
+        tone: 'warn',
+        text: `Синхронизация завершилась не полностью: ${summary}. Причина и действие владельца указаны в карточке источника ниже. Токены не показываются.`,
+      };
+    }
+
     return { tone: 'ok', text: `Синхронизация завершена: ${sync.replace(/,/g, ' · ')}.` };
   }
   if (disconnected) {
@@ -259,6 +283,16 @@ function SourceCard({
     typeof external?.matched_measurement_id === 'string' ? external.matched_measurement_id : null;
   const permissionLevel =
     typeof external?.permission_level === 'string' ? external.permission_level : null;
+  const googleAccountEmail =
+    typeof external?.google_account_email === 'string' ? external.google_account_email : null;
+  const gscProperty =
+    typeof external?.site_url === 'string'
+      ? external.site_url
+      : typeof external?.selected_site_url === 'string'
+        ? external.selected_site_url
+        : provider === 'search_console'
+          ? source.externalId
+          : null;
   const lastDiscoverySuccess =
     typeof discovery?.last_success_at === 'string' ? discovery.last_success_at : null;
 
@@ -299,9 +333,15 @@ function SourceCard({
             {source.dataFrom && source.dataTo ? `${source.dataFrom} — ${source.dataTo}` : '—'}
           </dd>
         </div>
+        {googleProvider && (
+          <div>
+            <dt>Google account</dt>
+            <dd>{googleAccountEmail || 'не сохранён — переподключите Google'}</dd>
+          </div>
+        )}
         {provider === 'google_analytics' && accountId && (
           <div>
-            <dt>GA4 account</dt>
+            <dt>GA4 account ID</dt>
             <dd>{accountId}</dd>
           </div>
         )}
@@ -314,10 +354,22 @@ function SourceCard({
             </dd>
           </div>
         )}
+        {provider === 'search_console' && gscProperty && (
+          <div>
+            <dt>Search Console property</dt>
+            <dd>{gscProperty}</dd>
+          </div>
+        )}
         {provider === 'search_console' && permissionLevel && (
           <div>
             <dt>Уровень доступа</dt>
             <dd>{permissionLevel}</dd>
+          </div>
+        )}
+        {googleProvider && source.minimumRole && (
+          <div>
+            <dt>Минимальная роль</dt>
+            <dd>{source.minimumRole}</dd>
           </div>
         )}
       </dl>
@@ -360,7 +412,11 @@ function SourceCard({
         </details>
       )}
 
-      {source.actionRequired && <p className="pw-analytics-action">{source.actionRequired}</p>}
+      {source.actionRequired && (
+        <p className="pw-analytics-action">
+          <strong>Действие владельца.</strong> {redactGoogleSecrets(source.actionRequired)}
+        </p>
+      )}
 
       {source.lastErrorCode && (
         <p className="pw-analytics-error">
@@ -388,6 +444,16 @@ function SourceCard({
           </span>
         ) : source.connected && connectHref ? (
           <>
+            {googleProvider && (
+              <form action="/api/admin/analytics/sync" method="post">
+                <input type="hidden" name="provider" value={provider} />
+                <input type="hidden" name="mode" value="manual" />
+                <input type="hidden" name="days" value="30" />
+                <button className="pw-analytics-button" type="submit">
+                  Повторить синхронизацию
+                </button>
+              </form>
+            )}
             <a className="pw-analytics-link" href={connectHref}>
               Переподключить
             </a>
@@ -520,10 +586,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           <section className="pw-analytics-config pw-analytics-config--quiet">
             <p>
               <strong>OAuth настроен.</strong> Redirect URI: <code>{google.redirectUri}</code>.
-              Запрашиваются только read-only scopes: <code>analytics.readonly</code>,{' '}
-              <code>webmasters.readonly</code>, <code>youtube.readonly</code> и{' '}
-              <code>yt-analytics.readonly</code>. Один grant обслуживает сайт и общий канал Pierrot
-              + UNFRAMED.
+              Запрашиваются identity-scopes <code>openid</code>, <code>email</code> и только
+              read-only scopes: <code>analytics.readonly</code>, <code>webmasters.readonly</code>,{' '}
+              <code>youtube.readonly</code> и <code>yt-analytics.readonly</code>. Один grant
+              обслуживает сайт и общий канал Pierrot + UNFRAMED.
             </p>
             {encryption === 'derived' && (
               <p>
@@ -531,6 +597,29 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 ротации задайте <code>ANALYTICS_TOKEN_ENCRYPTION_KEY</code>.
               </p>
             )}
+          </section>
+        )}
+
+        {google.configured && (
+          <section
+            className="pw-analytics-config pw-analytics-config--quiet"
+            aria-labelledby="pw-analytics-google-permissions-title"
+          >
+            <h2 id="pw-analytics-google-permissions-title">Права Google-аккаунта</h2>
+            <p>
+              GA4 property <code>{EXPECTED_GA4_PROPERTY_ID}</code>: подключённому Google-аккаунту
+              нужна роль <strong>{GA4_MINIMUM_ROLE}</strong> (минимум) в Property access management.
+            </p>
+            <p>
+              Search Console property <code>{EXPECTED_GSC_PROPERTY}</code>: нужна роль{' '}
+              <strong>{GSC_MINIMUM_ROLE}</strong> в Users and permissions.
+            </p>
+            <p>
+              Если нужен другой Google-аккаунт или прав нет, остановитесь и передайте действие
+              владельцу. Права автоматически не выдаются, OAuth scopes не ослабляются, токены не
+              показываются. После выдачи прав нажмите «Повторить синхронизацию» — reconnect не
+              обязателен, если grant не отозван.
+            </p>
           </section>
         )}
 

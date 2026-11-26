@@ -131,6 +131,13 @@ export type ProviderHealth = {
   authorizationRequired?: boolean;
   externalId: string | null;
   accountLabel: string | null;
+  /** Google account that granted the shared read-only OAuth credential. */
+  googleAccountEmail?: string | null;
+  /** GA4 property or Search Console property used for this source. */
+  resourceId?: string | null;
+  resourceKind?: 'ga4_property' | 'search_console_property' | 'google_account' | null;
+  /** Minimum role the owner must grant on the resource, when known. */
+  minimumRole?: string | null;
   scopes: string[];
   externalMeta: Record<string, unknown> | null;
   lastCheckedAt: string | null;

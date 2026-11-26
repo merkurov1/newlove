@@ -59,6 +59,10 @@ type DiscoveryInput = {
   propertyOverride?: string | null;
   accountOverride?: string | null;
   siteOverride?: string | null;
+  /** Identity of the Google account that granted the shared credential. */
+  accountEmail?: string | null;
+  accountName?: string | null;
+  accountSubject?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -75,6 +79,41 @@ function existingMeta(existing: StoredConnection | null): Record<string, unknown
 function existingDiscovery(existing: StoredConnection | null): Record<string, unknown> {
   const meta = existingMeta(existing);
   return isRecord(meta.discovery) ? meta.discovery : {};
+}
+
+/**
+ * Persist only display identity. Tokens, authorization codes and raw OAuth
+ * responses never reach this helper, so they cannot be written to the source
+ * row or rendered by the admin page.
+ */
+function identityMeta(
+  existing: StoredConnection | null,
+  input: DiscoveryInput,
+  checkedAt: string
+): Record<string, unknown> {
+  const meta = existingMeta(existing);
+  const previousEmail =
+    typeof meta.google_account_email === 'string' ? meta.google_account_email : null;
+  const previousName =
+    typeof meta.google_account_name === 'string' ? meta.google_account_name : null;
+  const previousSubject =
+    typeof meta.google_account_id === 'string' ? meta.google_account_id : null;
+
+  const email = input.accountEmail?.trim() || previousEmail;
+  const name = input.accountName?.trim() || previousName;
+  const subject = input.accountSubject?.trim() || previousSubject;
+
+  const identity: Record<string, unknown> = {
+    google_account_email: email,
+    google_account_name: name,
+    google_account_id: subject,
+  };
+
+  if (input.accountEmail || input.accountName || input.accountSubject) {
+    identity.google_account_checked_at = checkedAt;
+  }
+
+  return identity;
 }
 
 function compactProperties(
@@ -178,7 +217,10 @@ async function persistError(
         existing?.account_label ??
         (provider === 'google_analytics' ? 'Google Analytics' : 'Search Console'),
       externalId: existing?.external_id ?? null,
-      externalMeta: discoveryErrorMeta(existing, diagnostic, extra),
+      externalMeta: discoveryErrorMeta(existing, diagnostic, {
+        ...identityMeta(existing, input, diagnostic.timestamp),
+        ...extra,
+      }),
       scopes: input.scopes,
       sealed: input.sealed ?? undefined,
       connectedBy: input.connectedBy ?? existing?.connected_by ?? null,
@@ -333,6 +375,7 @@ export async function runGa4Discovery(
       externalMeta: discoverySuccessMeta('google_analytics', existing, {
         scopes: input.scopes,
         extra: {
+          ...identityMeta(existing, input, new Date().toISOString()),
           account_id: property.accountId,
           account_name: property.accountName,
           property_id: property.propertyId,
@@ -461,6 +504,7 @@ export async function runSearchConsoleDiscovery(
       externalMeta: discoverySuccessMeta('search_console', existing, {
         scopes: input.scopes,
         extra: {
+          ...identityMeta(existing, input, new Date().toISOString()),
           site_url: site.siteUrl,
           selected_site_url: site.siteUrl,
           permission_level: site.permissionLevel,

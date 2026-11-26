@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { getSyncOwnerSecret } from '@/lib/analytics/website/config';
-import { exchangeGoogleCode } from '@/lib/analytics/website/providers/oauth';
+import { exchangeGoogleCode, fetchGoogleUserInfo } from '@/lib/analytics/website/providers/oauth';
 import { AnalyticsProviderError } from '@/lib/analytics/website/providers/http';
 import {
   resolveGoogleRefreshCredential,
@@ -122,11 +122,15 @@ export async function GET(request: Request) {
   }
 
   const grantedScopes = (tokens.scope || '').split(' ').filter(Boolean);
+  const identity = await fetchGoogleUserInfo(tokens.accessToken);
   const results = await runGoogleDiscovery(store, {
     accessToken: tokens.accessToken,
     scopes: grantedScopes,
     sealed: credential.sealed,
     connectedBy: user.id,
+    accountEmail: identity.email,
+    accountName: identity.name,
+    accountSubject: identity.subject,
   });
 
   // YouTube uses the same stored grant. Discovery verifies both read-only
