@@ -9,6 +9,7 @@ import {
   truncateText,
 } from './state';
 import { estimateTaskCost } from './costs';
+import { hasVerifiableAcceptanceCriteria } from '../acceptanceCriteria';
 import type {
   DevAttempt,
   DevAttemptStatus,
@@ -1100,7 +1101,7 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
   try {
     const { data, error } = await store()
       .from('pierrot_dev_prompts')
-      .select('id,priority')
+      .select('id,priority,acceptance_criteria')
       .eq('status', 'ready')
       .is('queue_batch_id', null)
       .order('priority', { ascending: false })
@@ -1114,6 +1115,19 @@ export async function promoteStandaloneReadyTasks(limit = 20): Promise<number> {
     let promoted = 0;
     for (const row of data) {
       if (optedOut.has(`queue:optout:${row.id}`)) continue;
+      if (!hasVerifiableAcceptanceCriteria(row.acceptance_criteria)) {
+        // Never auto-enqueue a task that the queue gate would reject. The task
+        // stays ready so the owner can add or generate criteria and queue it.
+        await appendEvent({
+          taskId: String(row.id),
+          type: 'task.auto_enqueue_blocked',
+          level: 'warn',
+          message:
+            'Approved task was not auto-queued because it has no verifiable acceptance criteria. Add a measurable outcome or check in Task Studio.',
+          dedupeKey: `task-auto-enqueue-criteria:${row.id}`,
+        }).catch(() => {});
+        continue;
+      }
       // Supabase does not report an error when a conditional UPDATE matches
       // zero rows. Select the id back so a concurrent claim/dequeue cannot be
       // counted as a successful refill.
@@ -1568,6 +1582,7 @@ export type StartBatchResult = {
   ok: boolean;
   queued: number;
   notReady: Array<{ id: string; title: string; status: string }>;
+  missingCriteria?: Array<{ id: string; title: string; reason: string }>;
   error?: string;
 };
 
@@ -1620,6 +1635,28 @@ export async function startBatch(userId: string, batchId: string): Promise<Start
     }));
   if (notReady.length > 0) {
     return { ok: false, queued: 0, notReady, error: 'BATCH_NOT_READY' };
+  }
+
+  const missingCriteria = tasks
+    .filter(
+      (task) =>
+        String(task.status) === 'ready' &&
+        !hasVerifiableAcceptanceCriteria(task.acceptance_criteria)
+    )
+    .map((task) => ({
+      id: String(task.id),
+      title: truncateText(task.title, 200) || 'Задача',
+      reason:
+        'Add at least one measurable acceptance criterion before this batch can be started.',
+    }));
+  if (missingCriteria.length > 0) {
+    return {
+      ok: false,
+      queued: 0,
+      notReady: [],
+      missingCriteria,
+      error: 'BATCH_ACCEPTANCE_CRITERIA_REQUIRED',
+    };
   }
 
   let position = await nextQueuePosition();

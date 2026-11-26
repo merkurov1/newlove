@@ -2,6 +2,7 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { hasExplicitWebCommand } from '@/lib/knowledge/web/searchDecision';
 import { getDevRepositoryConfig } from '@/lib/pierrot/dev/repositories';
+import { generateAcceptanceCriteria } from '@/lib/pierrot/dev/acceptanceCriteria';
 import {
   createDevTask,
   findDevTaskByDecisionId,
@@ -225,6 +226,11 @@ export async function createDevTaskFromChat(input: {
         : cleanTitle
       : titleFromContent(content);
 
+  const acceptanceCriteria = generateAcceptanceCriteria({
+    title,
+    objective: content,
+  }).criteria;
+
   let projectId: string | null = null;
   try {
     if (input.conversationId) {
@@ -266,7 +272,7 @@ export async function createDevTaskFromChat(input: {
     migrations: [],
     securityConstraints: [],
     tests: [],
-    acceptanceCriteria: [],
+    acceptanceCriteria,
     unverified: [],
     conversationId: input.conversationId || null,
     projectId,
@@ -329,6 +335,13 @@ export async function transferMemoryRecordToDev(input: {
       .filter((line) => line !== null)
       .join('\n');
 
+  const acceptanceCriteria = generateAcceptanceCriteria({
+    title,
+    objective,
+    tests: input.tests || [],
+    acceptanceCriteria: input.acceptanceCriteria || [],
+  }).criteria;
+
   const task = await createDevTask(input.userId, {
     title,
     objective,
@@ -347,7 +360,7 @@ export async function transferMemoryRecordToDev(input: {
     migrations: [],
     securityConstraints: [],
     tests: input.tests || [],
-    acceptanceCriteria: input.acceptanceCriteria || [],
+    acceptanceCriteria,
     unverified: [],
     conversationId: input.record.conversationId,
     decisionIds: [input.record.id],

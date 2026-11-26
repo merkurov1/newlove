@@ -190,6 +190,9 @@ describe('explicit Dev task creation', () => {
         repository: 'newlove',
         status: 'draft',
         conversationId: '01ea10a0-e70a-411e-85fb-e213de4cd0a0',
+        acceptanceCriteria: expect.arrayContaining([
+          expect.stringContaining('проверь логи dev mode'),
+        ]),
       })
     );
   });
@@ -232,6 +235,24 @@ describe('memory → Dev transfer', () => {
     );
     expect(result.sourceRecord.status).toBe('current');
     expect(mockUpdateMemory.mock.calls[0][2]).not.toHaveProperty('status');
+  });
+
+  it('derives criteria for an automatic memory transfer', async () => {
+    await transferMemoryRecordToDev({
+      store: { mocked: true } as never,
+      userId: USER_ID,
+      record,
+      repository: 'newlove',
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      USER_ID,
+      expect.objectContaining({
+        acceptanceCriteria: expect.arrayContaining([
+          expect.stringContaining('Проверить логи Dev Mode'),
+        ]),
+      })
+    );
   });
 
   it('does not create a duplicate when the source is already linked', async () => {

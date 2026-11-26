@@ -156,6 +156,39 @@ describe('Task Studio prompt generation', () => {
     expect(input.affectedFiles).toEqual(['a']);
     expect(input.status).toBe('draft');
   });
+
+  it('generates verifiable criteria for a manual task with no criteria', () => {
+    const input = createTaskInput({
+      title: 'Queue safety',
+      objective: 'Keep tasks without acceptance criteria out of the execution queue',
+      affectedFiles: ['lib/pierrot/dev/workbench/execution.ts'],
+    });
+
+    expect(input.acceptanceCriteria.length).toBeGreaterThan(0);
+    expect(input.acceptanceCriteria.join('\n')).toContain('execution.ts');
+    expect(input.acceptanceCriteria.join('\n')).toContain('execution queue');
+  });
+
+  it('generates criteria for an automatic chat-style task', () => {
+    const input = createTaskInput({
+      title: 'проверь логи dev mode',
+      objective: 'проверь логи dev mode и улучши обработку ошибок',
+    });
+
+    expect(input.acceptanceCriteria.length).toBeGreaterThan(0);
+    expect(input.acceptanceCriteria[0]).toContain('dev mode');
+  });
+
+  it('does not invent criteria for an under-specified task and explains why', () => {
+    const input = createTaskInput({
+      title: 'Fix',
+      objective: '',
+      status: 'ready',
+    });
+
+    expect(input.acceptanceCriteria).toEqual([]);
+    expect(input.context).toContain('Acceptance criteria were not derived automatically');
+  });
 });
 
 describe('Task Studio persistence', () => {
@@ -180,6 +213,34 @@ describe('Task Studio persistence', () => {
       conversation_id: 'conv_12345678',
     });
     expect(String(lastInsert?.prompt_text)).toContain('# ENGINEERING TASK');
+  });
+
+  it('persists generated criteria for a manual task that omitted them', async () => {
+    queue.push({ data: taskRow(), error: null });
+
+    await createDevTask(USER_ID, {
+      title: 'Queue safety',
+      objective: 'Keep tasks without acceptance criteria out of the execution queue',
+      repository: 'newlove',
+    });
+
+    const criteria = lastInsert?.acceptance_criteria as string[];
+    expect(criteria.length).toBeGreaterThan(0);
+    expect(criteria.join('\n')).toContain('execution queue');
+  });
+
+  it('keeps a vague task in draft instead of letting it reach the queue', async () => {
+    queue.push({ data: taskRow({ status: 'draft' }), error: null });
+
+    await createDevTask(USER_ID, {
+      title: 'Fix',
+      objective: '',
+      repository: 'newlove',
+      status: 'ready',
+    });
+
+    expect(lastInsert).toMatchObject({ status: 'draft' });
+    expect(lastInsert?.acceptance_criteria).toEqual([]);
   });
 
   it('updates a task and rebuilds its prompt', async () => {
@@ -241,6 +302,19 @@ describe('Task Studio persistence', () => {
       validateDevTaskCompletion({
         verificationStatus: 'verified',
         acceptanceCriteria: [],
+        tests: ['npm test'],
+        unverified: [],
+        verificationNotes: 'Ran locally.',
+        resultCommit: 'a'.repeat(40),
+        pullRequests: [],
+      })
+    ).toThrow('DEV_ACCEPTANCE_CRITERIA_REQUIRED');
+
+    // The defensive validator was not relaxed for placeholder criteria.
+    expect(() =>
+      validateDevTaskCompletion({
+        verificationStatus: 'verified',
+        acceptanceCriteria: ['done'],
         tests: ['npm test'],
         unverified: [],
         verificationNotes: 'Ran locally.',

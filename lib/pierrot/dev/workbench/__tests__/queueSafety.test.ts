@@ -68,7 +68,7 @@ function task(status: string, queuePosition: number | null = null) {
     queuePosition,
     queuedAt: queuePosition === null ? null : '2026-11-19T00:00:00.000Z',
     attemptCount: 0,
-    acceptanceCriteria: ['done'],
+    acceptanceCriteria: ['The task result is visible in the workbench'],
     verificationStatus: null,
     blockedReason: null,
     lastErrorCode: null,

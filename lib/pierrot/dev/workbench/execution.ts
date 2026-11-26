@@ -1,5 +1,9 @@
 import { assertServerOnly } from '@/lib/serverOnly';
 import { attachDevTaskResult, validateDevTaskCompletion } from '../tasks';
+import {
+  generateAcceptanceCriteria,
+  hasVerifiableAcceptanceCriteria,
+} from '../acceptanceCriteria';
 import { resolveDevRepository } from '../repositories';
 import {
   appendEvent,
@@ -89,6 +93,33 @@ export class WorkbenchExecutionError extends Error {
     this.status = status;
     this.detail = detail;
   }
+}
+
+/**
+ * Legacy tasks may have reached `ready` before criteria generation existed.
+ * Derive and persist criteria from the task text when possible. The caller
+ * still applies the original validator when derivation is impossible.
+ */
+async function ensureTaskAcceptanceCriteria(
+  task: DevWorkbenchTask
+): Promise<DevWorkbenchTask> {
+  if (hasVerifiableAcceptanceCriteria(task.acceptanceCriteria)) return task;
+  const resolution = generateAcceptanceCriteria({
+    title: task.title,
+    objective: task.objective,
+  });
+  if (resolution.criteria.length === 0) return task;
+  const updated = await patchTask(task.id, {
+    acceptance_criteria: resolution.criteria,
+  });
+  if (!updated) {
+    throw new WorkbenchExecutionError(
+      'DEV_ACCEPTANCE_CRITERIA_SAVE_FAILED',
+      'Acceptance criteria were generated but could not be saved. Nothing was queued.',
+      500
+    );
+  }
+  return updated;
 }
 
 function ensureOwnership(attempt: DevAttempt | null, workerId: string): DevAttempt {
@@ -1198,10 +1229,16 @@ export async function approveTask(
       'A task needs an objective before it can be approved.'
     );
   }
-  if (task.acceptanceCriteria.length === 0) {
+  const prepared = await ensureTaskAcceptanceCriteria(task);
+  if (!hasVerifiableAcceptanceCriteria(prepared.acceptanceCriteria)) {
     throw new WorkbenchExecutionError(
       'DEV_ACCEPTANCE_CRITERIA_REQUIRED',
-      'A task needs at least one acceptance criterion before it can be approved.'
+      'A task needs at least one verifiable acceptance criterion before it can be approved. Add a measurable outcome or check in Task Studio; nothing was queued.',
+      409,
+      {
+        reason:
+          'The objective and title are too vague to derive a testable criterion automatically.',
+      }
     );
   }
   const approved = await transitionTask({
@@ -1247,15 +1284,23 @@ export async function enqueueTask(
       `Only ready tasks can be queued (current status: ${task.status}).`
     );
   }
+  const prepared = await ensureTaskAcceptanceCriteria(task);
+  if (!hasVerifiableAcceptanceCriteria(prepared.acceptanceCriteria)) {
+    throw new WorkbenchExecutionError(
+      'DEV_ACCEPTANCE_CRITERIA_REQUIRED',
+      'A task needs at least one verifiable acceptance criterion before it can be queued. Add a measurable outcome or check in Task Studio; nothing was queued.',
+      409
+    );
+  }
   const position = await nextQueuePosition();
   // The estimate is durable before the task reaches the queue. If the optional
   // ledger table is missing, the event payload still preserves the value.
   const estimate = await recordTaskCostEstimate({
     taskId: task.id,
     batchId: isUuid(batchId) ? batchId : null,
-    title: task.title,
-    objective: task.objective,
-    acceptanceCriteria: task.acceptanceCriteria,
+    title: prepared.title,
+    objective: prepared.objective,
+    acceptanceCriteria: prepared.acceptanceCriteria,
     trigger: 'enqueue',
   });
   await appendEvent({
@@ -1365,13 +1410,21 @@ export async function retryTask(userId: string, taskId: string): Promise<DevWork
       'An attempt is still active. Cancel it before retrying.'
     );
   }
+  const prepared = await ensureTaskAcceptanceCriteria(task);
+  if (!hasVerifiableAcceptanceCriteria(prepared.acceptanceCriteria)) {
+    throw new WorkbenchExecutionError(
+      'DEV_ACCEPTANCE_CRITERIA_REQUIRED',
+      'A task needs at least one verifiable acceptance criterion before it can be retried. Add a measurable outcome or check in Task Studio; nothing was queued.',
+      409
+    );
+  }
   const position = await nextQueuePosition();
   const estimate = await recordTaskCostEstimate({
     taskId: task.id,
     batchId: await getBatchIdForTask(task.id),
-    title: task.title,
-    objective: task.objective,
-    acceptanceCriteria: task.acceptanceCriteria,
+    title: prepared.title,
+    objective: prepared.objective,
+    acceptanceCriteria: prepared.acceptanceCriteria,
     trigger: 'retry',
   });
   await appendEvent({

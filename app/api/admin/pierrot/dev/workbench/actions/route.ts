@@ -343,19 +343,38 @@ export async function POST(req: Request) {
               : result.error === 'BATCH_START_FAILED'
                 ? 500
                 : 409;
+          const missingCriteria = result.missingCriteria || [];
           const message =
-            result.error === 'BATCH_NOT_READY'
-              ? 'Every task in the batch must be approved (ready) before the batch can start.'
-              : result.error === 'BATCH_EMPTY'
-                ? 'The batch has no tasks.'
-                : result.error === 'BATCH_CLOSED'
-                  ? 'A completed or archived batch cannot be restarted.'
-                  : result.error === 'BATCH_TASK_NOT_FOUND'
-                    ? 'One or more batch tasks were not found.'
-                    : result.error === 'BATCH_NOT_FOUND'
-                      ? 'Batch not found.'
-                      : 'The batch could not be started.';
-          return json({ error: message, code: result.error, notReady: result.notReady }, status);
+            result.error === 'BATCH_ACCEPTANCE_CRITERIA_REQUIRED'
+              ? 'Every ready task in the batch needs at least one verifiable acceptance criterion before the batch can start.'
+              : result.error === 'BATCH_NOT_READY'
+                ? 'Every task in the batch must be approved (ready) before the batch can start.'
+                : result.error === 'BATCH_EMPTY'
+                  ? 'The batch has no tasks.'
+                  : result.error === 'BATCH_CLOSED'
+                    ? 'A completed or archived batch cannot be restarted.'
+                    : result.error === 'BATCH_TASK_NOT_FOUND'
+                      ? 'One or more batch tasks were not found.'
+                      : result.error === 'BATCH_NOT_FOUND'
+                        ? 'Batch not found.'
+                        : 'The batch could not be started.';
+          return json(
+            {
+              error: message,
+              code: result.error,
+              notReady: result.notReady,
+              missingCriteria,
+              detail:
+                missingCriteria.length > 0
+                  ? {
+                      blockingReasons: missingCriteria.map(
+                        (task) => `${task.title}: ${task.reason}`
+                      ),
+                    }
+                  : null,
+            },
+            status
+          );
         }
         await dispatchNextQueuedTask({ source: 'admin:start_batch' });
         break;
