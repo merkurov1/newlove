@@ -7,6 +7,7 @@ const back = jest.fn();
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ back }),
+  usePathname: () => '/cast',
 }));
 
 jest.mock('@/lib/templeLogger', () => ({

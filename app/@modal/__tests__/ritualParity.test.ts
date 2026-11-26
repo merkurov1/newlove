@@ -106,4 +106,11 @@ describe('ritual modal and standalone route parity', () => {
     );
     expect(read('app/@modal/default.tsx')).toContain('return null');
   });
+
+  it('clears the modal slot on account access instead of keeping the ritual overlay', () => {
+    expect(
+      fs.existsSync(path.join(ROOT, 'app/@modal/login/page.tsx'))
+    ).toBe(true);
+    expect(read('app/@modal/login/page.tsx')).toContain('return null');
+  });
 });

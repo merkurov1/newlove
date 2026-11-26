@@ -5,9 +5,11 @@ import { resetRevealSourceForTests } from '@/lib/temple/modalReveal';
 
 const back = jest.fn();
 const logTempleEvent = jest.fn(async () => true);
+let currentPathname = '/vigil';
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ back }),
+  usePathname: () => currentPathname,
 }));
 
 jest.mock('@/lib/templeLogger', () => ({
@@ -18,6 +20,7 @@ describe('RitualModal shell', () => {
   beforeEach(() => {
     back.mockClear();
     logTempleEvent.mockClear();
+    currentPathname = '/vigil';
     window.sessionStorage.clear();
     document.body.className = '';
     resetRevealSourceForTests();
@@ -84,6 +87,8 @@ describe('RitualModal shell', () => {
     document.body.appendChild(trigger);
     trigger.focus();
 
+    currentPathname = '/cast';
+
     render(
       <RitualModal title="Cast" canonicalPath="/cast">
         <div>Shared ritual</div>
@@ -144,6 +149,8 @@ describe('RitualModal shell', () => {
       return <div>Counter child</div>;
     }
 
+    currentPathname = '/heartandangel/letitgo';
+
     render(
       <RitualModal title="Let It Go" canonicalPath="/heartandangel/letitgo" scene>
         <TimerChild />
@@ -154,6 +161,8 @@ describe('RitualModal shell', () => {
   });
 
   it('uses a non-scrolling scene slot for immersive rituals', () => {
+    currentPathname = '/heartandangel/calm';
+
     const { container } = render(
       <RitualModal
         title="Keep Calm"
@@ -171,6 +180,8 @@ describe('RitualModal shell', () => {
   });
 
   it('keeps scrollable rituals in the scroll slot', () => {
+    currentPathname = '/cast';
+
     const { container } = render(
       <RitualModal title="Cast" canonicalPath="/cast">
         <div>Long ritual</div>
@@ -189,6 +200,8 @@ describe('RitualModal shell', () => {
     document.body.appendChild(trigger);
     trigger.focus();
 
+    currentPathname = '/cast';
+
     const { unmount } = render(
       <RitualModal title="Cast" canonicalPath="/cast">
         <div>Shared ritual</div>
@@ -206,7 +219,41 @@ describe('RitualModal shell', () => {
     trigger.remove();
   });
 
+  it('does not keep the ritual overlay above an unrelated route such as /login', async () => {
+    const { rerender } = render(
+      <RitualModal title="Vigil" canonicalPath="/vigil">
+        <div>Shared ritual</div>
+      </RitualModal>
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('temple-modal')).toHaveAttribute(
+        'data-state',
+        'open'
+      )
+    );
+    expect(document.body).toHaveClass('ritual-modal-open');
+
+    currentPathname = '/login';
+
+    rerender(
+      <RitualModal title="Vigil" canonicalPath="/vigil">
+        <div>Shared ritual</div>
+      </RitualModal>
+    );
+
+    // The Sign in link must reveal the login route, not leave the stale
+    // ritual modal covering it. This must not navigate backwards either.
+    expect(screen.queryByTestId('temple-modal')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(document.body).not.toHaveClass('ritual-modal-open')
+    );
+    expect(back).not.toHaveBeenCalled();
+  });
+
   it('links the remaining rituals to their canonical full pages', () => {
+    currentPathname = '/cast';
+
     render(
       <RitualModal title="Cast" canonicalPath="/cast">
         <div>Shared ritual</div>
