@@ -133,6 +133,54 @@ function errorCodeFrom(error: unknown): string {
   return /^[A-Za-z0-9_.:-]{1,120}$/.test(message) ? message : 'provider_request_failed';
 }
 
+function providerCodeFrom(error: unknown): string {
+  const code = errorCodeFrom(error);
+  if (code !== 'provider_request_failed') return code;
+
+  const name = error instanceof Error ? error.name.toLowerCase() : '';
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+
+  if (name.includes('timeout') || message.includes('timed out') || message.includes('timeout')) {
+    return 'provider_timeout';
+  }
+
+  return code;
+}
+
+/**
+ * Attach safe provider attribution to a provider failure. The properties are
+ * non-enumerable so serialising the error cannot accidentally leak anything,
+ * and only the provider name plus a stable code are stored.
+ */
+function attributeProviderFailure(
+  error: unknown,
+  provider: 'gemini' | 'deepseek' | 'openrouter'
+): void {
+  if (!error || typeof error !== 'object') return;
+
+  try {
+    const value = error as Record<string, unknown>;
+
+    if (typeof value.pierrotProvider !== 'string') {
+      Object.defineProperty(value, 'pierrotProvider', {
+        value: provider,
+        enumerable: false,
+        configurable: true,
+      });
+    }
+
+    if (typeof value.pierrotProviderCode !== 'string') {
+      Object.defineProperty(value, 'pierrotProviderCode', {
+        value: providerCodeFrom(error),
+        enumerable: false,
+        configurable: true,
+      });
+    }
+  } catch {
+    // Attribution is best effort and must never change the failure path.
+  }
+}
+
 function streamAbortError(): Error {
   const error = new Error('The response stream was cancelled.');
   error.name = 'AbortError';
@@ -200,7 +248,7 @@ async function callDeepSeek(
 
     await recordCircuitFailure({
       dependency: 'pierrot_llm',
-      errorCode: error instanceof Error ? error.message.slice(0, 120) : 'deepseek_request_failed',
+      errorCode: providerCodeFrom(error),
       permanent,
     });
 
@@ -287,7 +335,7 @@ async function streamDeepSeek(
 
     await recordCircuitFailure({
       dependency: 'pierrot_llm',
-      errorCode: error instanceof Error ? error.message.slice(0, 120) : 'deepseek_request_failed',
+      errorCode: providerCodeFrom(error),
       permanent,
     });
 
@@ -347,7 +395,7 @@ async function callOpenRouterDeepSeek(
 
     await recordCircuitFailure({
       dependency: 'openrouter',
-      errorCode: error instanceof Error ? error.message.slice(0, 120) : 'openrouter_request_failed',
+      errorCode: providerCodeFrom(error),
       permanent,
     });
 
@@ -438,7 +486,7 @@ async function streamOpenRouterDeepSeek(
 
     await recordCircuitFailure({
       dependency: 'openrouter',
-      errorCode: error instanceof Error ? error.message.slice(0, 120) : 'openrouter_request_failed',
+      errorCode: providerCodeFrom(error),
       permanent,
     });
 
@@ -552,10 +600,7 @@ export async function callPierrotModel(
       });
       geminiFailed = true;
       previousProvider = 'gemini';
-      console.warn(
-        '[Pierrot AI] Gemini unavailable; trying DeepSeek:',
-        error instanceof Error ? error.message : 'gemini_request_failed'
-      );
+      console.warn('[Pierrot AI] Gemini unavailable; trying DeepSeek:', providerCodeFrom(error));
     }
   }
 
@@ -612,7 +657,7 @@ export async function callPierrotModel(
     previousProvider = 'deepseek';
     console.warn(
       '[Pierrot AI] DeepSeek direct unavailable; trying OpenRouter:',
-      error instanceof Error ? error.message : 'deepseek_request_failed'
+      providerCodeFrom(error)
     );
   }
 
@@ -741,6 +786,7 @@ export async function callPersonalAssistantModel(
           attempts,
         };
       } catch (error) {
+        attributeProviderFailure(error, 'deepseek');
         collectAttempt({
           provider: 'deepseek',
           model: 'deepseek-chat',
@@ -795,6 +841,7 @@ export async function callPersonalAssistantModel(
           attempts,
         };
       } catch (error) {
+        attributeProviderFailure(error, 'openrouter');
         collectAttempt({
           provider: 'openrouter',
           model: 'deepseek/deepseek-chat',
@@ -868,6 +915,7 @@ export async function callPersonalAssistantModel(
         attempts,
       };
     } catch (error) {
+      attributeProviderFailure(error, 'gemini');
       collectAttempt({
         provider: 'gemini',
         model: 'gemini-3.5-flash',
@@ -1001,7 +1049,7 @@ export async function streamPierrotModel(
       previousProvider = 'gemini';
       console.warn(
         '[Pierrot AI] Gemini streaming unavailable; trying DeepSeek:',
-        error instanceof Error ? error.message : 'gemini_request_failed'
+        providerCodeFrom(error)
       );
     }
   }
@@ -1068,7 +1116,7 @@ export async function streamPierrotModel(
     previousProvider = 'deepseek';
     console.warn(
       '[Pierrot AI] DeepSeek streaming unavailable; trying OpenRouter:',
-      error instanceof Error ? error.message : 'deepseek_request_failed'
+      providerCodeFrom(error)
     );
   }
 

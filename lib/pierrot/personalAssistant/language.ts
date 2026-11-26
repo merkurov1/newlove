@@ -8,6 +8,8 @@
  * the actual reply.
  */
 
+import { pierrotErrorCopy } from '@/lib/pierrot/errorContracts';
+
 export type AssistantLanguage = 'ru' | 'en' | 'es' | 'fr' | 'de' | 'und';
 
 const CYRILLIC = /[\u0400-\u04FF]/;
@@ -51,10 +53,19 @@ const ERROR_TEXT: Record<Exclude<AssistantLanguage, 'und'>, string> = {
   de: 'Ich konnte gerade keine Antwort erhalten. Bitte versuchen Sie es in einer Minute erneut.',
 };
 
-export function personalAssistantErrorText(language: string): string {
+export function personalAssistantErrorText(language: string, code?: string | null): string {
   const normalized = (language as AssistantLanguage) || 'und';
+
   if (normalized in ERROR_TEXT) {
-    return ERROR_TEXT[normalized as Exclude<AssistantLanguage, 'und'>];
+    const safeLanguage = normalized as Exclude<AssistantLanguage, 'und'>;
+    // Russian and English have the full per-class contract used by the web
+    // route. Other languages keep their neutral retry message.
+    if (safeLanguage === 'ru' || safeLanguage === 'en') {
+      const localized = pierrotErrorCopy(safeLanguage, code, ERROR_TEXT[safeLanguage]);
+      if (localized) return localized;
+    }
+
+    return ERROR_TEXT[safeLanguage];
   }
 
   return ERROR_TEXT.en;

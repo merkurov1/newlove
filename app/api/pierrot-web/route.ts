@@ -130,6 +130,11 @@ import {
   type NormalizedHistoryItem,
 } from '@/lib/pierrot/historyWindow';
 import { classifyPierrotFailure, logPierrotFailure } from '@/lib/pierrot/errors';
+import {
+  classifyAssistantFailure,
+  createAssistantCorrelationId,
+  logAssistantRequest,
+} from '@/lib/pierrot/personalAssistant/diagnostics';
 import { pierrotErrorCopy, type PierrotErrorLanguage } from '@/lib/pierrot/errorContracts';
 import {
   recordPierrotRetrieval,
@@ -576,6 +581,10 @@ export async function POST(req: Request) {
     const telegramSenderId = req.headers.get('x-telegram-sender-id');
 
     if (isPersonalAssistantSenderId(telegramSenderId)) {
+      const assistantStartedAt = Date.now();
+      const assistantCorrelationId = createAssistantCorrelationId({
+        requestId: req.headers.get('x-pierrot-request-id'),
+      });
       const personalAssistantRequest =
         isInternalRequest &&
         req.headers.get('x-telegram-update-authentic') === '1' &&
@@ -593,7 +602,11 @@ export async function POST(req: Request) {
 
       if (!store) {
         return NextResponse.json(
-          { error: personalAssistantErrorText(detectAssistantLanguage(trimmedMessage)) },
+          {
+            error: personalAssistantErrorText(detectAssistantLanguage(trimmedMessage)),
+            code: 'AI_NOT_CONFIGURED',
+            requestId: assistantCorrelationId,
+          },
           { status: 503 }
         );
       }
@@ -619,21 +632,45 @@ export async function POST(req: Request) {
             model: result.model,
             web: result.searchedWeb,
             language: result.language,
+            requestId: assistantCorrelationId,
           },
           { headers: { 'Cache-Control': 'no-store' } }
         );
       } catch (error) {
         // Never log message text, memory contents or provider request bodies.
-        console.error(
-          '[Pierrot Assistant] turn failed:',
-          error && typeof error === 'object' && 'code' in error
-            ? String((error as { code?: unknown }).code)
-            : 'unexpected'
-        );
+        // The classifier exposes only the stage, error class, HTTP status,
+        // safe provider code and duration.
+        const failure = classifyPierrotFailure(error);
+        const details = classifyAssistantFailure(error, { stage: 'generation' });
+
+        logAssistantRequest({
+          correlationId: assistantCorrelationId,
+          stage: 'generation',
+          outcome: 'failure',
+          durationMs: Date.now() - assistantStartedAt,
+          error,
+          details: {
+            ...details,
+            httpStatus: failure.httpStatus,
+          },
+        });
 
         return NextResponse.json(
-          { error: personalAssistantErrorText(detectAssistantLanguage(trimmedMessage)) },
-          { status: 502 }
+          {
+            error: personalAssistantErrorText(
+              detectAssistantLanguage(trimmedMessage),
+              failure.code
+            ),
+            code: failure.code,
+            requestId: assistantCorrelationId,
+            ...(details.provider ? { provider: details.provider } : {}),
+            ...(details.providerCode ? { providerCode: details.providerCode } : {}),
+            ...(failure.retryAfterSeconds ? { retryAfter: failure.retryAfterSeconds } : {}),
+          },
+          {
+            status: failure.httpStatus,
+            headers: { 'Cache-Control': 'no-store' },
+          }
         );
       }
     }
