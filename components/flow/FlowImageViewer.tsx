@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 import { hapticGallery, hapticReader } from '@/lib/telegram/webApp';
@@ -40,6 +41,12 @@ function clampScale(value: number) {
  * double-tap are implemented with explicit fallbacks. Telegram's BackButton is
  * handled by `FlowReaderShell`; Escape, Arrow keys, browser Back and the close
  * affordance all end the same way.
+ *
+ * The overlay is portalled to `document.body`. The reader article keeps a
+ * `transform` after its entry animation with `animation-fill-mode: both`, which
+ * turns it into the containing block for every `position: fixed` descendant.
+ * Rendering inline therefore pinned the viewer to the article's box (below the
+ * masthead) instead of the real viewport.
  */
 export default function FlowImageViewer({ images, index, onClose, onIndexChange }: Props) {
   const current = images[index] ?? images[0];
@@ -94,7 +101,8 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
     [images.length, index, onIndexChange]
   );
 
-  // Focus management, keyboard controls and focus restoration.
+  // Focus management and focus restoration. Runs once the portal is committed
+  // so the dialog and close affordance can actually receive focus.
   useEffect(() => {
     previousFocusRef.current = document.activeElement;
 
@@ -120,12 +128,16 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
   }, []);
 
   // Background scroll lock. The overlay itself also has `touch-action: none`.
+  // iOS may clamp the scroll position when `overflow: hidden` is applied, so
+  // the reading position is captured and restored before the overlay unmounts.
   useEffect(() => {
     const body = document.body;
     const html = document.documentElement;
     const previousBodyOverflow = body.style.overflow;
     const previousHtmlOverflow = html.style.overflow;
     const previousOverscroll = body.style.overscrollBehavior;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
 
     body.style.overflow = 'hidden';
     html.style.overflow = 'hidden';
@@ -137,16 +149,21 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
       body.style.overflow = previousBodyOverflow;
       html.style.overflow = previousHtmlOverflow;
       body.style.overscrollBehavior = previousOverscroll;
+
+      if (window.scrollX !== scrollX || window.scrollY !== scrollY) {
+        try {
+          window.scrollTo({ left: scrollX, top: scrollY, behavior: 'auto' });
+        } catch {
+          /* Scroll restoration is best-effort. */
+        }
+      }
     };
   }, []);
 
   // Browser Back closes the viewer instead of leaving the publication.
   useEffect(() => {
     try {
-      window.history.pushState(
-        { ...(window.history.state || {}), __flowImageViewer: true },
-        ''
-      );
+      window.history.pushState({ ...(window.history.state || {}), __flowImageViewer: true }, '');
       pushedHistoryRef.current = true;
     } catch {
       pushedHistoryRef.current = false;
@@ -310,9 +327,13 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
     setDrag({ x: 0, y: 0 });
   };
 
-  if (!current) return null;
+  // The viewer is opened by a client interaction, so this branch is never part
+  // of the server-rendered reader markup. It still keeps a future server import
+  // safe and avoids touching `document` during SSR.
+  if (!current || typeof document === 'undefined') return null;
 
   const caption = current.caption || '';
+  const visibleCaption = caption || current.alt;
   const hasMultiple = images.length > 1;
   const transform =
     scale > 1
@@ -321,7 +342,7 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
         ? `translate3d(${drag.x * 0.35}px, ${drag.y * 0.35}px, 0)`
         : undefined;
 
-  return (
+  const overlay = (
     <div
       ref={dialogRef}
       role="dialog"
@@ -329,11 +350,12 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
       aria-label="Image viewer"
       tabIndex={-1}
       data-testid="flow-image-viewer"
+      data-multiple={hasMultiple ? 'true' : 'false'}
       className="flow-viewer"
       onKeyDown={handleKeyDown}
       onDoubleClick={() => setScale((value) => (value > 1 ? 1 : DOUBLE_TAP_SCALE))}
     >
-      <div className="flow-viewer__bar">
+      <header className="flow-viewer__bar">
         <p className="flow-viewer__counter" aria-live="polite">
           {hasMultiple ? `${index + 1} / ${images.length}` : 'Image'}
         </p>
@@ -347,31 +369,34 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
         >
           <X size={20} strokeWidth={1.6} aria-hidden="true" />
         </button>
-      </div>
+      </header>
 
-      <div
-        className="flow-viewer__stage"
-        onClick={(event) => {
-          if (event.target === event.currentTarget && scale === 1) close();
-        }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onTouchCancel={handleTouchEnd}
-      >
-        {hasMultiple && (
-          <button
-            type="button"
-            className="flow-viewer__nav flow-viewer__nav--prev"
-            onClick={() => goTo(index - 1)}
-            disabled={index === 0}
-            aria-label="Previous image"
-          >
-            ←
-          </button>
-        )}
+      <figure className="flow-viewer__figure">
+        {/* The caption is a sibling of the gesture stage, not a child: the
+            stage owns `touch-action: none`, while a long caption keeps native
+            vertical scrolling on touch devices. */}
+        <div
+          className="flow-viewer__stage"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && scale === 1) close();
+          }}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchEnd}
+        >
+          {hasMultiple && (
+            <button
+              type="button"
+              className="flow-viewer__nav flow-viewer__nav--prev"
+              onClick={() => goTo(index - 1)}
+              disabled={index === 0}
+              aria-label="Previous image"
+            >
+              ←
+            </button>
+          )}
 
-        <figure className="flow-viewer__figure">
           {/* A single full-resolution image, not a second gallery renderer. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -387,29 +412,31 @@ export default function FlowImageViewer({ images, index, onClose, onIndexChange 
             }}
           />
 
-          {(caption || current.alt) && (
-            <figcaption className="flow-viewer__caption">{caption || current.alt}</figcaption>
+          {hasMultiple && (
+            <button
+              type="button"
+              className="flow-viewer__nav flow-viewer__nav--next"
+              onClick={() => goTo(index + 1)}
+              disabled={index === images.length - 1}
+              aria-label="Next image"
+            >
+              →
+            </button>
           )}
-        </figure>
+        </div>
 
-        {hasMultiple && (
-          <button
-            type="button"
-            className="flow-viewer__nav flow-viewer__nav--next"
-            onClick={() => goTo(index + 1)}
-            disabled={index === images.length - 1}
-            aria-label="Next image"
+        {visibleCaption && (
+          <figcaption
+            className="flow-viewer__caption"
+            tabIndex={0}
+            onDoubleClick={(event) => event.stopPropagation()}
           >
-            →
-          </button>
+            {visibleCaption}
+          </figcaption>
         )}
-      </div>
-
-      {hasMultiple && (
-        <p className="flow-viewer__hint" aria-hidden="true">
-          Swipe to move · double tap to zoom
-        </p>
-      )}
+      </figure>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 }

@@ -72,7 +72,8 @@ const FLOW_DETAIL_ITEMS = {
         {
           url: 'https://images.flow.test/archive-light.jpg',
           alt: 'Paper folders and a rolled drawing near a window',
-          caption: 'The archive, late morning',
+          caption:
+            'The archive, late morning — paper folders, a rolled drawing and the older light that reaches the back of the room after the street has already started its ordinary work outside.',
           width: 1600,
           height: 1200,
         },

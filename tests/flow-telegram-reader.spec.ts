@@ -189,6 +189,143 @@ async function mockImages(page: Page) {
   });
 }
 
+type Rect = { x: number; y: number; width: number; height: number };
+
+type ViewerGeometry = {
+  viewport: { width: number; height: number };
+  viewer: Rect;
+  stage: Rect;
+  image: Rect & {
+    centerX: number;
+    centerY: number;
+    naturalWidth: number;
+    naturalHeight: number;
+  };
+  caption: Rect | null;
+  background: string;
+  articleTransform: string | null;
+  parentIsBody: boolean;
+  horizontalOverflow: number;
+};
+
+async function readViewerGeometry(page: Page): Promise<ViewerGeometry> {
+  return page.evaluate(() => {
+    const viewer = document.querySelector<HTMLElement>('.flow-viewer');
+    const stage = document.querySelector<HTMLElement>('.flow-viewer__stage');
+    const image = document.querySelector<HTMLImageElement>('.flow-viewer__image');
+    const caption = document.querySelector<HTMLElement>('.flow-viewer__caption');
+    const article = document.querySelector<HTMLElement>('.flow-item');
+
+    if (!viewer || !stage || !image) throw new Error('Viewer geometry is incomplete');
+
+    const toRect = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+
+      return { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+    };
+
+    const imageRect = image.getBoundingClientRect();
+
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      viewer: toRect(viewer),
+      stage: toRect(stage),
+      image: {
+        ...toRect(image),
+        centerX: imageRect.left + imageRect.width / 2,
+        centerY: imageRect.top + imageRect.height / 2,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+      },
+      caption: caption ? toRect(caption) : null,
+      background: getComputedStyle(viewer).backgroundColor,
+      articleTransform: article ? getComputedStyle(article).transform : null,
+      parentIsBody: viewer.parentElement === document.body,
+      horizontalOverflow:
+        document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    };
+  });
+}
+
+function expectWarmLightBackground(background: string) {
+  const channels = background.match(/\d+(?:\.\d+)?/g)?.map(Number) ?? [];
+
+  expect(channels.length).toBeGreaterThanOrEqual(3);
+
+  const [red, green, blue] = channels;
+
+  expect(red).toBeGreaterThan(green);
+  expect(green).toBeGreaterThan(blue);
+  expect(red).toBeGreaterThanOrEqual(235);
+  expect(blue).toBeGreaterThanOrEqual(220);
+}
+
+function expectViewerFillsViewport(geometry: ViewerGeometry) {
+  const { viewport, viewer, stage, image, caption } = geometry;
+
+  // The reader article keeps a transform after its entry animation; the viewer
+  // must still be a direct child of <body> and use the real viewport.
+  expect(geometry.articleTransform).not.toBe('none');
+  expect(geometry.parentIsBody).toBe(true);
+  expect(Math.abs(viewer.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(viewer.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(viewer.width - viewport.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(viewer.height - viewport.height)).toBeLessThanOrEqual(1);
+  expect(Math.abs(stage.x - viewer.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(stage.y - viewer.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(stage.width - viewer.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(stage.height - viewer.height)).toBeLessThanOrEqual(1);
+
+  expect(image.width).toBeGreaterThan(0);
+  expect(image.height).toBeGreaterThan(0);
+  expect(image.x).toBeGreaterThanOrEqual(-1);
+  expect(image.y).toBeGreaterThanOrEqual(-1);
+  expect(image.x + image.width).toBeLessThanOrEqual(viewport.width + 1);
+  expect(image.y + image.height).toBeLessThanOrEqual(viewport.height + 1);
+  expect(Math.abs(image.centerX - viewport.width / 2)).toBeLessThanOrEqual(1);
+  expect(Math.abs(image.centerY - viewport.height / 2)).toBeLessThanOrEqual(1);
+
+  const naturalRatio = image.naturalWidth / image.naturalHeight;
+  const renderedRatio = image.width / image.height;
+
+  expect(Math.abs(renderedRatio - naturalRatio)).toBeLessThan(0.02);
+
+  if (caption) {
+    expect(caption.x).toBeGreaterThanOrEqual(-1);
+    expect(caption.y).toBeGreaterThanOrEqual(-1);
+    expect(caption.x + caption.width).toBeLessThanOrEqual(viewport.width + 1);
+    expect(caption.y + caption.height).toBeLessThanOrEqual(viewport.height + 1);
+    // The caption owns the reserved bottom band; it never sits on the photo.
+    expect(caption.y).toBeGreaterThanOrEqual(image.y + image.height - 1);
+  }
+
+  expect(geometry.horizontalOverflow).toBeLessThanOrEqual(0);
+  expectWarmLightBackground(geometry.background);
+}
+
+async function openViewer(page: Page) {
+  await page.goto('/flow/reader-with-images');
+
+  // Keep the Next.js development indicator out of the visual evidence.
+  await page.addStyleTag({ content: 'nextjs-portal { display: none !important; }' });
+
+  await expect(page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })).toBeVisible();
+  await page.getByRole('link', { name: /Open image: First light/ }).click();
+
+  const viewer = page.getByRole('dialog', { name: 'Image viewer' });
+
+  await expect(viewer).toBeVisible();
+  await expect(page.locator('.flow-viewer__image')).toBeVisible();
+  await page.waitForFunction(() => {
+    const image = document.querySelector<HTMLImageElement>('.flow-viewer__image');
+
+    return Boolean(image?.complete && image.naturalWidth > 0);
+  });
+  await page.waitForTimeout(220);
+
+  return viewer;
+}
+
 test.beforeAll(() => {
   fs.mkdirSync(ARTIFACT_DIR, { recursive: true });
 });
@@ -240,6 +377,7 @@ test.describe('Flow reader — Telegram', () => {
 
     await expect(viewer).toBeVisible();
     await expect(page.getByText('1 / 2')).toBeVisible();
+    await page.waitForTimeout(220);
 
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'flow-image-viewer-390x844.png'),
@@ -277,6 +415,124 @@ test.describe('Flow reader — Telegram', () => {
     ).toBe(true);
   });
 
+  for (const viewport of [
+    { width: 390, height: 844, telegram: true },
+    { width: 768, height: 1024, telegram: true },
+    { width: 1024, height: 768, telegram: false },
+    { width: 1440, height: 900, telegram: false },
+  ]) {
+    test(`${viewport.width}x${viewport.height}: viewer is a viewport-level, centred editorial gallery`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+      if (viewport.telegram) await installTelegram(page);
+
+      await mockFlowApis(page);
+      await mockImages(page);
+
+      await openViewer(page);
+
+      const first = await readViewerGeometry(page);
+
+      expectViewerFillsViewport(first);
+
+      await page.screenshot({
+        path: path.join(ARTIFACT_DIR, `flow-image-viewer-${viewport.width}x${viewport.height}.png`),
+      });
+
+      // A long caption changes nothing about the photograph's optical centre.
+      await page.getByRole('button', { name: 'Next image' }).click();
+      await expect(page.locator('.flow-viewer__caption')).toContainText(
+        'The archive, late morning'
+      );
+      await page.waitForTimeout(120);
+
+      const second = await readViewerGeometry(page);
+
+      expectViewerFillsViewport(second);
+      expect(Math.abs(second.image.centerX - first.image.centerX)).toBeLessThanOrEqual(1);
+      expect(Math.abs(second.image.centerY - first.image.centerY)).toBeLessThanOrEqual(1);
+
+      await page.screenshot({
+        path: path.join(
+          ARTIFACT_DIR,
+          `flow-image-viewer-long-caption-${viewport.width}x${viewport.height}.png`
+        ),
+      });
+    });
+  }
+
+  test('viewer follows a live viewport resize without losing the photograph centre', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await mockFlowApis(page);
+    await mockImages(page);
+    await openViewer(page);
+
+    const before = await readViewerGeometry(page);
+
+    expectViewerFillsViewport(before);
+
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.waitForTimeout(200);
+
+    const after = await readViewerGeometry(page);
+
+    expectViewerFillsViewport(after);
+    expect(after.viewport).toEqual({ width: 768, height: 1024 });
+    expect(Math.abs(after.image.centerY - 1024 / 2)).toBeLessThanOrEqual(1);
+  });
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 1440, height: 900 },
+  ]) {
+    test(`${viewport.width}x${viewport.height}: portrait, square and landscape photographs stay uncropped and centred`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await mockFlowApis(page);
+      await mockImages(page);
+      await openViewer(page);
+
+      for (const shape of [
+        { name: 'portrait', width: 900, height: 1400, fill: '#b9a995' },
+        { name: 'square', width: 1200, height: 1200, fill: '#a9b4ad' },
+        { name: 'landscape', width: 1600, height: 900, fill: '#c4b29c' },
+      ]) {
+        await page.evaluate(({ width, height, fill, name }) => {
+          const image = document.querySelector<HTMLImageElement>('.flow-viewer__image');
+
+          if (!image) throw new Error('Viewer image missing');
+
+          const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="${fill}"/><circle cx="${width / 2}" cy="${height / 2}" r="${Math.min(width, height) / 4}" fill="#f6f1e8" opacity="0.7"/><title>${name}</title></svg>`;
+
+          image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        }, shape);
+
+        await page.waitForFunction(
+          ({ width, height }) => {
+            const image = document.querySelector<HTMLImageElement>('.flow-viewer__image');
+
+            return Boolean(
+              image?.complete && image.naturalWidth === width && image.naturalHeight === height
+            );
+          },
+          { width: shape.width, height: shape.height }
+        );
+        await page.waitForTimeout(60);
+
+        const geometry = await readViewerGeometry(page);
+
+        expectViewerFillsViewport(geometry);
+        expect(geometry.image.naturalWidth).toBe(shape.width);
+        expect(geometry.image.naturalHeight).toBe(shape.height);
+      }
+    });
+  }
+
   test('820px iPad: reader and viewer stay composed in a wide Telegram viewport', async ({
     page,
   }) => {
@@ -299,6 +555,7 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.getByRole('link', { name: /Open image: First light/ }).click();
     await expect(page.getByRole('dialog', { name: 'Image viewer' })).toBeVisible();
+    await page.waitForTimeout(220);
 
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'flow-image-viewer-820x1180.png'),
@@ -323,6 +580,7 @@ test.describe('Flow reader — Telegram', () => {
 
     await page.getByRole('link', { name: /Open image: First light/ }).click();
     await expect(page.getByRole('dialog', { name: 'Image viewer' })).toBeVisible();
+    await page.waitForTimeout(220);
 
     await page.screenshot({
       path: path.join(ARTIFACT_DIR, 'flow-reader-browser-fallback-390x844.png'),
