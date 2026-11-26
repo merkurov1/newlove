@@ -73,6 +73,28 @@ describe('useIsTelegram', () => {
     expect(result.current).toBe(true);
   });
 
+  it('falls back to browser when the optional SDK never answers, but still accepts a late SDK', () => {
+    const { result } = renderHook(() => useTelegramEnvironment());
+
+    expect(result.current.status).toBe('detecting');
+
+    act(() => {
+      jest.advanceTimersByTime(5_200);
+      __refreshTelegramEnvironmentForTests();
+    });
+
+    expect(result.current.status).toBe('browser');
+    expect(result.current.isTelegram).toBe(false);
+
+    act(() => {
+      setTelegram({ initData: 'very-late-init-data', platform: 'android' });
+      __refreshTelegramEnvironmentForTests();
+    });
+
+    expect(result.current.status).toBe('telegram');
+    expect(result.current.initData).toBe('very-late-init-data');
+  });
+
   it('distinguishes a detected Telegram shell from initData still arriving', () => {
     setTelegram({ initData: '', platform: 'ios' });
 

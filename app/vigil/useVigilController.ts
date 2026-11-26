@@ -15,6 +15,7 @@ import { hapticNotification } from '@/lib/telegram/webApp';
 
 const FLAME_ID = 1;
 const CLOCK_REFRESH_MS = 30_000;
+const CLAIM_TIMEOUT_MS = 20_000;
 
 /**
  * Supplementary heart display data only. The shared flame clock itself comes
@@ -75,6 +76,7 @@ export function useVigilController() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sparkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusRetryRef = useRef(false);
+  const sendingRef = useRef(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [flameData, setFlameData] = useState<VigilFlameData | null>(null);
@@ -82,14 +84,16 @@ export function useVigilController() {
   const [spark, setSpark] = useState<VigilSparkPosition | null>(null);
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [authExpired, setAuthExpired] = useState(false);
   const [cooldownRemainingMs, setCooldownRemainingMs] = useState<number | null>(
     null
   );
 
   const userName = identity.displayName;
   const identityIsLoading = identity.isLoading;
-  const identitySource = identity.source;
+  const identityIsTelegram = identity.isTelegram;
   const refreshIdentity = identity.refresh;
+  const getIdentityToken = identity.getAuthToken;
 
   const isOnCooldown =
     cooldownRemainingMs !== null && cooldownRemainingMs > 0;
@@ -223,6 +227,21 @@ export function useVigilController() {
     };
   }, [refreshData, updateClock]);
 
+  const readBearerToken = useCallback(async (): Promise<string | null> => {
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.access_token) return session.access_token;
+    } catch {
+      // A failed Supabase session read falls back to the verified Telegram
+      // token, which is server-issued and safe to use as a bearer.
+    }
+
+    return getIdentityToken();
+  }, [getIdentityToken]);
+
   // Ask the server for this identity's own cooldown. The public flame timer is
   // never used to infer whether this visitor may spark.
   useEffect(() => {
@@ -230,19 +249,18 @@ export function useVigilController() {
 
     let cancelled = false;
 
+    // A new identity gets one fresh server exchange attempt.
+    statusRetryRef.current = false;
+
     const loadStatus = async (): Promise<VigilStatusResponse | null> => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const token = await readBearerToken();
 
         const response = await fetch('/api/vigil/claim', {
           method: 'GET',
           credentials: 'same-origin',
           cache: 'no-store',
-          headers: session?.access_token
-            ? { Authorization: `Bearer ${session.access_token}` }
-            : undefined,
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         });
 
         if (!response.ok) return null;
@@ -258,23 +276,24 @@ export function useVigilController() {
     const resolveStatus = async () => {
       let status = await loadStatus();
 
-      // A cached Telegram name can survive while the HttpOnly cookie expired.
+      // A cached identity name can survive while the signed session expired.
       // Re-exchange the signed initData once, then retry.
       if (
         !cancelled &&
         status &&
         status.authenticated === false &&
-        identitySource === 'telegram' &&
+        identityIsTelegram &&
         !statusRetryRef.current
       ) {
         statusRetryRef.current = true;
-        const refreshed = await refreshIdentity();
+        const refreshed = await refreshIdentity({ force: true });
 
         if (refreshed && !cancelled) status = await loadStatus();
       }
 
       if (cancelled || !status?.authenticated) return;
 
+      setAuthExpired(false);
       applyCooldown(
         typeof status.remainingMs === 'number' ? status.remainingMs : 0
       );
@@ -288,8 +307,9 @@ export function useVigilController() {
   }, [
     applyCooldown,
     identityIsLoading,
+    identityIsTelegram,
+    readBearerToken,
     refreshIdentity,
-    identitySource,
     userName,
   ]);
 
@@ -328,12 +348,12 @@ export function useVigilController() {
 
   const triggerRitual = useCallback(
     async (event?: React.MouseEvent<HTMLButtonElement>) => {
-      if (isLighting) return;
+      if (sendingRef.current || isLighting) return;
 
       if (!userName) {
         setSuccessMessage(null);
         setRateLimitMsg(
-          identity.isTelegram
+          identityIsTelegram
             ? identity.error || 'We could not confirm your Telegram name yet.'
             : 'Please sign in to participate.'
         );
@@ -346,6 +366,7 @@ export function useVigilController() {
         return;
       }
 
+      sendingRef.current = true;
       setIsLighting(true);
       setRateLimitMsg(null);
       setSuccessMessage(null);
@@ -366,46 +387,98 @@ export function useVigilController() {
       }
 
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const requestClaim = async (token: string | null) => {
+          // A stalled network must never leave the action in a permanent
+          // "Sending your spark…" state.
+          const controller = new AbortController();
+          const timeout = setTimeout(
+            () => controller.abort(),
+            CLAIM_TIMEOUT_MS
+          );
 
-        const requestClaim = async () => {
-          const response = await fetch('/api/vigil/claim', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(session?.access_token
-                ? { Authorization: `Bearer ${session.access_token}` }
-                : {}),
-            },
-            body: JSON.stringify({ id: FLAME_ID }),
-          });
+          try {
+            const response = await fetch('/api/vigil/claim', {
+              method: 'POST',
+              credentials: 'same-origin',
+              cache: 'no-store',
+              signal: controller.signal,
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
+              body: JSON.stringify({ id: FLAME_ID }),
+            });
 
-          const payload = await response.json().catch(() => null);
+            const payload = await response.json().catch(() => null);
 
-          return { response, payload };
+            return { response, payload };
+          } finally {
+            clearTimeout(timeout);
+          }
         };
 
-        let { response, payload } = await requestClaim();
+        let token = await readBearerToken();
+        let { response, payload } = await requestClaim(token);
 
-        if (response.status === 401 && identity.source === 'telegram') {
-          const refreshed = await identity.refresh();
+        if (response.status === 401) {
+          // A cached display name can outlive the signed session. Renew it
+          // exactly once, then retry the claim with fresh credentials.
+          let refreshedToken: string | null = null;
 
-          if (refreshed) ({ response, payload } = await requestClaim());
+          if (identityIsTelegram) {
+            const refreshed = await refreshIdentity({ force: true });
+
+            if (refreshed) refreshedToken = getIdentityToken();
+          } else {
+            try {
+              const { data } = await supabase.auth.refreshSession();
+              refreshedToken = data.session?.access_token ?? null;
+            } catch {
+              // Fall through to a clear expired-session state.
+            }
+          }
+
+          token = refreshedToken ?? (await readBearerToken());
+          ({ response, payload } = await requestClaim(token));
+        }
+
+        if (response.status === 401) {
+          setAuthExpired(true);
+          setRateLimitMsg(
+            identityIsTelegram
+              ? 'Your Telegram session expired. Reopen the Mini App to send a spark.'
+              : 'Your session expired. Sign in again to send a spark.'
+          );
+          setSpark(null);
+          setIsLighting(false);
+          return;
         }
 
         if (response.status === 429) {
-          const remainingMs =
-            typeof payload?.remainingMs === 'number'
-              ? payload.remainingMs
-              : VIGIL_COOLDOWN_MS;
+          const isPersonalCooldown =
+            payload?.error === 'cooldown' ||
+            typeof payload?.remainingMs === 'number';
 
-          applyCooldown(remainingMs);
-          setRateLimitMsg(
-            payload?.message || vigilCooldownMessage(remainingMs)
-          );
+          if (isPersonalCooldown) {
+            const remainingMs =
+              typeof payload?.remainingMs === 'number'
+                ? payload.remainingMs
+                : VIGIL_COOLDOWN_MS;
+
+            applyCooldown(remainingMs);
+            setRateLimitMsg(
+              payload?.message || vigilCooldownMessage(remainingMs)
+            );
+          } else {
+            // The per-IP limiter is transient. It must not start a 24-hour
+            // personal cooldown or the visitor is locked out locally.
+            applyCooldown(0);
+            setRateLimitMsg(
+              payload?.message ||
+                'Too many sparks right now. Please try again in a moment.'
+            );
+          }
+
           setSpark(null);
           setIsLighting(false);
           return;
@@ -433,6 +506,7 @@ export function useVigilController() {
         // The cooldown is personal; the shared flame is re-read from the same
         // authoritative endpoint the homepage uses.
         applyCooldown(VIGIL_COOLDOWN_MS);
+        setAuthExpired(false);
         setSuccessMessage('Spark received · added to the shared heart');
         void refreshSharedFlame();
         void refreshData();
@@ -446,15 +520,24 @@ export function useVigilController() {
 
         if (end) setSpark({ start: origin, end });
       } catch (error) {
+        const aborted =
+          typeof error === 'object' &&
+          error !== null &&
+          (error as { name?: string }).name === 'AbortError';
+
         console.error('Vigil ritual error:', error);
         hapticNotification('error');
         setSuccessMessage(null);
         setRateLimitMsg(
-          'The spark did not reach the heart. Please try again.'
+          aborted
+            ? 'The spark took too long to reach the heart. Please try again.'
+            : 'The spark did not reach the heart. Please try again.'
         );
         setSpark(null);
         setIsLighting(false);
         return;
+      } finally {
+        sendingRef.current = false;
       }
 
       if (sparkTimeoutRef.current) {
@@ -470,11 +553,15 @@ export function useVigilController() {
     [
       applyCooldown,
       cooldownRemainingMs,
-      identity,
+      getIdentityToken,
+      identity.error,
+      identityIsTelegram,
       isLighting,
       isOnCooldown,
       measureHeartTarget,
+      readBearerToken,
       refreshData,
+      refreshIdentity,
       refreshSharedFlame,
       userName,
     ]
@@ -505,6 +592,7 @@ export function useVigilController() {
     cooldownRemainingMs,
     rateLimitMsg,
     successMessage,
+    authExpired,
     spark,
     userName,
     triggerRitual,
