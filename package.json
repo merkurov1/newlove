@@ -24,6 +24,7 @@
     "lint:css": "stylelint \"app/**/*.css\"",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "test:og": "node scripts/og-font-smoke.mjs",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "verify": "pnpm typecheck && pnpm lint && pnpm test --runInBand",
