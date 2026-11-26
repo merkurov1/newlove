@@ -277,6 +277,13 @@ function formatStatusError(error: StatusError): string {
   return `${error.message}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
 }
 
+function reconnectUrl(connectUrl: string, email: string): string {
+  const separator = connectUrl.includes('?') ? '&' : '?';
+  return `${connectUrl}${separator}login_hint=${encodeURIComponent(
+    email
+  )}&select_account=true`;
+}
+
 export default function YouTubeProjectWorkspace({
   project,
   notice,
@@ -865,6 +872,9 @@ export default function YouTubeProjectWorkspace({
                 <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
                 {connection.scopes.length} scopes
                 {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                {connection.lastErrorMessage ? (
+                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
+                ) : null}
                 <div className="pw-analytics-card-actions">
                   <button
                     type="button"
@@ -876,6 +886,14 @@ export default function YouTubeProjectWorkspace({
                   >
                     Обновить каналы
                   </button>
+                  {connection.status !== 'connected' ? (
+                    <a
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      href={reconnectUrl(connectUrl, connection.googleAccountEmail)}
+                    >
+                      Переподключить этот аккаунт
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     className="pw-analytics-button pw-analytics-button--quiet"

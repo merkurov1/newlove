@@ -11,7 +11,7 @@ import {
   listOAuthConnections,
   listProjectBindings,
   listYouTubeChannels,
-  loadChannelAccessToken,
+  loadConnectionAccessToken,
   replaceConnectionChannels,
   unbindProject,
   YOUTUBE_PROJECTS,
@@ -56,7 +56,14 @@ function errorResponse(error: unknown) {
   }
 
   return json(
-    { error: 'request_failed', message: 'Не удалось выполнить действие с YouTube.' },
+    {
+      error: 'request_failed',
+      code:
+        error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+          ? String((error as { code?: unknown }).code).slice(0, 40)
+          : 'request_failed',
+      message: 'Не удалось выполнить действие с YouTube.',
+    },
     502
   );
 }
@@ -263,22 +270,12 @@ export async function POST(request: Request) {
         return json({ error: 'invalid_request', message: 'connectionId is required.' }, 400);
       }
 
-      const channels = await listYouTubeChannels(store, user.id);
-      const channel = channels.find((item) => item.connectionId === connectionId);
-
-      if (!channel) {
-        return json(
-          {
-            error: 'not_connected',
-            message: 'У этого подключения нет сохранённых каналов. Переподключите Google-аккаунт.',
-          },
-          409
-        );
-      }
-
-      const token = await loadChannelAccessToken(store, {
+      // Refresh works even when the first discovery returned zero channels:
+      // the connection and its sealed grant still exist, so the owner can
+      // retry discovery from the UI.
+      const token = await loadConnectionAccessToken(store, {
         ownerId: user.id,
-        channelRecordId: channel.id,
+        connectionId,
       });
       const discovered = await listMyChannels({ accessToken: token.accessToken });
       const updated = await replaceConnectionChannels(store, {

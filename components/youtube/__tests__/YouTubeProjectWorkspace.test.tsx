@@ -173,6 +173,133 @@ describe('YouTube project workspace state refresh', () => {
   });
 });
 
+describe('YouTube workspace multi-account states', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('shows both Google accounts, the reconnect hint only for the failing one, and disconnects only that account', async () => {
+    const payload = {
+      ...statusPayload('art-engine'),
+      connections: [
+        {
+          id: 'connection-a',
+          googleAccountEmail: 'merckurov@gmail.com',
+          googleAccountName: 'Merkurov',
+          status: 'connected',
+          scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+          connectedAt: '2026-01-01T00:00:00.000Z',
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          hasRefreshToken: true,
+        },
+        {
+          id: 'connection-b',
+          googleAccountEmail: 'unframed@example.com',
+          googleAccountName: 'UNFRAMED',
+          status: 'needs_reauthorization',
+          scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+          connectedAt: '2026-01-02T00:00:00.000Z',
+          lastErrorCode: 'refresh_rejected',
+          lastErrorMessage: 'Google no longer accepts this authorization.',
+          hasRefreshToken: true,
+        },
+      ],
+      channels: [
+        {
+          id: 'channel-a',
+          connectionId: 'connection-a',
+          channelId: 'UC_art',
+          title: 'Merkurov Art',
+          handle: '@merkurov-art',
+          thumbnailUrl: null,
+          status: 'active',
+          subscriberCount: 10,
+          viewCount: 100,
+          videoCount: 5,
+        },
+        {
+          id: 'channel-b1',
+          connectionId: 'connection-b',
+          channelId: 'UC_unframed',
+          title: 'UNFRAMED',
+          handle: '@unframed-tv',
+          thumbnailUrl: null,
+          status: 'active',
+          subscriberCount: 20,
+          viewCount: 200,
+          videoCount: 6,
+        },
+        {
+          id: 'channel-b2',
+          connectionId: 'connection-b',
+          channelId: 'UC_heart',
+          title: 'Heart & Angel',
+          handle: '@heartandangel',
+          thumbnailUrl: null,
+          status: 'active',
+          subscriberCount: 30,
+          viewCount: 300,
+          videoCount: 7,
+        },
+      ],
+    };
+
+    const fetchMock = jest.fn(
+      async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+        const url = String(input);
+        if (url === '/api/admin/youtube/channels?project=art-engine') {
+          return response(payload);
+        }
+        if (url === '/api/admin/youtube/channels' && init?.method === 'POST') {
+          return response({ ok: true, action: 'disconnect', revoked: true });
+        }
+        return response({ error: 'not_found' }, false, 404);
+      }
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    render(<YouTubeProjectWorkspace project="art-engine" />);
+
+    expect(
+      await screen.findByRole('option', { name: 'merckurov@gmail.com' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'unframed@example.com' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Google no longer accepts this authorization.')
+    ).toBeInTheDocument();
+
+    const reconnectLinks = screen.getAllByRole('link', {
+      name: 'Переподключить этот аккаунт',
+    });
+    expect(reconnectLinks).toHaveLength(1);
+    expect(reconnectLinks[0].getAttribute('href')).toContain(
+      'login_hint=unframed%40example.com'
+    );
+    expect(reconnectLinks[0].getAttribute('href')).toContain('select_account=true');
+
+    const disconnectButtons = screen.getAllByRole('button', { name: 'Отозвать доступ' });
+    fireEvent.click(disconnectButtons[1]);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/admin/youtube/channels',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    const calls = fetchMock.mock.calls as unknown as FetchCall[];
+    const disconnectCall = calls.find(
+      ([url, init]) =>
+        String(url) === '/api/admin/youtube/channels' && init?.method === 'POST'
+    );
+    expect(JSON.parse(String(disconnectCall?.[1]?.body))).toMatchObject({
+      action: 'disconnect',
+      connectionId: 'connection-b',
+    });
+  });
+});
+
 describe.each(PROJECTS)('YouTube project workspace · $slug', ({ slug }) => {
   let fetchMock: jest.Mock;
 
