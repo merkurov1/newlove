@@ -2,7 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 
 import { requireAdmin } from '@/lib/serverAuth';
-import YouTubeChannelManager from '@/components/youtube/YouTubeChannelManager';
+import YouTubeProjectWorkspace from '@/components/youtube/YouTubeProjectWorkspace';
+import { isYouTubeProjectSlug, YOUTUBE_PROJECTS } from '@/lib/youtube/channels';
+
+import '../analytics/analytics.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,10 +20,28 @@ function one(params: SearchParams, key: string): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
+function noticeFrom(params: SearchParams): string | null {
+  const status = one(params, 'youtube_channels');
+
+  if (!status) return null;
+
+  if (status === 'connected') {
+    const account = one(params, 'account');
+    const channels = one(params, 'channels');
+    return `Google-аккаунт ${account || ''} подключён. Найдено каналов: ${
+      channels || '—'
+    }. Выберите канал и привяжите его к проекту.`;
+  }
+
+  const reason = one(params, 'reason') || status;
+  const missing = one(params, 'missing');
+  return `Подключение не завершено: ${reason}${missing ? ` (${missing})` : ''}.`;
+}
+
 /**
- * One shared channel manager for both project contexts. The `project` query is
- * presentation/routing metadata only: the channel connection and permissions
- * are the same owner-level resource.
+ * Project-scoped YouTube workspace. Each project resolves its own binding; a
+ * shared channel can be bound to several projects without duplicating the
+ * Google connection or its encrypted token.
  */
 export default async function YouTubeManagementPage({
   searchParams,
@@ -29,29 +50,40 @@ export default async function YouTubeManagementPage({
 }) {
   await requireAdmin();
   const params = searchParams ?? {};
-  const project = one(params, 'project') === 'unframed' ? 'unframed' : 'pierrot';
+  const rawProject = one(params, 'project');
+  const project = isYouTubeProjectSlug(rawProject) ? rawProject : 'art-engine';
 
   return (
     <div className="pw-page">
       <div className="pw-page-inner">
         <header className="pw-analytics-head">
           <div>
-            <p className="pw-kicker">YOUTUBE · SHARED CHANNEL</p>
-            <h1 className="pw-page-title">Один канал. Два проекта.</h1>
+            <p className="pw-kicker">YOUTUBE · МУЛЬТИКАНАЛЬНАЯ ИНТЕГРАЦИЯ</p>
+            <h1 className="pw-page-title">
+              {YOUTUBE_PROJECTS.find((item) => item.slug === project)?.name || project}
+            </h1>
             <p className="pw-page-lede">
-              Pierrot и UNFRAMED используют одно подключение и один выбранный канал. Аналитика и
-              управление хранятся раздельно: подключение write-доступа не меняет аналитический
-              grant.
+              Google OAuth connection, YouTube-канал и привязка к проекту — отдельные сущности.
+              Один аккаунт может владеть несколькими каналами, один канал может работать в
+              нескольких проектах. Сейчас доступны аналитика и редактирование метаданных уже
+              опубликованных видео.
             </p>
           </div>
-          <nav className="pw-segmented" aria-label="Контекст проекта">
-            <Link href="/admin/pierrot/youtube?project=pierrot">PIERROT</Link>
-            <Link href="/admin/pierrot/youtube?project=unframed">UNFRAMED</Link>
+          <nav className="pw-segmented" aria-label="Проект">
+            {YOUTUBE_PROJECTS.map((item) => (
+              <Link
+                key={item.slug}
+                href={`/admin/pierrot/youtube?project=${item.slug}`}
+                aria-current={item.slug === project ? 'page' : undefined}
+              >
+                {item.name}
+              </Link>
+            ))}
             <Link href="/admin/pierrot/analytics">ANALYTICS</Link>
           </nav>
         </header>
 
-        <YouTubeChannelManager project={project} />
+        <YouTubeProjectWorkspace project={project} notice={noticeFrom(params)} />
       </div>
     </div>
   );

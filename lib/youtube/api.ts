@@ -592,6 +592,362 @@ export async function fetchChannelResource(
   };
 }
 
+export type YouTubeOwnedChannel = {
+  channelId: string;
+  title: string | null;
+  handle: string | null;
+  uploadsPlaylistId: string | null;
+  thumbnailUrl: string | null;
+  hiddenSubscriberCount: boolean;
+  subscriberCount: number | null;
+  viewCount: number | null;
+  videoCount: number | null;
+};
+
+type RawChannelItem = {
+  id?: string;
+  snippet?: {
+    title?: string;
+    customUrl?: string;
+    thumbnails?: { default?: { url?: string } };
+  };
+  statistics?: {
+    viewCount?: string;
+    subscriberCount?: string;
+    hiddenSubscriberCount?: boolean;
+    videoCount?: string;
+  };
+  contentDetails?: { relatedPlaylists?: { uploads?: string } };
+};
+
+function mapOwnedChannel(item: RawChannelItem): YouTubeOwnedChannel | null {
+  if (!item.id) return null;
+
+  return {
+    channelId: item.id,
+    title: item.snippet?.title ?? null,
+    handle: item.snippet?.customUrl ?? null,
+    uploadsPlaylistId: item.contentDetails?.relatedPlaylists?.uploads ?? null,
+    thumbnailUrl: item.snippet?.thumbnails?.default?.url ?? null,
+    hiddenSubscriberCount: item.statistics?.hiddenSubscriberCount === true,
+    subscriberCount: toNumber(item.statistics?.subscriberCount),
+    viewCount: toNumber(item.statistics?.viewCount),
+    videoCount: toNumber(item.statistics?.videoCount),
+  };
+}
+
+/**
+ * Lists every channel visible to the grant, including Brand Accounts and
+ * several channels owned by one Google account. Pagination is bounded so an
+ * unexpected response cannot turn one click into an unbounded crawl.
+ */
+export async function listMyChannels(
+  auth: YouTubeAuth,
+  options: RequestOptions & { maxPages?: number } = {}
+): Promise<{ channels: YouTubeOwnedChannel[]; truncated: boolean }> {
+  if (!auth.accessToken) {
+    throw new YouTubeError({
+      code: 'needs_reauthorization',
+      message: 'Listing channels requires an owner OAuth connection.',
+      stage: 'data.channels',
+    });
+  }
+
+  const maxPages = Math.max(1, Math.min(options.maxPages ?? 10, 20));
+  const channels: YouTubeOwnedChannel[] = [];
+  let pageToken: string | null = null;
+
+  for (let page = 0; page < maxPages; page += 1) {
+    const url = new URL(`${YOUTUBE_DATA_API}/channels`);
+    url.searchParams.set('part', 'snippet,statistics,contentDetails');
+    url.searchParams.set('mine', 'true');
+    url.searchParams.set('maxResults', '50');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+
+    const raw = await requestJson<{
+      items?: RawChannelItem[];
+      nextPageToken?: string;
+    }>(
+      withKey(url, auth),
+      { method: 'GET', headers: authHeaders(auth), cache: 'no-store' },
+      { ...options, stage: 'data.channels.mine' }
+    );
+
+    channels.push(
+      ...(raw.items ?? [])
+        .map(mapOwnedChannel)
+        .filter((item): item is YouTubeOwnedChannel => Boolean(item))
+    );
+
+    if (!raw.nextPageToken) {
+      return {
+        channels: Array.from(new Map(channels.map((item) => [item.channelId, item])).values()),
+        truncated: false,
+      };
+    }
+
+    pageToken = raw.nextPageToken;
+  }
+
+  return {
+    channels: Array.from(new Map(channels.map((item) => [item.channelId, item])).values()),
+    truncated: true,
+  };
+}
+
+export type UploadCatalogPage = {
+  videoIds: string[];
+  nextPageToken: string | null;
+  totalResults: number | null;
+};
+
+/** One page of the uploads playlist. The page token is opaque to the caller. */
+export async function fetchUploadsPage(
+  auth: YouTubeAuth,
+  uploadsPlaylistId: string,
+  options: RequestOptions & { pageToken?: string | null; maxResults?: number } = {}
+): Promise<UploadCatalogPage> {
+  if (!uploadsPlaylistId.trim()) {
+    throw new YouTubeError({
+      code: 'invalid_request',
+      message: 'The channel does not expose an uploads playlist.',
+      stage: 'data.playlistItems',
+    });
+  }
+
+  const url = new URL(`${YOUTUBE_DATA_API}/playlistItems`);
+  url.searchParams.set('part', 'contentDetails');
+  url.searchParams.set('playlistId', uploadsPlaylistId);
+  url.searchParams.set(
+    'maxResults',
+    String(Math.max(1, Math.min(options.maxResults ?? 50, 50)))
+  );
+  if (options.pageToken) url.searchParams.set('pageToken', options.pageToken);
+
+  const raw = await requestJson<{
+    items?: Array<{ contentDetails?: { videoId?: string } }>;
+    nextPageToken?: string;
+    pageInfo?: { totalResults?: number };
+  }>(
+    withKey(url, auth),
+    { method: 'GET', headers: authHeaders(auth), cache: 'no-store' },
+    { ...options, stage: 'data.playlistItems.page' }
+  );
+
+  return {
+    videoIds: (raw.items ?? [])
+      .map((item) => item.contentDetails?.videoId)
+      .filter((value): value is string => Boolean(value)),
+    nextPageToken: raw.nextPageToken ?? null,
+    totalResults:
+      typeof raw.pageInfo?.totalResults === 'number' ? raw.pageInfo.totalResults : null,
+  };
+}
+
+export type YouTubeVideoDetails = {
+  videoId: string;
+  channelId: string | null;
+  title: string;
+  description: string;
+  tags: string[];
+  categoryId: string | null;
+  defaultLanguage: string | null;
+  defaultAudioLanguage: string | null;
+  localized: Record<string, string> | null;
+  publishedAt: string | null;
+  thumbnailUrl: string | null;
+  privacyStatus: string | null;
+  uploadStatus: string | null;
+  publishAt: string | null;
+  madeForKids: boolean | null;
+  embeddable: boolean | null;
+  license: string | null;
+  publicStatsViewable: boolean | null;
+  durationSeconds: number | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+};
+
+type RawVideoDetails = {
+  id?: string;
+  snippet?: {
+    channelId?: string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+    categoryId?: string;
+    defaultLanguage?: string;
+    defaultAudioLanguage?: string;
+    localized?: Record<string, string>;
+    publishedAt?: string;
+    thumbnails?: { default?: { url?: string } };
+  };
+  status?: {
+    privacyStatus?: string;
+    uploadStatus?: string;
+    publishAt?: string;
+    madeForKids?: boolean;
+    embeddable?: boolean;
+    license?: string;
+    publicStatsViewable?: boolean;
+  };
+  contentDetails?: { duration?: string };
+  statistics?: { viewCount?: string; likeCount?: string; commentCount?: string };
+};
+
+function mapVideoDetails(item: RawVideoDetails): YouTubeVideoDetails | null {
+  if (!item.id) return null;
+
+  return {
+    videoId: item.id,
+    channelId: item.snippet?.channelId ?? null,
+    title: item.snippet?.title ?? '',
+    description: item.snippet?.description ?? '',
+    tags: Array.isArray(item.snippet?.tags)
+      ? item.snippet.tags.filter((tag): tag is string => typeof tag === 'string')
+      : [],
+    categoryId: item.snippet?.categoryId ?? null,
+    defaultLanguage: item.snippet?.defaultLanguage ?? null,
+    defaultAudioLanguage: item.snippet?.defaultAudioLanguage ?? null,
+    localized: item.snippet?.localized ?? null,
+    publishedAt: item.snippet?.publishedAt ?? null,
+    thumbnailUrl: item.snippet?.thumbnails?.default?.url ?? null,
+    privacyStatus: item.status?.privacyStatus ?? null,
+    uploadStatus: item.status?.uploadStatus ?? null,
+    publishAt: item.status?.publishAt ?? null,
+    madeForKids: typeof item.status?.madeForKids === 'boolean' ? item.status.madeForKids : null,
+    embeddable: typeof item.status?.embeddable === 'boolean' ? item.status.embeddable : null,
+    license: item.status?.license ?? null,
+    publicStatsViewable:
+      typeof item.status?.publicStatsViewable === 'boolean'
+        ? item.status.publicStatsViewable
+        : null,
+    durationSeconds: parseIsoDuration(item.contentDetails?.duration),
+    views: toNumber(item.statistics?.viewCount),
+    likes: toNumber(item.statistics?.likeCount),
+    comments: toNumber(item.statistics?.commentCount),
+  };
+}
+
+/** Full snippet + status for the metadata editor. Read-only. */
+export async function fetchVideoDetails(
+  auth: YouTubeAuth,
+  videoIds: string[],
+  options: RequestOptions = {}
+): Promise<YouTubeVideoDetails[]> {
+  const ids = Array.from(new Set(videoIds.map(assertVideoId))).slice(0, 50);
+
+  if (ids.length === 0) return [];
+
+  const url = new URL(`${YOUTUBE_DATA_API}/videos`);
+  url.searchParams.set('part', 'snippet,status,contentDetails,statistics');
+  url.searchParams.set('id', ids.join(','));
+
+  const raw = await requestJson<{ items?: RawVideoDetails[] }>(
+    withKey(url, auth),
+    { method: 'GET', headers: authHeaders(auth), cache: 'no-store' },
+    { ...options, stage: 'data.videos.details' }
+  );
+
+  return (raw.items ?? [])
+    .map(mapVideoDetails)
+    .filter((item): item is YouTubeVideoDetails => Boolean(item));
+}
+
+export async function fetchVideoDetail(
+  auth: YouTubeAuth,
+  videoId: string,
+  options: RequestOptions = {}
+): Promise<YouTubeVideoDetails> {
+  const [video] = await fetchVideoDetails(auth, [videoId], options);
+
+  if (!video) {
+    throw new YouTubeError({
+      code: 'resource_not_found',
+      message: 'The requested video was not found or is not accessible.',
+      stage: 'data.videos.details',
+    });
+  }
+
+  return video;
+}
+
+export type EditableVideoMetadata = {
+  title: string;
+  description: string;
+  tags: string[];
+};
+
+export type VideoSnippetMerge = {
+  snippet: Record<string, unknown>;
+  before: EditableVideoMetadata;
+  after: EditableVideoMetadata;
+  changedFields: Array<'title' | 'description' | 'tags'>;
+  preservedFields: string[];
+};
+
+/**
+ * Builds a `videos.update` snippet from the current resource so fields the
+ * owner did not edit (categoryId, defaultLanguage, defaultAudioLanguage,
+ * localized, and absent tags) survive the round trip.
+ */
+export function mergeEditableVideoSnippet(
+  current: YouTubeVideoDetails,
+  changes: Partial<EditableVideoMetadata>
+): VideoSnippetMerge {
+  const before: EditableVideoMetadata = {
+    title: current.title,
+    description: current.description,
+    tags: [...current.tags],
+  };
+  const after: EditableVideoMetadata = {
+    title: changes.title !== undefined ? changes.title : before.title,
+    description: changes.description !== undefined ? changes.description : before.description,
+    tags: changes.tags !== undefined ? [...changes.tags] : before.tags,
+  };
+  const snippet: Record<string, unknown> = {
+    title: after.title,
+    description: after.description,
+  };
+  const preservedFields: string[] = [];
+
+  if (changes.tags !== undefined || current.tags.length > 0) {
+    snippet.tags = after.tags;
+  } else {
+    preservedFields.push('tags');
+  }
+
+  if (current.categoryId) {
+    snippet.categoryId = current.categoryId;
+    preservedFields.push('categoryId');
+  }
+
+  if (current.defaultLanguage) {
+    snippet.defaultLanguage = current.defaultLanguage;
+    preservedFields.push('defaultLanguage');
+  }
+
+  if (current.defaultAudioLanguage) {
+    snippet.defaultAudioLanguage = current.defaultAudioLanguage;
+    preservedFields.push('defaultAudioLanguage');
+  }
+
+  // `snippet.localized` is read-only in videos.update. It is listed as
+  // preserved but intentionally not sent; YouTube derives it from the
+  // localized metadata store rather than from this request.
+  if (current.localized) {
+    preservedFields.push('localized');
+  }
+
+  const changedFields: VideoSnippetMerge['changedFields'] = [];
+  if (after.title !== before.title) changedFields.push('title');
+  if (after.description !== before.description) changedFields.push('description');
+  if (after.tags.join('\n') !== before.tags.join('\n')) changedFields.push('tags');
+
+  return { snippet, before, after, changedFields, preservedFields };
+}
+
 export type YouTubeVideoResource = {
   id: string;
   title: string | null;

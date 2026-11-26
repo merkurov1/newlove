@@ -8,6 +8,7 @@ import {
 import { exchangeGoogleCode, fetchGoogleUserInfo } from '@/lib/analytics/website/providers/oauth';
 import { verifyState, sealSecret } from '@/lib/analytics/website/tokenCrypto';
 import { getStoredConnection } from '@/lib/analytics/website/store';
+import { handleYouTubeChannelsCallback } from '@/lib/youtube/channelsCallback';
 import { runYouTubeManagementDiscovery } from '@/lib/youtube/discovery';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
 
@@ -43,6 +44,19 @@ function exchangeReason(error: unknown): string {
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
+
+  // The multi-channel flow reuses this already-registered callback by default.
+  // Its signed state carries a different purpose, so it is handled separately
+  // and never touches the legacy single-channel management grant.
+  const earlyState = url.searchParams.get('state');
+  const earlyPayload = earlyState
+    ? verifyState<{ purpose?: string }>(earlyState, getSyncOwnerSecret())
+    : null;
+
+  if (earlyPayload?.purpose === 'youtube_channels') {
+    return handleYouTubeChannelsCallback(request);
+  }
+
   const error = url.searchParams.get('error');
 
   if (error) {

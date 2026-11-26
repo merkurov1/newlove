@@ -13,6 +13,10 @@ export type YouTubeManagementAuditInput = {
   channelId?: string | null;
   targetId?: string | null;
   errorCode?: string | null;
+  /** Field names only. Never values, descriptions or tokens. */
+  changedFields?: string[] | null;
+  /** Short non-sensitive result, for example "updated 2 fields". */
+  resultSummary?: string | null;
 };
 
 /**
@@ -36,6 +40,8 @@ export async function recordYouTubeManagementAudit(
       destructive: definition.destructive,
       external: definition.external,
       error_code: input.errorCode?.slice(0, 120) ?? null,
+      changed_fields: input.changedFields?.slice(0, 10) ?? null,
+      result_summary: input.resultSummary?.slice(0, 200) ?? null,
     });
 
     if (error) {

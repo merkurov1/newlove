@@ -5,8 +5,12 @@ import {
   classifyYouTubeFailure,
   fetchChannelResource,
   fetchUploadVideoIds,
+  fetchVideoDetail,
   fetchVideoResources,
+  mergeEditableVideoSnippet,
+  type EditableVideoMetadata,
   type FetchLike,
+  type YouTubeVideoDetails,
 } from './api';
 import {
   YOUTUBE_DATA_API,
@@ -48,6 +52,12 @@ export const YOUTUBE_MANAGEMENT_ACTIONS = {
   },
   'video.upload': { capability: 'videos', write: true, destructive: false, external: true },
   'video.update': { capability: 'videos', write: true, destructive: false, external: true },
+  'video.metadata.update': {
+    capability: 'videos',
+    write: true,
+    destructive: false,
+    external: true,
+  },
   'video.thumbnail': { capability: 'thumbnail', write: true, destructive: false, external: true },
   'playlist.list': { capability: 'playlists', write: false, destructive: false, external: false },
   'playlist.create': { capability: 'playlists', write: true, destructive: false, external: true },
@@ -448,16 +458,32 @@ export async function updateVideoMetadata(
   input: UpdateVideoInput
 ): Promise<YouTubeVideoSummary> {
   const videoId = assertVideoId(input.videoId);
-  const snippet: Record<string, unknown> = {
-    ...(input.title !== undefined ? { title: text(input.title, 'Title', 100) } : {}),
-    ...(input.description !== undefined
-      ? { description: optionalText(input.description, 'Description', 5_000) ?? '' }
-      : {}),
-    ...(input.tags !== undefined ? { tags: tags(input.tags) ?? [] } : {}),
-    ...(input.categoryId !== undefined
-      ? { categoryId: text(input.categoryId, 'Category', 10) }
-      : {}),
-  };
+  const changesSnippet =
+    input.title !== undefined ||
+    input.description !== undefined ||
+    input.tags !== undefined ||
+    input.categoryId !== undefined;
+  const snippet: Record<string, unknown> = {};
+
+  if (changesSnippet) {
+    // `videos.update?part=snippet` replaces the whole snippet. Read the current
+    // resource first and re-send every writable field the caller did not edit.
+    const current = await fetchVideoDetail(auth, videoId, { fetchImpl: auth.fetchImpl });
+    const merged = mergeEditableVideoSnippet(current, {
+      title: input.title !== undefined ? text(input.title, 'Title', 100) : undefined,
+      description:
+        input.description !== undefined
+          ? optionalText(input.description, 'Description', 5_000) ?? ''
+          : undefined,
+      tags: input.tags !== undefined ? tags(input.tags) ?? [] : undefined,
+    });
+    Object.assign(snippet, merged.snippet);
+
+    if (input.categoryId !== undefined) {
+      snippet.categoryId = text(input.categoryId, 'Category', 10);
+    }
+  }
+
   const status: Record<string, unknown> = {
     ...(input.privacyStatus !== undefined ? { privacyStatus: privacy(input.privacyStatus) } : {}),
     ...(input.publishAt !== undefined ? { publishAt: input.publishAt } : {}),
@@ -511,6 +537,129 @@ export async function updateVideoMetadata(
       durationSeconds: null,
     }
   );
+}
+
+export type EditableVideoUpdateResult = {
+  videoId: string;
+  changedFields: Array<'title' | 'description' | 'tags'>;
+  preservedFields: string[];
+  before: EditableVideoMetadata;
+  after: EditableVideoMetadata;
+  privacyStatus: string | null;
+  defaultLanguage: string | null;
+  categoryId: string | null;
+};
+
+function editableText(value: unknown, label: string, maxLength: number): string {
+  if (typeof value !== 'string') {
+    throw new YouTubeError({
+      code: 'invalid_request',
+      message: `${label} must be a string.`,
+      stage: 'management_validation',
+    });
+  }
+
+  if (value.length > maxLength) {
+    throw new YouTubeError({
+      code: 'invalid_request',
+      message: `${label} is too long.`,
+      stage: 'management_validation',
+    });
+  }
+
+  return value;
+}
+
+/**
+ * Owner-confirmed metadata edit for an already published video.
+ *
+ * YouTube's `videos.update` replaces the requested part. This function reads
+ * the current video first and re-sends every writable snippet field the owner
+ * cannot edit here, so categoryId, defaultLanguage, defaultAudioLanguage,
+ * localized metadata and existing tags are not silently cleared. `status` is
+ * never sent, which leaves privacy/visibility untouched.
+ */
+export async function updateEditableVideoMetadata(
+  auth: YouTubeManagementAuth,
+  input: {
+    videoId: string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+  }
+): Promise<EditableVideoUpdateResult> {
+  const videoId = assertVideoId(input.videoId);
+
+  const changes: Partial<EditableVideoMetadata> = {};
+
+  if (input.title !== undefined) {
+    const title = editableText(input.title, 'Title', 100);
+    if (!title.trim()) {
+      throw new YouTubeError({
+        code: 'invalid_request',
+        message: 'Title cannot be empty.',
+        stage: 'management_validation',
+      });
+    }
+    changes.title = title;
+  }
+
+  if (input.description !== undefined) {
+    changes.description = editableText(input.description, 'Description', 5_000);
+  }
+
+  if (input.tags !== undefined) {
+    changes.tags = tags(input.tags) ?? [];
+  }
+
+  if (Object.keys(changes).length === 0) {
+    throw new YouTubeError({
+      code: 'invalid_request',
+      message: 'Choose at least one metadata field to edit.',
+      stage: 'management_validation',
+    });
+  }
+
+  const current: YouTubeVideoDetails = await fetchVideoDetail(auth, videoId, {
+    fetchImpl: auth.fetchImpl,
+  });
+  const merged = mergeEditableVideoSnippet(current, changes);
+
+  if (merged.changedFields.length === 0) {
+    throw new YouTubeError({
+      code: 'invalid_request',
+      message: 'The proposed metadata is identical to the current video.',
+      stage: 'management_validation',
+    });
+  }
+
+  const response = await managementFetch(
+    auth,
+    `${YOUTUBE_DATA_API}/videos?part=snippet`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json; charset=UTF-8' },
+      body: JSON.stringify({ id: videoId, snippet: merged.snippet }),
+    },
+    { stage: 'management.videos.update.metadata', retries: 1 }
+  );
+
+  const raw = await json<{
+    id?: string;
+    snippet?: { defaultLanguage?: string; categoryId?: string };
+    status?: { privacyStatus?: string };
+  }>(response);
+
+  return {
+    videoId: raw.id ?? videoId,
+    changedFields: merged.changedFields,
+    preservedFields: merged.preservedFields,
+    before: merged.before,
+    after: merged.after,
+    privacyStatus: raw.status?.privacyStatus ?? current.privacyStatus,
+    defaultLanguage: raw.snippet?.defaultLanguage ?? current.defaultLanguage,
+    categoryId: raw.snippet?.categoryId ?? current.categoryId,
+  };
 }
 
 export async function setVideoThumbnail(

@@ -114,6 +114,23 @@ describe('YouTube management writes', () => {
 
   it('updates metadata, sets a thumbnail and manages playlists', async () => {
     const { calls, fetchImpl } = recorder([
+      () =>
+        jsonResponse({
+          items: [
+            {
+              id: 'TmC6Lr5K4R8',
+              snippet: {
+                title: 'Title',
+                description: 'Existing description',
+                tags: ['existing'],
+                categoryId: '27',
+                defaultLanguage: 'ru',
+                publishedAt: '2026-11-01T00:00:00.000Z',
+              },
+              status: { privacyStatus: 'private' },
+            },
+          ],
+        }),
       () => jsonResponse(video),
       () => jsonResponse({ items: [{ default: 'https://img.example/t.jpg' }] }),
       () =>
@@ -152,11 +169,20 @@ describe('YouTube management writes', () => {
     await removeVideoFromPlaylist(client, { playlistItemId: 'PLI1' });
     const listed = await listPlaylists(client);
 
-    expect(calls[0].url).toContain('/videos?part=snippet,status');
-    expect(calls[0].init.method).toBe('PUT');
-    expect(calls[1].url).toContain('/thumbnails/set?videoId=TmC6Lr5K4R8');
-    expect(calls[4].init.method).toBe('DELETE');
-    expect(calls[5].url).toContain('/playlistItems?part=snippet');
+    expect(calls[0].url).toContain('/videos?part=snippet%2Cstatus%2CcontentDetails%2Cstatistics');
+    expect(calls[0].init.method).toBe('GET');
+    expect(calls[1].url).toContain('/videos?part=snippet,status');
+    expect(calls[1].init.method).toBe('PUT');
+    expect(JSON.parse(String(calls[1].init.body)).snippet).toMatchObject({
+      title: 'New title',
+      description: 'Existing description',
+      tags: ['existing'],
+      categoryId: '27',
+      defaultLanguage: 'ru',
+    });
+    expect(calls[2].url).toContain('/thumbnails/set?videoId=TmC6Lr5K4R8');
+    expect(calls[5].init.method).toBe('DELETE');
+    expect(calls[6].url).toContain('/playlistItems?part=snippet');
     expect(listed[0]).toMatchObject({ playlistId: 'PL1', title: 'UNFRAMED' });
   });
 
