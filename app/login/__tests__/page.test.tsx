@@ -73,6 +73,61 @@ describe('Login page', () => {
     );
   });
 
+  it('keeps the Vigil return path while opening Register mode', () => {
+    mockSearchParams = new URLSearchParams('mode=register&next=%2Fvigil');
+
+    render(<LoginPage />);
+
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Register' })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    expect(screen.getByRole('link', { name: 'Register' })).toHaveAttribute(
+      'href',
+      '/login?mode=register&next=%2Fvigil'
+    );
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fvigil'
+    );
+  });
+
+  it('returns to /vigil after an already initialized session is confirmed', async () => {
+    mockSearchParams = new URLSearchParams('next=%2Fvigil');
+    mockAuth = {
+      ...mockAuth,
+      user: { id: 'user-vigil' },
+      isLoading: false,
+    };
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(push).toHaveBeenCalledWith('/vigil');
+    });
+
+    expect(push).not.toHaveBeenCalledWith('/art-engine');
+  });
+
+  it('ignores an external next and falls back to the safe default path', async () => {
+    mockSearchParams = new URLSearchParams('next=https%3A%2F%2Fevil.example');
+
+    render(<LoginPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+        'href',
+        '/login?next=%2Fart-engine'
+      );
+    });
+
+    expect(screen.getByRole('link', { name: 'Register' })).toHaveAttribute(
+      'href',
+      '/login?mode=register&next=%2Fart-engine'
+    );
+  });
+
   it('surfaces a Google OAuth failure instead of leaving an unhandled rejection', async () => {
     mockAuth.signInWithGoogle.mockRejectedValueOnce(new Error('OAuth unavailable'));
 

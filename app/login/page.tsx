@@ -43,6 +43,7 @@ function LoginClient() {
   const [pending, setPending] = useState<PendingMethod>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [returnTo, setReturnTo] = useState(DEFAULT_RETURN_PATH);
+  const [returnPathReady, setReturnPathReady] = useState(false);
 
   const callbackErrorHandledRef = useRef(false);
   const otpInputRef = useRef<HTMLInputElement | null>(null);
@@ -70,6 +71,7 @@ function LoginClient() {
     });
 
     setReturnTo(resolved);
+    setReturnPathReady(true);
 
     try {
       // AuthContext reads this value when it builds the OAuth redirect.
@@ -90,10 +92,10 @@ function LoginClient() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isLoading && user) {
+    if (!isLoading && user && returnPathReady) {
       router.push(returnTo);
     }
-  }, [user, isLoading, router, returnTo]);
+  }, [user, isLoading, router, returnTo, returnPathReady]);
 
   useEffect(() => {
     if (emailSent) {

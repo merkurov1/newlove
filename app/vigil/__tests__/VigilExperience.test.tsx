@@ -535,4 +535,18 @@ describe('/vigil shared flame surface', () => {
       '/login?next=%2Fvigil'
     );
   });
+
+  it('keeps the same account access link inside the intercepted modal', () => {
+    identityModule.default.mockReturnValue(identity({ status: 'anonymous' }));
+
+    render(<VigilExperience presentation="modal" />);
+
+    expect(screen.getByRole('link', { name: /^sign in$/i })).toHaveAttribute(
+      'href',
+      '/login?next=%2Fvigil'
+    );
+    expect(
+      screen.getByRole('button', { name: /sign in to send a spark/i })
+    ).toBeDisabled();
+  });
 });

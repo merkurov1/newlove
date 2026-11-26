@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
 import { logTempleEvent } from '@/lib/templeLogger';
@@ -43,7 +43,9 @@ export default function RitualModal({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const goBack = router.back;
+  const isActiveRoute = pathname === canonicalPath;
   const dialogRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -88,12 +90,17 @@ export default function RitualModal({
   });
 
   useEffect(() => {
-    if (!revealOpen) return;
+    if (!revealOpen || !isActiveRoute) return;
 
     closeButtonRef.current?.focus();
-  }, [revealOpen]);
+  }, [isActiveRoute, revealOpen]);
 
   useEffect(() => {
+    // Parallel-route slots can keep their last intercepted page mounted while
+    // the URL moves on. A ritual must never remain as an overlay above an
+    // unrelated route (for example /login), or the destination looks inert.
+    if (!isActiveRoute) return;
+
     startedAtRef.current = Date.now();
     finalizedRef.current = false;
     returnFocusRef.current = document.activeElement as HTMLElement | null;
@@ -154,7 +161,9 @@ export default function RitualModal({
       unregisterBack();
       returnFocusRef.current?.focus?.();
     };
-  }, [closeWithReveal, finalizeVisit]);
+  }, [closeWithReveal, finalizeVisit, isActiveRoute]);
+
+  if (!isActiveRoute) return null;
 
   return (
     <div
