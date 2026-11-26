@@ -1799,6 +1799,8 @@ async function internalSnapshot(
         suspectedAutomated: newsletterMetrics.suspectedAutomated,
         rateLimited: newsletterMetrics.rateLimited,
         blockedReasons: newsletterMetrics.blockedReasons,
+        confirmationRate: newsletterMetrics.confirmationRate,
+        signupSpike: newsletterMetrics.signupSpike,
       },
       jobs: {
         total: newsletterJobs.length,

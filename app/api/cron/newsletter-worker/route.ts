@@ -3,7 +3,10 @@ import { createId } from '@paralleldrive/cuid2';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
-import { filterSubscribersByLang } from '@/lib/newsletter/language';
+import {
+  excludeProcessedSubscribers,
+  fetchNewsletterRecipients,
+} from '@/lib/newsletter/recipients';
 import { beginWorkerInvocation } from '@/lib/operations/guard';
 import { workerLimits } from '@/lib/operations/config';
 
@@ -162,10 +165,10 @@ async function handleWorker(request: Request) {
         return NextResponse.json({ error: 'Issue has already been sent' }, { status: 409 });
       }
 
-      const { data: allSubscribers, error: subsError } = await supabase
-        .from('subscribers')
-        .select('id,email,locale')
-        .eq('isActive', true);
+      const { recipients, error: subsError } = await fetchNewsletterRecipients(
+        supabase,
+        letter.lang
+      );
 
       if (subsError) {
         await supabase
@@ -180,19 +183,32 @@ async function handleWorker(request: Request) {
         return NextResponse.json({ error: 'Failed to fetch subscribers' }, { status: 500 });
       }
 
-      let subscribers = filterSubscribersByLang(allSubscribers || [], letter.lang);
+      let subscribers = recipients;
 
-      const { data: sentLogs } = await supabase
+      const { data: sentLogs, error: sentLogsError } = await supabase
         .from('newsletter_logs')
         .select('subscriber_id')
         .eq('job_id', job.id)
         .in('status', ['sent', 'skipped', 'failed']);
 
+      if (sentLogsError) {
+        await supabase
+          .from('newsletter_jobs')
+          .update({
+            status: 'pending',
+            error_message: 'Could not verify already processed recipients',
+          })
+          .eq('id', job.id);
+
+        return NextResponse.json(
+          { error: 'Could not verify already processed recipients' },
+          { status: 500 }
+        );
+      }
+
       if (Array.isArray(sentLogs) && sentLogs.length > 0) {
         const alreadyProcessed = new Set(sentLogs.map((row) => String(row.subscriber_id)));
-        subscribers = subscribers.filter(
-          (subscriber) => !alreadyProcessed.has(String(subscriber.id))
-        );
+        subscribers = excludeProcessedSubscribers(subscribers, alreadyProcessed);
       }
 
       if (!subscribers?.length) {

@@ -269,6 +269,24 @@ describe('POST /api/subscribe bot controls', () => {
     expect(emailModule.sendSubscriptionConfirmation).not.toHaveBeenCalled();
   });
 
+  it('fails closed in production when Turnstile is not configured', async () => {
+    const fake = makeStore();
+    serverAuth.getServerSupabaseClient.mockReturnValue(fake.store);
+    botModule.verifyTurnstileToken.mockResolvedValue({
+      ok: false,
+      reason: 'not_configured',
+    });
+
+    const response = await POST(makeRequest({ turnstileToken: '' }));
+
+    expect(response.status).toBe(503);
+    expect(fake.inserts).toHaveLength(0);
+    expect(emailModule.sendSubscriptionConfirmation).not.toHaveBeenCalled();
+    expect(fake.events[0]).toMatchObject({
+      payload: { reason: 'turnstile_not_configured' },
+    });
+  });
+
   it('returns 429 when the durable layered limiter rejects the IP or email', async () => {
     const fake = makeStore();
     serverAuth.getServerSupabaseClient.mockReturnValue(fake.store);

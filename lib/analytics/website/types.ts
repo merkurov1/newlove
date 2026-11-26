@@ -341,6 +341,15 @@ export type InternalSnapshot = {
       suspectedAutomated: number | null;
       rateLimited: number | null;
       blockedReasons: Record<string, number>;
+      confirmationRate: number | null;
+      signupSpike: {
+        detected: boolean;
+        latestHourCount: number;
+        baselineHourlyAverage: number;
+        threshold: number;
+        minCount: number;
+        windowHours: number;
+      } | null;
     };
     jobs: {
       total: number | null;

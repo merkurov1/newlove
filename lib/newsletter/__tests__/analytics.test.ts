@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from '@jest/globals';
 
-import { classifyNewsletterAudience } from '../analytics';
+import { classifyNewsletterAudience, detectNewsletterSignupSpike } from '../analytics';
 
 const subscribers = [
   { isActive: true, confirmedAt: '2026-01-01T00:00:00.000Z', unsubscribedAt: null },
@@ -89,5 +89,37 @@ describe('newsletter analytics classification', () => {
 
     expect(metrics.confirmed).toBe(1);
     expect(metrics.suspectedAutomated).toBe(0);
+  });
+
+  it('reports a confirmation rate and flags a signup burst without reading addresses', () => {
+    const now = new Date('2026-11-20T11:59:00.000Z');
+    const burst = Array.from({ length: 12 }, (_, index) => ({
+      event_name: 'subscription_submitted',
+      event_key: `submitted-${index}`,
+      subscriber_id: `sub-${index}`,
+      created_at: `2026-11-20T11:${String(index * 4).padStart(2, '0')}:00.000Z`,
+      payload: { status: 'pending_confirmation' },
+    }));
+
+    const metrics = classifyNewsletterAudience(subscribers, [...events, ...burst], now);
+
+    expect(metrics.confirmationRate).toBeCloseTo(2 / 4);
+    expect(metrics.signupSpike).toMatchObject({
+      detected: true,
+      latestHourCount: 12,
+    });
+  });
+
+  it('does not call a normal trickle a spike', () => {
+    const now = new Date('2026-11-20T12:00:00.000Z');
+    const event = {
+      event_name: 'subscription_submitted',
+      event_key: 'one',
+      subscriber_id: 'sub-1',
+      created_at: '2026-11-20T11:10:00.000Z',
+      payload: {},
+    };
+
+    expect(detectNewsletterSignupSpike([event], { now })).toMatchObject({ detected: false });
   });
 });

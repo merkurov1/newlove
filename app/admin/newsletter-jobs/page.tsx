@@ -52,6 +52,12 @@ export default async function NewsletterJobsPage() {
 
   const jobs = await getNewsletterJobs();
 
+  const turnstileSiteKeyConfigured = Boolean(
+    (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '').trim()
+  );
+  const turnstileSecretConfigured = Boolean((process.env.TURNSTILE_SECRET_KEY || '').trim());
+  const turnstileReady = turnstileSiteKeyConfigured && turnstileSecretConfigured;
+
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
     processing: 'bg-blue-100 text-blue-800 border-blue-300',
@@ -71,6 +77,42 @@ export default async function NewsletterJobsPage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">📊 Newsletter Jobs Monitor</h1>
         <p className="text-gray-600">Мониторинг отправки рассылок</p>
+      </div>
+
+      {!turnstileReady && (
+        <div className="mb-6 bg-amber-50 border border-amber-300 rounded-md p-4">
+          <p className="text-amber-900 font-semibold">
+            ⚠️ Защита формы подписки не настроена полностью
+          </p>
+          <p className="text-sm text-amber-800 mt-1">
+            {turnstileSiteKeyConfigured ? '✅' : '❌'} NEXT_PUBLIC_TURNSTILE_SITE_KEY (публичный
+            ключ Cloudflare Turnstile)
+          </p>
+          <p className="text-sm text-amber-800">
+            {turnstileSecretConfigured ? '✅' : '❌'} TURNSTILE_SECRET_KEY (серверный секрет, не
+            выводится)
+          </p>
+          <p className="text-sm text-amber-800 mt-2">
+            В production без секрета публичная подписка закрыта (fail-closed). Существующие
+            подписчики и отправка выпусков не блокируются. Добавьте обе переменные в Vercel
+            Environment Variables для Production (и Preview при необходимости).
+          </p>
+        </div>
+      )}
+
+      <div className="mb-6 flex flex-wrap gap-3">
+        <a
+          href="/api/admin/newsletter/preview?lang=ru"
+          className="inline-block px-4 py-2 bg-[#990F3D] text-white rounded-md hover:opacity-90"
+        >
+          🔍 Предпросмотр RU-аудитории (без отправки)
+        </a>
+        <a
+          href="/api/admin/newsletter/preview?lang=en"
+          className="inline-block px-4 py-2 bg-gray-700 text-white rounded-md hover:opacity-90"
+        >
+          🔍 Предпросмотр EN-аудитории (без отправки)
+        </a>
       </div>
 
       {jobs.length === 0 ? (

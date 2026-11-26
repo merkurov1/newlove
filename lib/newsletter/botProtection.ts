@@ -50,7 +50,17 @@ export type TurnstileFailureReason =
   | 'invalid'
   | 'expired'
   | 'provider_unavailable'
-  | 'invalid_response';
+  | 'invalid_response'
+  | 'not_configured';
+
+/**
+ * Turnstile must never silently disappear in production. Preview deployments
+ * may run without keys (owners often wire them after the first deploy), but a
+ * production runtime without a secret fails closed.
+ */
+export function isProductionRuntime(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.NODE_ENV === 'production' || env.VERCEL_ENV === 'production';
+}
 
 export type TurnstileVerificationResult =
   | { ok: true; skipped: boolean }
@@ -68,8 +78,9 @@ function turnstileErrorCodes(body: TurnstileResponse): string[] {
 
 /**
  * Verifies a Cloudflare Turnstile token on the server. When no secret is
- * configured the check is explicitly skipped so older deployments keep
- * working; production should configure both the site key and the secret.
+ * configured the check is skipped outside production so local development and
+ * preview deployments keep working. In production a missing secret fails
+ * closed: a silent skip would turn a challenge into no protection at all.
  *
  * The token, secret and remote IP are never logged.
  */
@@ -77,13 +88,17 @@ export async function verifyTurnstileToken(input: {
   token: unknown;
   remoteIp?: string | null;
   secretKey?: string;
+  requireConfigured?: boolean;
   fetchImpl?: typeof fetch;
   timeoutMs?: number;
 }): Promise<TurnstileVerificationResult> {
   const secret = (input.secretKey ?? process.env.TURNSTILE_SECRET_KEY ?? '').trim();
 
   if (!secret) {
-    return { ok: true, skipped: true };
+    const requireConfigured = input.requireConfigured ?? isProductionRuntime();
+    return requireConfigured
+      ? { ok: false, reason: 'not_configured' }
+      : { ok: true, skipped: true };
   }
 
   const token = typeof input.token === 'string' ? input.token.trim() : '';
