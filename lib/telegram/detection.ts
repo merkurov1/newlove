@@ -51,6 +51,11 @@ const DETECTING_SNAPSHOT: TelegramEnvironment = Object.freeze({
 const SCRIPT_SELECTOR = 'script[src*="telegram-web-app.js"]';
 const POLL_BASE_MS = 50;
 const POLL_MAX_MS = 1_000;
+// If neither the SDK object, a Telegram launch hash nor the WebView bridge is
+// observable within this window, the page is an ordinary browser. A later SDK
+// load still flips the shared store back to Telegram, so this only prevents an
+// unrelated/blocked script from leaving the UI in "Preparing your identity…".
+const DETECTING_FALLBACK_MS = 5_000;
 // The real SDK always reports `platform` (`unknown` in a normal browser), but
 // older/partial builds can leave it empty. Give such an SDK a short settling
 // window before calling it a browser, while the shared poll keeps watching for
@@ -63,6 +68,7 @@ type SdkLoadState = 'unknown' | 'loaded' | 'error';
 let snapshot: TelegramEnvironment = DETECTING_SNAPSHOT;
 let sdkLoadState: SdkLoadState = 'unknown';
 let webAppFirstSeenAt: number | null = null;
+let observationStartedAt: number | null = null;
 
 let watcherStarted = false;
 let pollTimer: number | null = null;
@@ -197,6 +203,26 @@ export function detectTelegramEnvironment(): TelegramEnvironment {
     }
   }
 
+  // No SDK object and no Telegram shell signal after the bounded observation
+  // window: this is a normal browser even if the optional SDK script never
+  // reports load/error. The poll keeps running, so a genuinely late SDK or
+  // launch hash can still promote the environment to Telegram later.
+  if (
+    !webApp &&
+    !telegramShell &&
+    observationStartedAt !== null &&
+    Date.now() - observationStartedAt >= DETECTING_FALLBACK_MS
+  ) {
+    return {
+      status: 'browser',
+      isTelegram: false,
+      initData: '',
+      initDataPending: false,
+      sdkReady,
+      platform,
+    };
+  }
+
   return {
     status: 'detecting',
     isTelegram: false,
@@ -302,6 +328,7 @@ function startWatcher() {
   watcherStarted = true;
   observedScripts = new WeakSet<HTMLScriptElement>();
   pollDelay = POLL_BASE_MS;
+  observationStartedAt = Date.now();
 
   window.addEventListener('focus', handleEnvironmentEvent);
   window.addEventListener('pageshow', handleEnvironmentEvent);
@@ -340,6 +367,7 @@ function stopWatcher() {
   watcherStarted = false;
   clearPoll();
   pollDelay = POLL_BASE_MS;
+  observationStartedAt = null;
 
   if (typeof window !== 'undefined') {
     window.removeEventListener('focus', handleEnvironmentEvent);
@@ -410,6 +438,7 @@ export function __resetTelegramEnvironmentForTests() {
   snapshot = DETECTING_SNAPSHOT;
   sdkLoadState = 'unknown';
   webAppFirstSeenAt = null;
+  observationStartedAt = null;
 }
 
 /** Test-only synchronous re-evaluation after mutating window.Telegram. */

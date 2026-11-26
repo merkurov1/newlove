@@ -250,6 +250,49 @@ describe('useTempleIdentity', () => {
     expect(result.current.displayName).toBe('Restored Anna');
   });
 
+  it('keeps the server-issued token and force-refreshes a cached exchange after a 401', async () => {
+    setTelegram('signed-init-data');
+
+    let attempts = 0;
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/temple/auth')) {
+        attempts += 1;
+
+        return jsonResponse({
+          success: true,
+          displayName: 'Anna',
+          token: `signed-token-${attempts}`,
+        });
+      }
+
+      return jsonResponse({});
+    });
+
+    const { result } = renderHook(() => useTempleIdentity());
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('verified');
+    });
+
+    expect(result.current.getAuthToken()).toBe('signed-token-1');
+
+    await act(async () => {
+      expect(await result.current.refresh()).toBe(true);
+    });
+
+    expect(authCalls()).toHaveLength(1);
+
+    await act(async () => {
+      expect(await result.current.refresh({ force: true })).toBe(true);
+    });
+
+    expect(authCalls()).toHaveLength(2);
+    expect(result.current.getAuthToken()).toBe('signed-token-2');
+  });
+
   it('does not duplicate the exchange under React StrictMode', async () => {
     setTelegram('strict-mode-init-data');
     fetchMock.mockResolvedValue(jsonResponse({ success: true, displayName: 'Anna' }));

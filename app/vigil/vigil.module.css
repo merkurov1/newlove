@@ -405,6 +405,11 @@
   color: var(--faint);
 }
 
+.sparkButton[data-state='expired'] {
+  border-color: rgba(240, 160, 143, 0.42);
+  color: #f0a08f;
+}
+
 /* --- Heart ------------------------------------------------------------- */
 
 .heart {

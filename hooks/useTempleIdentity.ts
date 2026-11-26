@@ -10,6 +10,12 @@ type TelegramIdentityPayload = {
   displayName?: unknown;
   source?: unknown;
   error?: unknown;
+  /**
+   * Signed server session token returned by `/api/temple/auth`. It is kept in
+   * memory only and is used as a bearer fallback when the HttpOnly cookie is
+   * unavailable (for example a third-party WebView or a blocked cookie).
+   */
+  token?: unknown;
 };
 
 function readDisplayName(payload: TelegramIdentityPayload | null): string {
@@ -54,8 +60,18 @@ export type TempleIdentity = {
   isLoading: boolean;
   error: string | null;
   isTelegram: boolean;
-  /** Re-runs the server-side Telegram session exchange (e.g. after a 401). */
-  refresh: () => Promise<boolean>;
+  /**
+   * Re-runs the server-side Telegram session exchange (e.g. after a 401).
+   * `force` bypasses the cached successful exchange so the cookie/token can be
+   * renewed even when the same initData is still cached in memory.
+   */
+  refresh: (options?: { force?: boolean }) => Promise<boolean>;
+  /**
+   * Signed server-issued Telegram session token for a bearer fallback.
+   * Always null for Supabase identities. It is never read from storage or from
+   * `initDataUnsafe`; only `/api/temple/auth` can populate it.
+   */
+  getAuthToken: () => string | null;
 };
 
 const TELEGRAM_FAILED_MESSAGE =
@@ -87,6 +103,7 @@ export function useTempleIdentity(): TempleIdentity {
 
   const mountedRef = useRef(true);
   const telegramNameRef = useRef<string | null>(null);
+  const telegramTokenRef = useRef<string | null>(null);
   const verifiedInitDataRef = useRef<string | null>(null);
   const failedInitDataRef = useRef<string | null>(null);
   const pendingExchangeRef = useRef<{
@@ -114,14 +131,14 @@ export function useTempleIdentity(): TempleIdentity {
     return profileName || metadataName || user?.email?.split('@')[0]?.trim() || '';
   })();
 
-  const exchangeInitData = useCallback(async (initData: string): Promise<boolean> => {
+  const exchangeInitData = useCallback(async (initData: string, force = false): Promise<boolean> => {
     if (!initData) return false;
 
     const pending = pendingExchangeRef.current;
 
-    if (pending?.initData === initData) return pending.promise;
+    if (!force && pending?.initData === initData) return pending.promise;
 
-    if (verifiedInitDataRef.current === initData && telegramNameRef.current) {
+    if (!force && verifiedInitDataRef.current === initData && telegramNameRef.current) {
       return true;
     }
 
@@ -145,6 +162,10 @@ export function useTempleIdentity(): TempleIdentity {
 
         const payload = telegramPayload(await response.json().catch(() => null));
         const displayName = readDisplayName(payload);
+        const token =
+          payload && typeof payload.token === 'string' && payload.token
+            ? payload.token
+            : null;
 
         if (!response.ok || !displayName) {
           throw new Error(
@@ -156,6 +177,7 @@ export function useTempleIdentity(): TempleIdentity {
 
         verifiedInitDataRef.current = initData;
         failedInitDataRef.current = null;
+        telegramTokenRef.current = token;
         cacheTelegramName(displayName);
 
         if (mountedRef.current) {
@@ -170,6 +192,7 @@ export function useTempleIdentity(): TempleIdentity {
 
         verifiedInitDataRef.current = null;
         failedInitDataRef.current = initData;
+        telegramTokenRef.current = null;
 
         // Never log the raw launch data or a bot/session secret.
         console.error(
@@ -258,11 +281,12 @@ export function useTempleIdentity(): TempleIdentity {
     }
   }, []);
 
-  const refresh = useCallback(async (): Promise<boolean> => {
+  const refresh = useCallback(async (options?: { force?: boolean }): Promise<boolean> => {
+    const force = options?.force === true;
     const initData = readTelegramInitData();
 
     if (initData) {
-      return exchangeInitData(initData);
+      return exchangeInitData(initData, force);
     }
 
     if (!isTelegram) return false;
@@ -271,6 +295,8 @@ export function useTempleIdentity(): TempleIdentity {
     return restoreSession(true);
   }, [exchangeInitData, isTelegram, restoreSession]);
 
+  const getAuthToken = useCallback(() => telegramTokenRef.current, []);
+
   useEffect(() => {
     if (authLoading) return;
 
@@ -278,6 +304,7 @@ export function useTempleIdentity(): TempleIdentity {
       verifiedInitDataRef.current = null;
       failedInitDataRef.current = null;
       telegramNameRef.current = null;
+      telegramTokenRef.current = null;
       setTelegramName(null);
       setError(null);
       cacheTelegramName(null);
@@ -292,6 +319,7 @@ export function useTempleIdentity(): TempleIdentity {
       verifiedInitDataRef.current = null;
       failedInitDataRef.current = null;
       telegramNameRef.current = null;
+      telegramTokenRef.current = null;
       setTelegramName(null);
       setError(null);
       cacheTelegramName(null);
@@ -358,6 +386,7 @@ export function useTempleIdentity(): TempleIdentity {
     error: !supabaseName && environment.isTelegram ? error : null,
     isTelegram,
     refresh,
+    getAuthToken,
   };
 }
 

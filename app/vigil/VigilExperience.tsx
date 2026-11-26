@@ -58,6 +58,7 @@ export default function VigilExperience({
     cooldownLabel,
     rateLimitMsg,
     successMessage,
+    authExpired,
     spark,
     userName,
     triggerRitual,
@@ -68,7 +69,7 @@ export default function VigilExperience({
   const [breathPhase, setBreathPhase] =
     useState<HeartBreathingPhase>('Inhale');
 
-  useTelegramBottomButton({
+  const nativeActionAvailable = useTelegramBottomButton({
     text: isOnCooldown ? `SPARK RETURNS IN ${cooldownLabel}` : 'SEND SPARK',
     visible: isTelegram,
     enabled: Boolean(userName) && !isLighting && !isOnCooldown,
@@ -77,6 +78,12 @@ export default function VigilExperience({
       void triggerRitual();
     },
   });
+
+  // Telegram owns the primary action only when its native button is actually
+  // available. A late SDK, an older client without BottomButton, or another
+  // mounted ritual still holding ownership must not leave the screen without
+  // any working Send Spark control.
+  const showInSceneAction = !isTelegram || !nativeActionAvailable;
 
   // The shared flame clock is published once to the modal header. The same
   // server snapshot also drives the heart below.
@@ -99,17 +106,21 @@ export default function VigilExperience({
 
   const actionLabel = isLighting
     ? 'Sending your spark…'
-    : isOnCooldown
-      ? `Spark returns in ${cooldownLabel}`
-      : !userName
-        ? identityAwaitingLaunch
-          ? 'Waiting for your Telegram name…'
-          : identityPreparing || identity.isLoading
-            ? 'Preparing your identity…'
-            : identity.isTelegram
-              ? 'We could not confirm your name'
-              : 'Sign in to send a spark'
-        : 'Send Spark';
+    : authExpired
+      ? identity.isTelegram
+        ? 'Reopen the Mini App to send a spark'
+        : 'Sign in again to send a spark'
+      : isOnCooldown
+        ? `Spark returns in ${cooldownLabel}`
+        : !userName
+          ? identityAwaitingLaunch
+            ? 'Waiting for your Telegram name…'
+            : identityPreparing || identity.isLoading
+              ? 'Preparing your identity…'
+              : identity.isTelegram
+                ? 'We could not confirm your name'
+                : 'Sign in to send a spark'
+          : 'Send Spark';
 
   useEffect(() => {
     if (!isModal) return;
@@ -288,19 +299,29 @@ export default function VigilExperience({
           </svg>
 
           {/*
-           * Telegram owns exactly one primary action: the native BottomButton.
-           * Rendering the in-scene button there would create two competing
-           * Send Spark controls. The browser keeps the in-scene action.
+           * Telegram owns the primary action only while its native
+           * BottomButton is actually available. If the SDK is late, the
+           * client lacks BottomButton, or another route still owns it, the
+           * in-scene action below is the fallback so the ritual is never dead.
            */}
-          {!isTelegram && (
+          {showInSceneAction && (
             <button
               type="button"
               onClick={(event) => void triggerRitual(event)}
-              disabled={isLighting || !userName || isOnCooldown}
+              disabled={isLighting || !userName || isOnCooldown || authExpired}
               aria-busy={isLighting}
               aria-label={actionLabel}
               className={styles.sparkButton}
-              data-state={isLighting ? 'lighting' : isOnCooldown ? 'cooldown' : 'ready'}
+              data-state={
+                isLighting
+                  ? 'lighting'
+                  : isOnCooldown
+                    ? 'cooldown'
+                    : authExpired
+                      ? 'expired'
+                      : 'ready'
+              }
+              data-vigil-action="in-scene"
             >
               {actionLabel}
             </button>
@@ -502,6 +523,15 @@ export default function VigilExperience({
           {rateLimitMsg && (
             <p className={styles.error} role="status">
               {rateLimitMsg}
+            </p>
+          )}
+
+          {authExpired && !identity.isTelegram && (
+            <p className={styles.notice}>
+              <Link href="/login?next=%2Fvigil" className={styles.signInLink}>
+                Sign in again
+              </Link>{' '}
+              to send a spark.
             </p>
           )}
 

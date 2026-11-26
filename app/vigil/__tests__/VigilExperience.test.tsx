@@ -118,6 +118,10 @@ jest.mock('@/lib/supabase-browser', () => {
       removeChannel: jest.fn(),
       auth: {
         getSession: async () => ({ data: { session: null } }),
+        refreshSession: jest.fn(async () => ({
+          data: { session: null },
+          error: null,
+        })),
       },
     },
   };
@@ -135,6 +139,13 @@ const useIsTelegramModule = require('@/components/useIsTelegram') as {
 const bottomButtonModule = require('@/components/telegram/useTelegramBottomButton') as {
   useTelegramBottomButton: jest.Mock;
 };
+const supabaseModule = require('@/lib/supabase-browser') as {
+  supabase: {
+    auth: {
+      refreshSession: jest.Mock;
+    };
+  };
+};
 
 const HOUR = 60 * 60 * 1000;
 
@@ -148,6 +159,7 @@ function identity(overrides: Record<string, unknown> = {}) {
     error: null,
     isTelegram: false,
     refresh: jest.fn(async () => false),
+    getAuthToken: jest.fn(() => null),
     ...overrides,
   };
 }
@@ -196,6 +208,11 @@ beforeEach(() => {
   useIsTelegramModule.default.mockReturnValue(false);
   identityModule.default.mockReturnValue(identity());
   supportersModule.useVigilSupporters.mockReturnValue(snapshot());
+  bottomButtonModule.useTelegramBottomButton.mockReturnValue(false);
+  supabaseModule.supabase.auth.refreshSession.mockResolvedValue({
+    data: { session: null },
+    error: null,
+  });
   fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input);
 
@@ -271,6 +288,7 @@ describe('/vigil shared flame surface', () => {
 
   it('uses only the native Telegram BottomButton for the spark action', () => {
     useIsTelegramModule.default.mockReturnValue(true);
+    bottomButtonModule.useTelegramBottomButton.mockReturnValue(true);
     identityModule.default.mockReturnValue(
       identity({ displayName: 'Anna', source: 'telegram' })
     );
@@ -289,6 +307,53 @@ describe('/vigil shared flame surface', () => {
         visible: true,
       })
     );
+  });
+
+  it('renders an in-scene fallback when the native Telegram button is unavailable', async () => {
+    useIsTelegramModule.default.mockReturnValue(true);
+    bottomButtonModule.useTelegramBottomButton.mockReturnValue(false);
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'telegram' })
+    );
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            return jsonResponse({
+              ok: true,
+              record: { id: 1 },
+              cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+            });
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    const button = screen.getByRole('button', { name: /^send spark$/i });
+
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('data-vigil-action', 'in-scene');
+
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toHaveTextContent(
+        /added to the shared heart/i
+      );
+    });
   });
 
   it('keeps the in-scene Send Spark action in a browser', () => {
@@ -363,6 +428,248 @@ describe('/vigil shared flame surface', () => {
       'data-lifetime-total',
       '250'
     );
+  });
+
+  it('renews an expired Supabase session once and retries the claim', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+    supabaseModule.supabase.auth.refreshSession.mockResolvedValue({
+      data: { session: { access_token: 'fresh-token' } },
+      error: null,
+    });
+
+    let postCount = 0;
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            postCount += 1;
+
+            if (postCount === 1) {
+              return jsonResponse({ error: 'not authenticated' }, 401);
+            }
+
+            expect(init.headers).toEqual(
+              expect.objectContaining({
+                Authorization: 'Bearer fresh-token',
+              })
+            );
+
+            return jsonResponse({
+              ok: true,
+              record: { id: 1 },
+              cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+            });
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toHaveTextContent(
+        /added to the shared heart/i
+      );
+    });
+
+    expect(postCount).toBe(2);
+    expect(supabaseModule.supabase.auth.refreshSession).toHaveBeenCalledTimes(
+      1
+    );
+  });
+
+  it('shows a recoverable expired-session state after repeated 401s', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            return jsonResponse({ error: 'not authenticated' }, 401);
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', {
+          name: /sign in again to send a spark/i,
+        })
+      ).toBeDisabled();
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/session expired/i);
+    expect(
+      screen.getByRole('link', { name: /^sign in again$/i })
+    ).toHaveAttribute('href', '/login?next=%2Fvigil');
+  });
+
+  it('does not start a 24h cooldown for a transient rate-limit response', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            return jsonResponse(
+              {
+                error: 'Too many requests',
+                message: 'Rate limit exceeded. Please try again in 30 seconds.',
+                retryAfter: 30,
+              },
+              429
+            );
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(/rate limit/i);
+    });
+
+    const button = screen.getByRole('button', { name: /^send spark$/i });
+
+    expect(button).toBeEnabled();
+    expect(screen.queryByText(/returns in/i)).toBeNull();
+  });
+
+  it('recovers the action after a 5xx claim failure', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            return jsonResponse(
+              { error: 'The spark could not be transmitted.' },
+              503
+            );
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /did not reach the heart/i
+      );
+    });
+
+    const button = screen.getByRole('button', { name: /^send spark$/i });
+
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute('aria-busy', 'false');
+  });
+
+  it('sends only one claim for a rapid double activation', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+
+    let postCount = 0;
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            postCount += 1;
+
+            await new Promise((resolve) => setTimeout(resolve, 20));
+
+            return jsonResponse({
+              ok: true,
+              record: { id: 1 },
+              cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+            });
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    const button = screen.getByRole('button', { name: /^send spark$/i });
+
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toBeInTheDocument();
+    });
+
+    expect(postCount).toBe(1);
   });
 
   it('renders the same intensity as the shared calculation for the same server state', async () => {
