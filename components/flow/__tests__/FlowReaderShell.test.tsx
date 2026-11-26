@@ -198,6 +198,18 @@ describe('FlowReaderShell', () => {
     window.history.replaceState(null, '', window.location.pathname);
   });
 
+  it('keeps appearance and focus as icon-only controls with accessible names', () => {
+    render(reader(HEADINGS));
+
+    const appearance = screen.getByRole('button', { name: 'Appearance settings' });
+    const focus = screen.getByRole('button', { name: 'Focus mode' });
+
+    expect(appearance.textContent).toBe('');
+    expect(focus.textContent).toBe('');
+    expect(appearance).toHaveAttribute('aria-label', 'Appearance settings');
+    expect(focus).toHaveAttribute('aria-label', 'Focus mode');
+  });
+
   it('persists appearance preferences and applies them to the reader root', async () => {
     render(reader());
 

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { PenLine, Trash2 } from 'lucide-react';
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImageComponent from '@/components/flow/FlowImage';
 import FlowHomeScreenPrompt from '@/components/flow/FlowHomeScreenPrompt';
@@ -142,7 +143,7 @@ function AdminControls({ onEdit, onDelete }: { onEdit: () => void; onDelete: () 
   return (
     <div className="flow-entry__admin">
       <button type="button" onClick={onEdit} aria-label="Edit post" title="Edit">
-        Edit
+        <PenLine size={13} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -151,7 +152,7 @@ function AdminControls({ onEdit, onDelete }: { onEdit: () => void; onDelete: () 
         aria-label="Delete post"
         title="Delete"
       >
-        Delete
+        <Trash2 size={13} aria-hidden="true" />
       </button>
     </div>
   );

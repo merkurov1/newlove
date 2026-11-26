@@ -858,13 +858,22 @@ function bodyContainsUrl(body: string, url: string): boolean {
 
   try {
     const parsed = new URL(url);
+    const hostname = parsed.hostname;
+    const bareHostname = hostname.replace(/^www\./i, '');
+    const pathname = parsed.pathname.replace(/\/+$/, '');
     const variants = new Set([
-      `${parsed.hostname}${parsed.pathname}`,
-      `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname}`,
+      `${hostname}${parsed.pathname}`,
+      `${bareHostname}${parsed.pathname}`,
+      `${hostname}${pathname}`,
+      `${bareHostname}${pathname}`,
     ]);
+    const lowerBody = body.toLowerCase();
 
     return [...variants].some(
-      (variant) => variant.length > 8 && body.includes(variant)
+      (variant) =>
+        variant.length > 8 &&
+        (body.includes(variant) ||
+          lowerBody.includes(variant.toLowerCase()))
     );
   } catch {
     return false;
