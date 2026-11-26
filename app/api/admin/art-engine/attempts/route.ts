@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { listRecentAttempts } from '@/lib/lots/db';
@@ -11,7 +12,12 @@ export const revalidate = 0;
 export async function GET(req: Request) {
   try {
     await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

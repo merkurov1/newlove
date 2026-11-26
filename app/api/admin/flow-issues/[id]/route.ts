@@ -4,6 +4,7 @@ import {
   getServerSupabaseClient,
   requireAdminFromRequest,
 } from "@/lib/serverAuth";
+import { isAuthenticationError } from "@/lib/auth/errors";
 import { renderIssue } from "@/lib/flow-issue/render";
 import {
   applyIssueEdits,
@@ -36,7 +37,16 @@ export async function PATCH(
 ) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error("[flow-issues] auth check failed", error);
+
+      return NextResponse.json(
+        { error: "Не удалось проверить доступ." },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json(
       { error: "Доступ запрещён" },
       { status: 401 },

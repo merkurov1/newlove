@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { createHash, randomUUID } from 'crypto';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
@@ -145,7 +146,12 @@ export async function POST(req: Request) {
 
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

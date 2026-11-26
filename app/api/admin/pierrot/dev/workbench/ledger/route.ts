@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getDevCostLedger } from '@/lib/pierrot/dev/workbench/ledgerData';
@@ -19,7 +20,12 @@ export async function GET(req: Request) {
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

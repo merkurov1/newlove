@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import { loadPierrotViewMetrics } from '@/lib/analytics/pierrotViews';
@@ -10,7 +11,12 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

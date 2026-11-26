@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { normalizeFlowItem } from '@/lib/flow/content';
 
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,29 @@ const ALLOWED_TYPES = [
 export async function POST(req: NextRequest) {
   try {
     await requireAdminFromRequest(req);
+  } catch (error) {
+    if (isAuthenticationError(error)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized',
+        },
+        { status: 401 },
+      );
+    }
 
+    console.error('[admin-items-new] auth check failed:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to authorize request.',
+      },
+      { status: 500 },
+    );
+  }
+
+  try {
     const body = await req.json();
 
     const supabase = await createClient({
@@ -138,9 +161,9 @@ export async function POST(req: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : 'Unauthorized',
+            : 'Failed to create item.',
       },
-      { status: 401 },
+      { status: 500 },
     );
   }
 }

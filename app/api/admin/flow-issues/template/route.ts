@@ -4,6 +4,7 @@ import {
   getServerSupabaseClient,
   requireAdminFromRequest,
 } from "@/lib/serverAuth";
+import { isAuthenticationError } from "@/lib/auth/errors";
 import {
   DEFAULT_ISSUE_TEMPLATE,
   normalizeIssueTemplate,
@@ -38,8 +39,7 @@ export async function GET(request: Request) {
     const message =
       error instanceof Error ? error.message : "Ошибка загрузки настроек";
 
-    const unauthorized =
-      /unauthorized|admin access required/i.test(message);
+    const unauthorized = isAuthenticationError(error);
 
     return NextResponse.json(
       { error: unauthorized ? "Доступ запрещён" : message },
@@ -103,13 +103,14 @@ export async function PUT(request: Request) {
       config,
     });
   } catch (error) {
-    console.error("[flow-issue-template] save failed", error);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error("[flow-issue-template] save failed", error);
+    }
 
     const message =
       error instanceof Error ? error.message : "Ошибка сохранения настроек";
-
-    const unauthorized =
-      /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
       { error: unauthorized ? "Доступ запрещён" : message },

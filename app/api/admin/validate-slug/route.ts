@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/serverAuth';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,10 +36,18 @@ export async function GET(request: Request) {
     const exists = Boolean(data?.length);
     return NextResponse.json({ exists, available: !exists });
   } catch (error: any) {
-    const message = error?.message || 'Unable to validate slug';
+    const unauthorized = isAuthenticationError(error);
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error?.message || 'Unable to validate slug';
+
+    if (!unauthorized) {
+      console.error('[admin-validate-slug]', error);
+    }
+
     return NextResponse.json(
       { error: message },
-      { status: message.includes('Unauthorized') ? 401 : 500 }
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }

@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createId } from '@paralleldrive/cuid2';
@@ -85,7 +86,12 @@ export async function POST(
 
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
@@ -335,7 +336,12 @@ async function execute(parsed: ParsedRequest, accessToken: string, fetchImpl?: t
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -397,7 +403,12 @@ export async function POST(request: Request) {
   // never observe channel state or trigger an audit/write path.
   try {
     user = await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

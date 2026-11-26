@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
@@ -32,7 +33,12 @@ function json(body: unknown, status = 200) {
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

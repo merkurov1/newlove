@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { sendNewsletterToSubscriber } from '@/lib/newsletter/sendNewsletterToSubscriber';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { cookies } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
@@ -52,9 +53,16 @@ export async function POST(req: Request) {
     }
 
   } catch (err: any) {
-    console.error('test-send POST error:', err?.stack || String(err));
-    const errorMessage = err.message === 'Unauthorized' ? 'Ошибка: нет прав администратора.' : err?.message || String(err);
-    const status = err.message === 'Unauthorized' ? 401 : 500;
+    const unauthorized = isAuthenticationError(err);
+
+    if (!unauthorized) {
+      console.error('test-send POST error:', err?.stack || String(err));
+    }
+
+    const errorMessage = unauthorized
+      ? 'Ошибка: нет прав администратора.'
+      : err?.message || String(err);
+    const status = unauthorized ? 401 : 500;
     return NextResponse.json({ ok: false, error: errorMessage }, { status });
   }
 }

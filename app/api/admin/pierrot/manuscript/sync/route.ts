@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { syncUnframedProjectKnowledge } from '@/lib/pierrot/editorial/projectSync';
 
 export const runtime = 'nodejs';
@@ -21,10 +22,21 @@ export async function POST(request: Request) {
 
     return NextResponse.json(result, { status: result.ok ? 200 : 500 });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Project sync failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/manuscript/sync]', error);
+    }
+
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error instanceof Error
+        ? error.message
+        : 'Project sync failed';
+
     return NextResponse.json(
-      { error: message, code: 'project_sync_failed' },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { error: message, code: unauthorized ? undefined : 'project_sync_failed' },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }

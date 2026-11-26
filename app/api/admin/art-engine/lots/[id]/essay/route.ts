@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { findLotById, updateLotById } from '@/lib/art-engine/repository';
@@ -22,7 +23,12 @@ export async function POST(
 
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

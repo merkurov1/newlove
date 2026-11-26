@@ -1,6 +1,7 @@
 export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { adminDeleteUser, adminUpdateUserRole } from '@/app/admin/actions';
 import { z } from 'zod';
 
@@ -75,8 +76,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ users, orphanSubscribers });
   } catch (error) {
-    console.error('Error fetching users');
-    if (String(error).includes('Unauthorized')) {
+    if (isAuthenticationError(error)) {
       let authenticated = false;
       try {
         authenticated = Boolean(await getCurrentUser());
@@ -88,6 +88,8 @@ export async function GET(request: NextRequest) {
         { status: authenticated ? 403 : 401 }
       );
     }
+
+    console.error('Error fetching users', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -130,8 +132,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ status: 'error', message: 'Unknown action' }, { status: 400 });
   } catch (error) {
-    console.error('Error in POST /api/admin/users');
-    if (String(error).includes('Unauthorized')) {
+    if (isAuthenticationError(error)) {
       let authenticated = false;
       try {
         authenticated = Boolean(await getCurrentUser());
@@ -143,6 +144,8 @@ export async function POST(request: NextRequest) {
         { status: authenticated ? 403 : 401 }
       );
     }
+
+    console.error('Error in POST /api/admin/users', error);
     return NextResponse.json(
       { status: 'error', message: 'Unable to update user' },
       { status: 500 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import {
   isTechnicalText,
@@ -29,7 +30,16 @@ async function authorize(req: NextRequest): Promise<NextResponse | null> {
   try {
     await requireAdminFromRequest(req);
     return null;
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-item-publish] auth check failed:', error);
+
+      return NextResponse.json(
+        { success: false, error: 'Failed to authorize request.' },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       { success: false, error: 'Unauthorized' },
       { status: 401 }

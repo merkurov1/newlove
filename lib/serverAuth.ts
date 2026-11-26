@@ -7,6 +7,10 @@ import {
 import { createClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
 import { verifyTelegramInitData } from '@/lib/telegram/initData';
+import { AuthenticationError, isAuthenticationError } from '@/lib/auth/errors';
+import { logSecurityEvent } from '@/lib/logger';
+
+export { AuthenticationError, isAuthenticationError };
 
 type ServerAuthOptions = {
   useServiceRole?: boolean;
@@ -106,43 +110,60 @@ function verifyTelegramWebAppData(
 }
 
 /**
+ * Reads the current user's profile.
+ *
+ * A missing/invalid session is represented by `null`. A database failure while
+ * reading the profile is thrown so callers can report it as an application
+ * error (500) instead of disguising it as an authentication denial (401).
+ */
+async function loadCurrentUser(): Promise<AuthenticatedUser | null> {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    return null;
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  if (profileError) {
+    throw new Error(
+      `Failed to load user profile: ${
+        profileError instanceof Error
+          ? profileError.message
+          : 'database error'
+      }`,
+    );
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    role: profile?.role === 'ADMIN' ? 'ADMIN' : 'USER',
+    profile,
+    user,
+  };
+}
+
+/**
  * Resolves the authenticated user from the normal Supabase cookie session.
+ *
+ * This remains best-effort for optional-auth surfaces: profile/database errors
+ * are logged as application errors and treated as an anonymous visitor here.
+ * Authorization gates use the strict variant below so those failures surface
+ * as 500 responses.
  */
 export async function getCurrentUser(): Promise<AuthenticatedUser | null> {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      return null;
-    }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error(
-        '[serverAuth] Profile lookup failed:',
-        profileError,
-      );
-
-      return null;
-    }
-
-    return {
-      id: user.id,
-      email: user.email,
-      role: profile?.role === 'ADMIN' ? 'ADMIN' : 'USER',
-      profile,
-      user,
-    };
+    return await loadCurrentUser();
   } catch (error) {
     console.error('[serverAuth] getCurrentUser failed:', error);
     return null;
@@ -153,21 +174,60 @@ export async function getServerUser(): Promise<AuthenticatedUser | null> {
   return getCurrentUser();
 }
 
+function requestPath(req?: Request | null): string | undefined {
+  if (!req) return undefined;
+
+  try {
+    return new URL(req.url).pathname;
+  } catch {
+    return req.url;
+  }
+}
+
+function logAuthDenied(
+  reason: 'user' | 'admin' | 'bearer' | 'bearer-role',
+  req?: Request | null,
+): void {
+  logSecurityEvent('auth_denied', 'low', {
+    reason,
+    method: req?.method,
+    path: requestPath(req),
+  });
+}
+
+async function loadRequiredUser(): Promise<AuthenticatedUser | null> {
+  try {
+    return await loadCurrentUser();
+  } catch (error) {
+    // Real database/internal failures must be visible as application errors.
+    console.error('[serverAuth] Failed to resolve current user:', error);
+    throw error;
+  }
+}
+
 export async function requireUser(): Promise<AuthenticatedUser> {
-  const user = await getCurrentUser();
+  const user = await loadRequiredUser();
 
   if (!user) {
-    throw new Error('Unauthorized');
+    logAuthDenied('user');
+    throw new AuthenticationError('Unauthorized');
   }
 
   return user;
 }
 
 export async function requireAdmin(): Promise<AuthenticatedUser> {
-  const user = await getCurrentUser();
+  return requireAdminWithContext();
+}
+
+async function requireAdminWithContext(
+  req?: Request | null,
+): Promise<AuthenticatedUser> {
+  const user = await loadRequiredUser();
 
   if (!user || user.role !== 'ADMIN') {
-    throw new Error('Unauthorized: Admin access required');
+    logAuthDenied('admin', req);
+    throw new AuthenticationError('Unauthorized: Admin access required');
   }
 
   return user;
@@ -261,7 +321,8 @@ export async function requireAdminFromRequest(
     } = await authClient.auth.getUser(token);
 
     if (error || !user) {
-      throw new Error('Unauthorized');
+      logAuthDenied('bearer', req);
+      throw new AuthenticationError('Unauthorized');
     }
 
     // Read the role with a server-side client.
@@ -285,7 +346,8 @@ export async function requireAdminFromRequest(
     }
 
     if (profile?.role !== 'ADMIN') {
-      throw new Error('Unauthorized: Admin access required');
+      logAuthDenied('bearer-role', req);
+      throw new AuthenticationError('Unauthorized: Admin access required');
     }
 
     return {
@@ -298,7 +360,7 @@ export async function requireAdminFromRequest(
   }
 
   // 4. Standard browser session.
-  return requireAdmin();
+  return requireAdminWithContext(req);
 }
 
 const serverAuthDefault = {

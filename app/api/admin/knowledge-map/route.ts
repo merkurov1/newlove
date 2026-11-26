@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'node:crypto';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { extractGraph, getKnowledgeMapModel } from '@/lib/knowledge-map/deepseek';
 import { getTextFromRow, isTextFile, sanitizeForModel, shouldExcludeTable } from '@/lib/knowledge-map/sanitize';
 import type { KnowledgeEdge, KnowledgeGraph, KnowledgeNode } from '@/lib/knowledge-map/types';
@@ -307,7 +308,7 @@ export async function GET(request: Request) {
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Status error';
-    const unauthorized = /unauthorized|admin access required/i.test(message);
+    const unauthorized = isAuthenticationError(error);
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },
       { status: unauthorized ? 401 : 500 },
@@ -490,7 +491,7 @@ export async function POST(request: Request) {
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка построения графа';
-    const unauthorized = /unauthorized|admin access required/i.test(message);
+    const unauthorized = isAuthenticationError(error);
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },
       { status: unauthorized ? 401 : 500 },

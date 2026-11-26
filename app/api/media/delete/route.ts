@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 // Delete media files from the protected Supabase media bucket.
 export async function DELETE(req: NextRequest) {
@@ -23,8 +24,18 @@ export async function DELETE(req: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true, deleted: data?.length || 0, files: safeFiles });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Internal error';
-    return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
+    const unauthorized = isAuthenticationError(err);
+    const message = unauthorized
+      ? 'Unauthorized'
+      : err instanceof Error
+        ? err.message
+        : 'Internal error';
+
+    if (!unauthorized) {
+      console.error('[media/delete]', err);
+    }
+
+    return NextResponse.json({ error: message }, { status: unauthorized ? 401 : 500 });
   }
 }
 

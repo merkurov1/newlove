@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -138,11 +139,16 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ lot: structuredLot });
   } catch (error: any) {
-    console.error('[generate_lot Error]:', error);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[generate_lot Error]:', error);
+    }
+
     const message = error?.message || String(error);
     return NextResponse.json(
-      { error: message.includes('Unauthorized') ? message : 'Generation failed', details: message },
-      { status: message.includes('Unauthorized') ? 401 : 500 }
+      { error: unauthorized ? message : 'Generation failed', details: message },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
