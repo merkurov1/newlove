@@ -139,9 +139,16 @@ only blocker to external data. No token is mocked or invented.
    **Authorized redirect URIs**.
 4. Ensure the GA4 Data API and Search Console API are enabled for the project.
 5. Open Pierrot → `/admin/pierrot/analytics` → Connect Google.
-6. Approve the two read-only scopes:
+6. Approve the identity scopes (`openid`, `email`) and the read-only scopes:
    - `https://www.googleapis.com/auth/analytics.readonly`
    - `https://www.googleapis.com/auth/webmasters.readonly`
+   - `https://www.googleapis.com/auth/youtube.readonly`
+   - `https://www.googleapis.com/auth/yt-analytics.readonly`
+
+See `docs/analytics-google-permissions.md` for the owner runbook when a grant
+is revoked (`invalid_grant`) or the connected Google account lacks a role on
+GA4 property `244838264` or Search Console property `sc-domain:merkurov.love`
+(`insufficient_permissions`).
 
 The callback discovers the numeric GA4 property by matching the web stream
 measurement ID `G-J1F4ZTK9ND` through the Google Admin API. The measurement ID

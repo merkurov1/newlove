@@ -30,6 +30,24 @@ describe('analytics source health', () => {
     );
   });
 
+  it('keeps a resource-level permission failure separate from a revoked grant', () => {
+    // insufficient_permissions means the grant is valid but the Google account
+    // lacks a role on the resource. It must not ask for a pointless reconnect.
+    expect(
+      deriveProviderConnectionStatus({
+        configured: true,
+        connection: { status: 'error', last_error_code: 'insufficient_permissions' },
+      })
+    ).toBe('error');
+
+    expect(
+      deriveProviderConnectionStatus({
+        configured: true,
+        connection: { status: 'connected', last_error_code: 'insufficient_permissions' },
+      })
+    ).toBe('error');
+  });
+
   it('separates fresh, stale, missing and zero data', () => {
     const fresh = buildSourceCoverage({
       provider: 'google_analytics',

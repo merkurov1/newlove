@@ -10,8 +10,8 @@ analytics copies.
   channel row. `external_id` is the channel id; `external_meta.channel_title`,
   `uploads_playlist_id` and `project_slugs = ['pierrot','unframed']` describe
   the shared resource.
-- **One Google grant.** The existing incremental Google OAuth flow now requests
-  four read-only scopes:
+- **One Google grant.** The existing incremental Google OAuth flow requests the
+  identity scopes `openid email` plus four read-only API scopes:
 
   ```text
   https://www.googleapis.com/auth/analytics.readonly
@@ -20,7 +20,9 @@ analytics copies.
   https://www.googleapis.com/auth/yt-analytics.readonly
   ```
 
-  Monetary YouTube Analytics scopes are not requested.
+  Identity scopes are used only to show which Google account granted the
+  credential in the admin UI. Monetary YouTube Analytics scopes are not
+  requested.
 
 - **One analytics result.** The same `lib/youtube` tools run in either project
   chat. The current project is context, not a filter; reports always cover the

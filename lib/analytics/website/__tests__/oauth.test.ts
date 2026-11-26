@@ -7,10 +7,17 @@ import {
   chooseSearchConsoleSite,
   normalizeGa4AccountId,
   normalizeGa4PropertyId,
+  refreshGoogleAccessToken,
 } from '../providers/oauth';
 import { YOUTUBE_MANAGEMENT_CONSENT_SCOPES, YOUTUBE_MANAGEMENT_SCOPES } from '../config';
 
 const previousEnv = { ...process.env };
+const originalFetch = global.fetch;
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  jest.restoreAllMocks();
+});
 
 beforeEach(() => {
   process.env.GOOGLE_CLIENT_ID = 'test-client-id';
@@ -42,12 +49,17 @@ describe('Google consent configuration', () => {
 
     const scopes = (url.searchParams.get('scope') || '').split(' ');
     expect(scopes).toEqual([
+      'openid',
+      'email',
       'https://www.googleapis.com/auth/analytics.readonly',
       'https://www.googleapis.com/auth/webmasters.readonly',
       'https://www.googleapis.com/auth/youtube.readonly',
       'https://www.googleapis.com/auth/yt-analytics.readonly',
     ]);
     expect(scopes.some((scope) => /monetary/i.test(scope))).toBe(false);
+    // Identity scopes are additive. The analytics API scopes stay read-only.
+    expect(scopes).not.toContain('https://www.googleapis.com/auth/analytics.edit');
+    expect(scopes).not.toContain('https://www.googleapis.com/auth/webmasters');
   });
 
   it('only sends login_hint when the owner explicitly chooses an account', () => {
@@ -57,6 +69,33 @@ describe('Google consent configuration', () => {
 
     expect(explicit.searchParams.get('login_hint')).toBe('unframed@example.com');
     expect(explicit.searchParams.get('prompt')).toContain('select_account');
+  });
+
+  it('classifies a revoked refresh token as invalid_grant without echoing the token', async () => {
+    global.fetch = jest.fn(async () =>
+      new Response(
+        JSON.stringify({
+          error: 'invalid_grant',
+          error_description: 'Token has been expired or revoked.',
+        }),
+        { status: 400, headers: { 'content-type': 'application/json' } }
+      )
+    ) as unknown as typeof fetch;
+
+    let caught: unknown;
+    try {
+      await refreshGoogleAccessToken('1//revoked-refresh-token-secret');
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toMatchObject({
+      code: 'invalid_grant',
+      status: 400,
+      retryable: false,
+    });
+    expect(JSON.stringify(caught)).not.toContain('revoked-refresh-token-secret');
+    expect(JSON.stringify(caught)).not.toContain('1//');
   });
 
   it('builds a separate least-privilege management consent with a distinct callback', () => {

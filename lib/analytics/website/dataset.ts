@@ -4,11 +4,17 @@ import { parseCalendarDate } from '@/lib/pierrot/reportingPeriod';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  GA4_READONLY_SCOPE,
+  GSC_READONLY_SCOPE,
   getBlueskyConfig,
   getGoogleOAuthConfig,
+  getGooglePropertyOverride,
   getSearchBrandTerms,
+  getSearchConsoleSiteOverride,
   getUmamiConfig,
+  missingRequiredScope,
 } from './config';
+import { buildGoogleAccessGuidance, googleAccountEmailFromMeta } from './googleAccess';
 import {
   GSC_REPORTING_DELAY_DAYS,
   GSC_SEARCH_TYPE,
@@ -20,7 +26,6 @@ import {
 import { classifyTrafficPath, isInternalPath, isPublicPath } from './traffic';
 import { classifyNewsletterAudience } from '@/lib/newsletter/analytics';
 import { buildSourceCoverage, coverageIsComparable } from './coverage';
-import { getSearchConsoleSiteOverride } from './config';
 import {
   getDataCoverage,
   getRecentSyncRuns,
@@ -2173,11 +2178,16 @@ const AUTH_ERROR_CODES = new Set([
   'unauthorized',
   'invalid_grant',
   'needs_reauthorization',
-  'insufficient_permissions',
 ]);
 
 /**
  * OAuth connectivity and stored-data availability are separate dimensions.
+ *
+ * A revoked grant (`invalid_grant`) is an OAuth problem. A resource-level
+ * permission failure (`insufficient_permissions`) is different: the grant is
+ * valid, but the connected Google account lacks the role on the GA4 property or
+ * Search Console site. Treating the latter as "reconnect" hides the real owner
+ * action and makes a successful retry after a role grant look impossible.
  *
  * A legacy connection row can still say `connected` after Google revoked the
  * refresh token. If the last recorded error is an authorization error, the
@@ -2193,6 +2203,10 @@ export function deriveProviderConnectionStatus(input: {
 
   const errorCode = String(input.connection.last_error_code || '').trim();
   if (AUTH_ERROR_CODES.has(errorCode)) return 'needs_reauthorization';
+  // A legacy row can still say `connected` after a resource-level failure.
+  // Keep the failure visible so the owner sees the role action instead of a
+  // healthy source with silently missing data.
+  if (errorCode === 'insufficient_permissions') return 'error';
 
   if (input.connection.status === 'needs_reauthorization') return 'needs_reauthorization';
   if (input.connection.status === 'error') return 'error';
@@ -2224,24 +2238,6 @@ function providerHealth(
 
   const status = deriveProviderConnectionStatus({ configured, connection });
 
-  let actionRequired: string | null = extraAction;
-
-  if (!configured) {
-    actionRequired =
-      provider === 'umami'
-        ? 'Добавьте ANALYTICS_UMAMI_API_URL, ANALYTICS_UMAMI_API_KEY и ANALYTICS_UMAMI_WEBSITE_ID.'
-        : provider === 'bluesky'
-          ? 'Добавьте BLUESKY_IDENTIFIER и BLUESKY_PASSWORD (app password).'
-          : 'Добавьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.';
-  } else if (status === 'not_connected') {
-    actionRequired = extraAction || 'Подключите источник и выдайте доступ только на чтение.';
-  } else if (status === 'needs_reauthorization') {
-    actionRequired = 'Разрешение Google отозвано или истекло. Подключите источник заново.';
-  } else if (status === 'error') {
-    actionRequired =
-      connection?.last_error_message || 'Последняя синхронизация завершилась ошибкой.';
-  }
-
   const externalMeta =
     connection?.external_meta && typeof connection.external_meta === 'object'
       ? connection.external_meta
@@ -2254,6 +2250,67 @@ function providerHealth(
     typeof discovery?.checked_at === 'string'
       ? discovery.checked_at
       : (connection?.last_error_at ?? null);
+  const lastErrorCode = connection?.last_error_code ?? lastRun?.error_code ?? null;
+  const googleAccountEmail = googleAccountEmailFromMeta(externalMeta);
+
+  const metaText = (key: string): string | null => {
+    const value = externalMeta?.[key];
+    return typeof value === 'string' && value.trim() ? value : null;
+  };
+
+  const googleProvider = provider === 'google_analytics' || provider === 'search_console';
+  const ga4PropertyId =
+    provider === 'google_analytics'
+      ? metaText('property_id') || getGooglePropertyOverride() || connection?.external_id || null
+      : null;
+  const gscProperty =
+    provider === 'search_console'
+      ? metaText('site_url') ||
+        metaText('selected_site_url') ||
+        getSearchConsoleSiteOverride() ||
+        connection?.external_id ||
+        null
+      : null;
+  const requiredScopeGranted =
+    googleProvider && connection?.scopes && connection.scopes.length > 0
+      ? !missingRequiredScope(
+          connection.scopes,
+          provider === 'search_console' ? GSC_READONLY_SCOPE : GA4_READONLY_SCOPE
+        )
+      : null;
+  const guidance =
+    googleProvider && (status === 'error' || status === 'needs_reauthorization' || lastErrorCode)
+      ? buildGoogleAccessGuidance({
+          provider,
+          errorCode: lastErrorCode,
+          lastErrorMessage: connection?.last_error_message ?? lastRun?.error_message ?? null,
+          googleAccountEmail,
+          ga4PropertyId,
+          ga4AccountId: metaText('account_id'),
+          gscProperty,
+          requiredScopeGranted,
+        })
+      : null;
+
+  let actionRequired: string | null = extraAction;
+
+  if (!configured) {
+    actionRequired =
+      provider === 'umami'
+        ? 'Добавьте ANALYTICS_UMAMI_API_URL, ANALYTICS_UMAMI_API_KEY и ANALYTICS_UMAMI_WEBSITE_ID.'
+        : provider === 'bluesky'
+          ? 'Добавьте BLUESKY_IDENTIFIER и BLUESKY_PASSWORD (app password).'
+          : 'Добавьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.';
+  } else if (status === 'not_connected') {
+    actionRequired = extraAction || 'Подключите источник и выдайте доступ только на чтение.';
+  } else if (guidance) {
+    actionRequired = guidance.ownerAction;
+  } else if (status === 'needs_reauthorization') {
+    actionRequired = 'Разрешение Google отозвано или истекло. Подключите источник заново.';
+  } else if (status === 'error') {
+    actionRequired =
+      connection?.last_error_message || 'Последняя синхронизация завершилась ошибкой.';
+  }
 
   return {
     provider,
@@ -2266,13 +2323,17 @@ function providerHealth(
     authorizationRequired: status === 'needs_reauthorization',
     externalId: connection?.external_id ?? null,
     accountLabel: connection?.account_label ?? null,
+    googleAccountEmail,
+    resourceId: guidance?.resource ?? ga4PropertyId ?? gscProperty ?? null,
+    resourceKind: guidance?.resourceKind ?? null,
+    minimumRole: guidance?.minimumRole ?? null,
     scopes: connection?.scopes ?? [],
     externalMeta,
     lastCheckedAt,
     lastSyncAt: connection?.last_sync_at ?? lastRun?.started_at ?? null,
     lastSuccessAt: lastSuccess?.finished_at ?? lastSuccess?.started_at ?? null,
     lastSyncStatus: connection?.last_sync_status ?? lastRun?.status ?? null,
-    lastErrorCode: connection?.last_error_code ?? lastRun?.error_code ?? null,
+    lastErrorCode,
     lastErrorMessage: connection?.last_error_message ?? lastRun?.error_message ?? null,
     dataFrom: coverage?.from ?? null,
     dataTo: coverage?.to ?? null,

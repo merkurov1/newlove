@@ -1,4 +1,5 @@
 import { assertServerOnly } from '@/lib/serverOnly';
+import { GSC_READONLY_SCOPE } from '../config';
 import { fetchJson } from './http';
 
 assertServerOnly('lib/analytics/website/providers/searchConsole');
@@ -64,7 +65,13 @@ export async function querySearchConsole(input: {
       },
       body: JSON.stringify(body),
     },
-    { provider: 'search_console', retries: 3, label: 'searchAnalytics/query' }
+    {
+      provider: 'search_console',
+      retries: 3,
+      label: 'searchAnalytics/query',
+      stage: 'searchAnalytics/query',
+      scope: GSC_READONLY_SCOPE,
+    }
   );
 
   return {

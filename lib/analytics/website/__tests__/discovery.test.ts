@@ -670,6 +670,213 @@ describe('successful discovery persistence', () => {
   });
 });
 
+describe('resource-level permission failures', () => {
+  it('records GA4 insufficient_permissions as an error without destroying the selected property', async () => {
+    const sealed = sealSecret('refresh-token-must-not-leak');
+    const { store, rows } = fakeStore({
+      google_analytics: {
+        provider: 'google_analytics',
+        status: 'connected',
+        account_label: 'Merkurov · merkurov.love',
+        external_id: '244838264',
+        external_meta: { property_id: '244838264', account_id: '176791840' },
+        scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+        token_ciphertext: sealed.ciphertext,
+        token_iv: sealed.iv,
+        token_tag: sealed.tag,
+        token_key_version: sealed.keyVersion,
+      },
+    });
+
+    global.fetch = jest.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message: 'The caller does not have permission',
+            details: [{ reason: 'PERMISSION_DENIED' }],
+          },
+        },
+        403
+      )
+    ) as unknown as typeof fetch;
+
+    const results = await runGoogleDiscovery(store, {
+      accessToken: 'ya29.secret-access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+      sealed,
+      accountEmail: 'owner@example.com',
+      accountName: 'Owner',
+      accountSubject: 'google-subject-1',
+    });
+
+    expect(results[0]).toMatchObject({
+      provider: 'google_analytics',
+      status: 'error',
+      code: 'insufficient_permissions',
+      externalId: '244838264',
+    });
+
+    const row = rows.get('google_analytics') as Record<string, unknown>;
+    expect(row).toMatchObject({
+      status: 'error',
+      last_error_code: 'insufficient_permissions',
+      external_id: '244838264',
+      account_label: 'Merkurov · merkurov.love',
+    });
+    expect((row.external_meta as Record<string, unknown>).property_id).toBe('244838264');
+    expect((row.external_meta as Record<string, unknown>).google_account_email).toBe(
+      'owner@example.com'
+    );
+    expect((row.external_meta as Record<string, unknown>).discovery).toMatchObject({
+      status: 'error',
+      code: 'insufficient_permissions',
+      http_status: 403,
+      stage: 'accountSummaries',
+    });
+
+    const serialized = JSON.stringify(row);
+    expect(serialized).not.toContain('ya29.');
+    expect(serialized).not.toContain('refresh-token-must-not-leak');
+  });
+
+  it('records Search Console insufficient_permissions and keeps the selected site', async () => {
+    const { store, rows } = fakeStore({
+      search_console: {
+        provider: 'search_console',
+        status: 'connected',
+        account_label: 'sc-domain:merkurov.love',
+        external_id: 'sc-domain:merkurov.love',
+        external_meta: {
+          site_url: 'sc-domain:merkurov.love',
+          permission_level: 'siteFullUser',
+        },
+        scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+      },
+    });
+
+    global.fetch = jest.fn(async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 403,
+            status: 'PERMISSION_DENIED',
+            message: 'The caller does not have permission',
+            details: [{ reason: 'PERMISSION_DENIED' }],
+          },
+        },
+        403
+      )
+    ) as unknown as typeof fetch;
+
+    const results = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+      providers: ['search_console'],
+      accountEmail: 'owner@example.com',
+    });
+
+    expect(results[0]).toMatchObject({
+      provider: 'search_console',
+      status: 'error',
+      code: 'insufficient_permissions',
+      externalId: 'sc-domain:merkurov.love',
+    });
+    expect(rows.get('search_console')).toMatchObject({
+      status: 'error',
+      last_error_code: 'insufficient_permissions',
+      external_id: 'sc-domain:merkurov.love',
+    });
+    expect((rows.get('search_console')?.external_meta as Record<string, unknown>).site_url).toBe(
+      'sc-domain:merkurov.love'
+    );
+  });
+
+  it('retries after a permission failure and clears the error without duplicating the row', async () => {
+    const { store, rows } = fakeStore();
+    let attempts = 0;
+
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/accountSummaries')) {
+        attempts += 1;
+
+        if (attempts === 1) {
+          return jsonResponse(
+            {
+              error: {
+                code: 403,
+                status: 'PERMISSION_DENIED',
+                message: 'The caller does not have permission',
+              },
+            },
+            403
+          );
+        }
+
+        return jsonResponse({
+          accountSummaries: [
+            {
+              account: 'accounts/176791840',
+              displayName: 'Merkurov',
+              propertySummaries: [
+                {
+                  property: 'properties/244838264',
+                  displayName: 'merkurov.love',
+                  parent: 'accounts/176791840',
+                },
+              ],
+            },
+          ],
+        });
+      }
+
+      if (url.includes('properties/244838264/dataStreams')) {
+        return jsonResponse({
+          dataStreams: [
+            {
+              type: 'WEB_DATA_STREAM',
+              webStreamData: { measurementId: 'G-J1F4ZTK9ND' },
+            },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected url ${url}`);
+    }) as unknown as typeof fetch;
+
+    const failed = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+      accountEmail: 'owner@example.com',
+    });
+    expect(failed[0].status).toBe('error');
+
+    const retried = await runGoogleDiscovery(store, {
+      accessToken: 'access-token',
+      scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+      providers: ['google_analytics'],
+      accountEmail: 'owner@example.com',
+    });
+
+    expect(retried[0].status).toBe('connected');
+    expect(rows.size).toBe(1);
+    expect(rows.get('google_analytics')).toMatchObject({
+      status: 'connected',
+      external_id: '244838264',
+      last_error_code: null,
+      last_error_message: null,
+    });
+
+    const meta = rows.get('google_analytics')?.external_meta as Record<string, unknown>;
+    expect(meta.google_account_email).toBe('owner@example.com');
+    expect(meta.discovered_properties).toHaveLength(1);
+  });
+});
 describe('partial discovery persistence', () => {
   it('keeps GA4 connected when GSC fails, and preserves an existing GSC resource', async () => {
     const existingSealed = sealSecret('refresh-token');

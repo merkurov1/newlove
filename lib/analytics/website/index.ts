@@ -5,6 +5,7 @@ export * from './answer';
 export * from './report';
 export * from './tools';
 export { loadAnalyticsDataset } from './dataset';
+export * from './googleAccess';
 export { runAnalyticsSync } from './sync';
 export { loadWebsiteDashboard } from './dashboard';
 export * from './dashboardContract';
