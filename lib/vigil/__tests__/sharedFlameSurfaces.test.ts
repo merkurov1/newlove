@@ -50,6 +50,33 @@ describe('shared Vigil flame surface contract', () => {
     expect(experience).toContain('data-vigil-intensity');
   });
 
+  it('drives real visual properties, not only data attributes', () => {
+    expect(home).toContain('heartVisuals.brightness.toFixed(');
+    expect(home).toContain('heartVisuals.saturate.toFixed(');
+    expect(home).toContain('heartVisuals.grayscale.toFixed(');
+    expect(home).toContain('heartVisuals.glowOpacity');
+    expect(home).toContain('heartVisuals.glowBlurPx');
+    expect(home).toContain('heartVisuals.scale.toFixed(');
+
+    expect(experience).toContain('flameVisuals.brightness.toFixed(');
+    expect(experience).toContain('flameVisuals.saturate.toFixed(');
+    expect(experience).toContain('flameVisuals.grayscale.toFixed(');
+    expect(experience).toContain('flameVisuals.glowOpacity');
+    expect(experience).toContain('flameVisuals.glowBlurPx');
+    expect(experience).toContain('flameVisuals.intensity');
+  });
+
+  it('feeds the same live supporter count through the one calculation', () => {
+    expect(home).toContain('supporterCount: hasVigilState ? supporterCount : 0');
+    expect(controller).toContain(
+      'supporterCount: flameReady ? supporterCount : 0'
+    );
+
+    expect(home).not.toContain('Math.log10');
+    expect(controller).not.toContain('Math.log10');
+    expect(experience).not.toContain('Math.log10');
+  });
+
   it('shows the lifetime total on both surfaces from the same state payload', () => {
     expect(publicState).toContain('METRICS_VIEW');
     expect(publicState).toContain('buildVigilMetrics');

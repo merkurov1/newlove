@@ -1,4 +1,7 @@
 import {
+  VIGIL_CROWD_MAX_INTENSITY,
+  VIGIL_CROWD_MAX_SUPPORTERS,
+  VIGIL_CROWD_MIN_INTENSITY,
   normalizeSupporterCount,
   parseVigilPublicState,
   vigilCrowdIntensity,
@@ -9,32 +12,53 @@ describe('Vigil supporter count to crowd intensity', () => {
     expect(vigilCrowdIntensity(0)).toBe(0);
   });
 
-  it('shows a visible, modest increase for a low real count', () => {
+  it('gives a lone supporter the minimum visible glow', () => {
     const intensity = vigilCrowdIntensity(1);
 
     expect(intensity).toBeGreaterThan(0);
-    expect(intensity).toBeLessThan(vigilCrowdIntensity(10));
+    expect(intensity).toBe(VIGIL_CROWD_MIN_INTENSITY);
+    expect(intensity).toBeLessThan(vigilCrowdIntensity(2));
   });
 
-  it('grows for typical and high supporter counts', () => {
-    const zero = vigilCrowdIntensity(0);
-    const low = vigilCrowdIntensity(3);
-    const typical = vigilCrowdIntensity(24);
-    const high = vigilCrowdIntensity(90);
+  it('increases strictly for every integer count from 1 to 10', () => {
+    const samples = Array.from(
+      { length: VIGIL_CROWD_MAX_SUPPORTERS },
+      (_, index) => vigilCrowdIntensity(index + 1)
+    );
 
-    expect(low).toBeGreaterThan(zero);
-    expect(typical).toBeGreaterThan(low);
-    expect(high).toBeGreaterThan(typical);
-    expect(high).toBeLessThanOrEqual(1);
+    samples.forEach((value, index) => {
+      expect(value).toBeGreaterThan(index === 0 ? 0 : samples[index - 1]);
+      expect(value).toBeLessThanOrEqual(VIGIL_CROWD_MAX_INTENSITY);
+    });
+
+    expect(samples[0]).toBe(VIGIL_CROWD_MIN_INTENSITY);
+    expect(samples[samples.length - 1]).toBe(VIGIL_CROWD_MAX_INTENSITY);
   });
 
-  it('clamps very large or malformed counts without inventing support', () => {
-    expect(vigilCrowdIntensity(100)).toBe(1);
-    expect(vigilCrowdIntensity(1_000_000)).toBe(1);
+  it('reaches full intensity at ten supporters and clamps larger crowds', () => {
+    expect(vigilCrowdIntensity(VIGIL_CROWD_MAX_SUPPORTERS)).toBe(
+      VIGIL_CROWD_MAX_INTENSITY
+    );
+
+    for (const count of [11, 12, 24, 90, 100, 1_000_000]) {
+      expect(vigilCrowdIntensity(count)).toBe(VIGIL_CROWD_MAX_INTENSITY);
+    }
+  });
+
+  it('treats malformed, negative and non-numeric counts as no support', () => {
     expect(vigilCrowdIntensity(-20)).toBe(0);
     expect(vigilCrowdIntensity(Number.NaN)).toBe(0);
     expect(vigilCrowdIntensity(Number.POSITIVE_INFINITY)).toBe(0);
+    expect(vigilCrowdIntensity(Number.NEGATIVE_INFINITY)).toBe(0);
+    expect(vigilCrowdIntensity(undefined)).toBe(0);
+    expect(vigilCrowdIntensity(null)).toBe(0);
+    expect(vigilCrowdIntensity('not-a-count')).toBe(0);
+    expect(vigilCrowdIntensity(0.9)).toBe(0);
+  });
+
+  it('normalizes fractional supporter rows without inventing support', () => {
     expect(normalizeSupporterCount('12.9')).toBe(12);
+    expect(vigilCrowdIntensity(2.9)).toBe(vigilCrowdIntensity(2));
   });
 });
 
