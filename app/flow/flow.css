@@ -121,27 +121,32 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
 
 .flow-entry__admin {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.35rem;
+  gap: 4px;
 }
 
+/* Same icon-button treatment as the Flow PWA entry actions: 13px lucide
+ * strokes, a 40px touch row and no visible label. */
 .flow-entry__admin button {
-  min-height: 36px;
-  padding: 0 0.5rem;
-  font-family: var(--flow-mono);
-  font-size: 0.64rem;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 8px;
   color: var(--flow-muted);
+  font-family: var(--flow-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
   transition: color 140ms ease;
 }
 
 .flow-entry__admin button:hover {
   color: var(--flow-ink);
-}
-
-.flow-entry__admin button[data-action='delete']:hover {
-  color: #b3261e;
 }
 
 .flow-entry__media {
@@ -721,6 +726,8 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   font-variant-numeric: tabular-nums;
 }
 
+/* Icon-only controls use the same restrained 44px target as the PWA icon
+ * buttons: no border, no rounded frame and no filled selected chip. */
 .flow-reader__control {
   display: inline-flex;
   min-width: 44px;
@@ -728,9 +735,9 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.55rem;
-  border: 1px solid var(--flow-reader-line, var(--flow-line));
-  border-radius: 999px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   background: transparent;
   color: var(--flow-reader-muted, var(--flow-muted));
   font-family: var(--flow-mono);
@@ -738,10 +745,7 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   letter-spacing: 0.12em;
   line-height: 1;
   text-transform: uppercase;
-  transition:
-    border-color 140ms ease,
-    color 140ms ease,
-    background-color 140ms ease;
+  transition: color 140ms ease;
 }
 
 .flow-reader__control span {
@@ -749,13 +753,10 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
 }
 
 .flow-reader__control:hover {
-  border-color: var(--flow-reader-muted, var(--flow-muted));
   color: var(--flow-reader-ink, var(--flow-ink));
 }
 
 .flow-reader__control[aria-pressed='true'] {
-  border-color: var(--flow-reader-ink, var(--flow-ink));
-  background: color-mix(in srgb, var(--flow-reader-ink, var(--flow-ink)) 9%, transparent);
   color: var(--flow-reader-ink, var(--flow-ink));
 }
 
@@ -1377,7 +1378,6 @@ body.flow-reader-focus .flow-home-screen--reader {
 }
 
 @media (prefers-contrast: more) {
-  .flow-reader__control,
   .flow-reader-settings__theme,
   .flow-reader-settings__stepper {
     border-color: currentColor;
@@ -1394,7 +1394,6 @@ body.flow-reader-focus .flow-home-screen--reader {
     background: Highlight;
   }
 
-  .flow-reader__control,
   .flow-reader-settings__theme,
   .flow-reader-settings__stepper {
     border-color: CanvasText;

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { isHttpUrl } from "./utils";
 import type {
   LinkPreview,
   YouTubeMetadata,
@@ -49,6 +50,7 @@ export function YouTubePreview({
 
   const author =
     metadata.author_name;
+  const safeUrl = isHttpUrl(url) ? url : undefined;
 
   return (
     <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
@@ -90,9 +92,9 @@ export function YouTubePreview({
         ) : null}
 
         <a
-          href={url}
+          href={safeUrl}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="mt-2 block truncate text-[10px] uppercase tracking-[0.12em] text-black/35 transition-colors hover:text-black/60"
         >
           youtube.com
@@ -123,6 +125,7 @@ export function LinkPreviewCard({
     preview.site_name?.trim() ||
     preview.domain ||
     "Open link";
+  const safeUrl = isHttpUrl(url) ? url : undefined;
 
   return (
     <div className="mt-3 overflow-hidden border border-black/10 bg-black/[0.02]">
@@ -151,9 +154,9 @@ export function LinkPreviewCard({
         ) : null}
 
         <a
-          href={url}
+          href={safeUrl}
           target="_blank"
-          rel="noreferrer"
+          rel="noopener noreferrer"
           className="mt-2 block truncate text-[10px] uppercase tracking-[0.12em] text-black/35 transition-colors hover:text-black/60"
         >
           {sourceLabel}

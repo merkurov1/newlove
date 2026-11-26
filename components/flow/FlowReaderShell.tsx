@@ -429,7 +429,6 @@ export default function FlowReaderShell({ slug, title, headings = [] }: Props) {
           aria-haspopup="dialog"
         >
           <SlidersHorizontal size={15} aria-hidden="true" />
-          <span>Appearance</span>
         </button>
 
         <button
@@ -440,7 +439,6 @@ export default function FlowReaderShell({ slug, title, headings = [] }: Props) {
           aria-pressed={prefs.focusMode}
         >
           <Focus size={15} aria-hidden="true" />
-          <span>Focus</span>
         </button>
       </div>
 

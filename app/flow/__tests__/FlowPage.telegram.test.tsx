@@ -150,6 +150,14 @@ describe('Telegram Flow layout', () => {
     expect(screen.queryByRole('button', { name: 'WRITE' })).not.toBeInTheDocument();
     expect(await screen.findByText('Existing Flow entry')).toBeInTheDocument();
 
+    const edit = screen.getByRole('button', { name: 'Edit post' });
+    const remove = screen.getByRole('button', { name: 'Delete post' });
+
+    expect(edit.textContent).toBe('');
+    expect(remove.textContent).toBe('');
+    expect(edit).toHaveAttribute('title', 'Edit');
+    expect(remove).toHaveAttribute('title', 'Delete');
+
     await waitFor(() => {
       expect(button.setParams).toHaveBeenCalledWith({
         text: 'WRITE',

@@ -7,9 +7,12 @@ import type {
   YouTubeMetadata,
 } from "./types";
 import {
+  extractUrlsFromText,
   isYouTubeVideo,
   isProbablyImageUrl,
+  normalizeExtractedUrl,
   normalizePastedUrl,
+  urlDedupeKey,
 } from "./utils";
 
 interface UseNewPostModalParams {
@@ -23,47 +26,6 @@ function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random()
     .toString(36)
     .slice(2, 10)}`;
-}
-
-/**
- * Recognizes complete URLs, www URLs and bare domains.
- * A missing protocol is normalized to HTTPS.
- */
-const URL_PATTERN =
-  /(?:https?:\/\/|www\.)[^\s<>"'`]+|(?:\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?:\/[^\s<>"'`]*)?)/gi;
-
-function normalizeExtractedUrl(value: string): string | null {
-  let candidate = value.trim();
-
-  // Strip punctuation commonly placed immediately after a URL.
-  candidate = candidate.replace(/[),.;!?}\]]+$/g, "");
-
-  if (!candidate) return null;
-
-  if (candidate.startsWith("//")) {
-    candidate = `https:${candidate}`;
-  } else if (!/^https?:\/\//i.test(candidate)) {
-    candidate = `https://${candidate}`;
-  }
-
-  return normalizePastedUrl(candidate);
-}
-
-function extractUrls(text: string): string[] {
-  const matches = text.match(URL_PATTERN) ?? [];
-  const urls: string[] = [];
-  const seen = new Set<string>();
-
-  for (const match of matches) {
-    const normalized = normalizeExtractedUrl(match);
-
-    if (!normalized || seen.has(normalized)) continue;
-
-    seen.add(normalized);
-    urls.push(normalized);
-  }
-
-  return urls;
 }
 
 async function readResponse(res: Response): Promise<any> {
@@ -206,53 +168,79 @@ export function useNewPostModal({
           setYoutubeMetadata(null);
         }
 
-        // Restore multiple link previews and older single-link records.
+        // Restore current and legacy link records. `metadata.links` is still
+        // produced by older Flow versions and must survive an edit instead of
+        // being dropped when the composer writes its complete metadata object.
         const restoredLinks: FlowLinkAttachment[] = [];
+        const restoredLinkKeys = new Set<string>();
         const rawLinks = Array.isArray(meta.link_previews)
           ? meta.link_previews
-          : meta.link_preview
-            ? [meta.link_preview]
-            : [];
+          : Array.isArray(meta.linkPreviews)
+            ? meta.linkPreviews
+            : meta.link_preview
+              ? [meta.link_preview]
+              : meta.linkPreview
+                ? [meta.linkPreview]
+                : [];
+        const legacyLinks = Array.isArray(meta.links) ? meta.links : [];
 
-        for (const raw of rawLinks) {
-          if (!raw || typeof raw !== "object") continue;
+        const addRestoredLink = (raw: unknown) => {
+          let preview: Record<string, any> = {};
+          let urlInput = "";
 
-          const preview = raw as Record<string, any>;
-          const url =
-            typeof preview.url === "string"
-              ? preview.url
-              : "";
+          if (typeof raw === "string") {
+            urlInput = raw;
+          } else if (raw && typeof raw === "object") {
+            preview = raw as Record<string, any>;
+            urlInput =
+              typeof preview.url === "string" ? preview.url : "";
+          }
 
-          if (!url) continue;
+          const url = normalizeExtractedUrl(urlInput);
 
+          if (!url) return;
+
+          const key = urlDedupeKey(url);
+
+          if (restoredLinkKeys.has(key)) return;
+
+          restoredLinkKeys.add(key);
           restoredLinks.push({
             id: makeId("link"),
             url,
             preview: {
+              ...preview,
               url,
-              title: preview.title || url,
-              description: preview.description,
-              image: preview.image,
-              site_name: preview.site_name,
-              favicon: preview.favicon,
-              domain: preview.domain,
+              title:
+                typeof preview.title === "string" && preview.title.trim()
+                  ? preview.title
+                  : url,
             },
           });
-        }
+        };
+
+        for (const raw of rawLinks) addRestoredLink(raw);
+        for (const raw of legacyLinks) addRestoredLink(raw);
 
         if (
-          restoredLinks.length === 0 &&
           found.source_url &&
           !isYouTubeVideo(found.source_url)
         ) {
-          restoredLinks.push({
-            id: makeId("link"),
-            url: found.source_url,
-            preview: {
-              url: found.source_url,
-              title: found.source_url,
-            },
-          });
+          const sourceUrl = normalizeExtractedUrl(found.source_url);
+
+          if (
+            sourceUrl &&
+            !restoredLinkKeys.has(urlDedupeKey(sourceUrl))
+          ) {
+            restoredLinks.push({
+              id: makeId("link"),
+              url: sourceUrl,
+              preview: {
+                url: sourceUrl,
+                title: sourceUrl,
+              },
+            });
+          }
         }
 
         setLinks(restoredLinks);
@@ -478,10 +466,20 @@ export function useNewPostModal({
         throw new Error(data.error || "Could not fetch link preview.");
       }
 
-      const finalUrl = data.url || normalized;
+      // The parser may return a canonical destination. Keep it only when it
+      // is still a safe HTTP(S) URL; otherwise retain the author's URL.
+      const finalUrl =
+        normalizeExtractedUrl(
+          typeof data.url === "string" ? data.url : "",
+        ) ?? normalized;
+      const finalKey = urlDedupeKey(finalUrl);
 
       setLinks((prev) => {
-        if (prev.some((link) => link.url === finalUrl)) {
+        if (
+          prev.some(
+            (link) => urlDedupeKey(link.url) === finalKey,
+          )
+        ) {
           return prev;
         }
 
@@ -508,8 +506,12 @@ export function useNewPostModal({
       // Keep the URL as an attachment even if preview parsing fails.
       console.warn("[useNewPostModal] Link preview failed:", err);
 
+      const fallbackKey = urlDedupeKey(normalized);
+
       setLinks((prev) =>
-        prev.some((link) => link.url === normalized)
+        prev.some(
+          (link) => urlDedupeKey(link.url) === fallbackKey,
+        )
           ? prev
           : [
               ...prev,
@@ -639,17 +641,16 @@ export function useNewPostModal({
     const pastedText =
       event.clipboardData?.getData("text/plain") || "";
 
-    const urls = extractUrls(pastedText);
+    const { urls, textWithoutUrls: extractedText } =
+      extractUrlsFromText(pastedText);
 
     if (urls.length === 0) return;
 
-    // We have found one or more URLs. Handle them as attachments,
-    // while preserving any surrounding text in the writing area.
+    // We have found one or more URLs. Handle them as attachments while
+    // preserving the author's surrounding prose and punctuation.
     event.preventDefault();
 
-    const textWithoutUrls = pastedText
-      .replace(URL_PATTERN, "")
-      .replace(/[ \t]{2,}/g, " ");
+    const textWithoutUrls = extractedText.replace(/[ \t]{2,}/g, " ");
 
     const textarea = textareaRef.current;
 
@@ -754,7 +755,33 @@ export function useNewPostModal({
         delete metadata.youtube;
       }
 
-      const linkPreviews = links.map((link) => ({
+      // Normalize once more at the serialization boundary. Unsafe or invalid
+      // links are dropped, and the same destination cannot be written twice
+      // because of a trailing slash or surrounding punctuation.
+      const serializedLinks: FlowLinkAttachment[] = [];
+      const serializedLinkKeys = new Set<string>();
+
+      for (const link of links) {
+        const url = normalizeExtractedUrl(link.url);
+
+        if (!url) continue;
+
+        const key = urlDedupeKey(url);
+
+        if (serializedLinkKeys.has(key)) continue;
+
+        serializedLinkKeys.add(key);
+        serializedLinks.push({
+          ...link,
+          url,
+          preview: {
+            ...link.preview,
+            url,
+          },
+        });
+      }
+
+      const linkPreviews = serializedLinks.map((link) => ({
         ...link.preview,
         url: link.url,
       }));
@@ -767,11 +794,17 @@ export function useNewPostModal({
         delete metadata.link_preview;
       }
 
+      // The composer now owns the complete link list. Clear legacy aliases so
+      // a removed link cannot reappear from an older metadata shape.
+      delete metadata.linkPreviews;
+      delete metadata.linkPreview;
+      delete metadata.links;
+
       const primarySourceUrl =
-        links[0]?.url ||
+        serializedLinks[0]?.url ||
         (youtubeMetadata?.video_id
           ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
-          : youtubeUrl || null);
+          : normalizeExtractedUrl(youtubeUrl) || null);
 
       const determinedType =
         bodyMd.trim().length > 180
@@ -780,7 +813,7 @@ export function useNewPostModal({
             ? "video"
             : imageUrls.length > 0
               ? "photo"
-              : links.length > 0
+              : serializedLinks.length > 0
                 ? "link"
                 : "note";
 
