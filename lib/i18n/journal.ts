@@ -41,6 +41,8 @@ export type JournalCopy = {
   };
   inside: {
     title: string;
+    selectedTitle: string;
+    selectedNote: string;
     kicker: string;
     empty: string;
     lead: string;
@@ -48,6 +50,7 @@ export type JournalCopy = {
     open: string;
     contents: string;
     types: Record<string, string>;
+    formats: Record<'post' | 'photo' | 'video' | 'link', string>;
   };
   flow: {
     title: string;
@@ -119,6 +122,8 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
     },
     inside: {
       title: 'Inside this issue',
+      selectedTitle: 'Selected from this issue',
+      selectedNote: 'One main story and four formats from the full issue.',
       kicker: 'What is in the issue',
       empty: 'The materials of this issue are being prepared.',
       lead: 'Lead',
@@ -132,6 +137,12 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
         video: 'Video',
         photo: 'Photos',
         other: 'Other',
+      },
+      formats: {
+        post: 'Post',
+        link: 'Link',
+        video: 'Video',
+        photo: 'Photo',
       },
     },
     flow: {
@@ -214,6 +225,8 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
     },
     inside: {
       title: 'В этом выпуске',
+      selectedTitle: 'Главное из выпуска',
+      selectedNote: 'Один главный материал и четыре формата из полного выпуска.',
       kicker: 'Что внутри',
       empty: 'Материалы этого выпуска готовятся к публикации.',
       lead: 'Главное',
@@ -227,6 +240,12 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
         video: 'Видео',
         photo: 'Фото',
         other: 'Другое',
+      },
+      formats: {
+        post: 'Запись',
+        link: 'Ссылка',
+        video: 'Видео',
+        photo: 'Фото',
       },
     },
     flow: {

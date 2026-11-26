@@ -8,10 +8,10 @@ const enIssue: FrontIssue = {
   slug: 'issue-en',
   lang: 'en',
   number: 18,
-  headline: 'The English headline',
+  headline: 'UNFRAMED // Episode 0: The Spectral Tiger | Anton Merkurov',
   excerpt: 'English excerpt.',
   summary: 'Notes 2, Links 1',
-  published: 4,
+  published: 5,
   publishedAt: '2026-11-20T10:00:00.000Z',
   periodStart: '2026-11-14T00:00:00.000Z',
   periodEnd: '2026-11-20T00:00:00.000Z',
@@ -25,7 +25,7 @@ const ruIssue: FrontIssue = {
   slug: 'issue-ru',
   lang: 'ru',
   number: 26,
-  headline: 'Русский заголовок',
+  headline: 'Русский заголовок — Антон Меркуров',
   excerpt: 'Русский фрагмент.',
   summary: 'Заметки 2',
   published: 2,
@@ -58,19 +58,35 @@ const olderRuIssue: FrontIssue = {
 
 const materials: JournalMaterial[] = [
   {
-    id: 'note-1',
+    id: 'lead-1',
+    kind: 'article',
+    type: 'article',
+    lang: 'en',
+    title: enIssue.headline,
+    body: 'The complete lead story text.',
+    description: 'The lead story as a short editorial preview.',
+    url: 'https://www.merkurov.love/unframed/spectral-tiger',
+    image: 'https://cdn.example.com/lead.jpg',
+    imageAlt: 'Spectral Tiger lead image',
+    siteName: '',
+    publishedAt: '2026-11-18T10:00:00.000Z',
+    isLead: true,
+    isExternal: false,
+  },
+  {
+    id: 'post-1',
     kind: 'note',
     type: 'note',
     lang: 'ru',
     title: 'Заметка о книге',
     body: 'Полный текст заметки о книге UNFRAMED.',
     description: '',
-    url: 'https://www.merkurov.love/flow/note-1',
+    url: 'https://www.merkurov.love/flow/post-1',
     image: null,
     imageAlt: '',
     siteName: '',
-    publishedAt: '2026-11-18T10:00:00.000Z',
-    isLead: true,
+    publishedAt: '2026-11-17T10:00:00.000Z',
+    isLead: false,
     isExternal: false,
   },
   {
@@ -85,7 +101,7 @@ const materials: JournalMaterial[] = [
     image: 'https://www.artnews.com/preview.jpg',
     imageAlt: 'Kandinsky painting',
     siteName: 'ARTnews.com',
-    publishedAt: '2026-11-17T10:00:00.000Z',
+    publishedAt: '2026-11-17T09:00:00.000Z',
     isLead: false,
     isExternal: true,
   },
@@ -121,6 +137,22 @@ const materials: JournalMaterial[] = [
     isLead: false,
     isExternal: false,
   },
+  {
+    id: 'extra-1',
+    kind: 'article',
+    type: 'article',
+    lang: 'en',
+    title: 'An extra article that must stay in the full issue only',
+    body: 'This item is published but is not selected for the compact front page.',
+    description: '',
+    url: 'https://www.merkurov.love/flow/extra-1',
+    image: null,
+    imageAlt: '',
+    siteName: '',
+    publishedAt: '2026-11-14T10:00:00.000Z',
+    isLead: false,
+    isExternal: false,
+  },
 ];
 
 const flow: FlowEntry[] = [
@@ -142,12 +174,20 @@ const flow: FlowEntry[] = [
   },
 ];
 
+function materialsFor(lang: 'en' | 'ru'): JournalMaterial[] {
+  if (lang === 'en') return materials;
+
+  return materials.map((material) =>
+    material.isLead ? { ...material, lang: 'ru', title: ruIssue.headline } : material
+  );
+}
+
 function renderPage(lang: 'en' | 'ru') {
   return render(
     <FrontPage
       lang={lang}
       featured={lang === 'en' ? enIssue : ruIssue}
-      materials={materials}
+      materials={materialsFor(lang)}
       flow={flow}
       archive={[enIssue, ruIssue, olderEnIssue, olderRuIssue].filter(
         (issue) => issue.id !== (lang === 'en' ? 'en-1' : 'ru-1')
@@ -163,69 +203,93 @@ function orderedIds(container: HTMLElement): string[] {
   );
 }
 
+function selectedIds(container: HTMLElement): string[] {
+  return Array.from(container.querySelectorAll('#contents [data-material-id]')).map(
+    (element) => element.getAttribute('data-material-id') || ''
+  );
+}
+
 describe('Journal FrontPage editorial composition', () => {
-  it('shows the issue number, period, language, title, lead, metadata and CTA first', () => {
+  it('shows one main material with the issue context and a normalized headline', () => {
     renderPage('en');
 
     expect(screen.getByRole('heading', { level: 1, name: 'The Journal' })).toBeInTheDocument();
     expect(screen.getByText('Current issue')).toBeInTheDocument();
     expect(screen.getByText(/Issue №18/)).toBeInTheDocument();
-    expect(screen.getByText('Original language')).toBeInTheDocument();
+    expect(screen.getByText(/Original language/)).toBeInTheDocument();
     expect(screen.getAllByText('In English').length).toBeGreaterThan(0);
-    expect(screen.getByRole('heading', { level: 2, name: 'The English headline' })).toHaveAttribute(
-      'lang',
-      'en'
-    );
-    expect(
-      screen.getByText(
-        'A full editorial lead that explains what the issue is about and why it matters.'
-      )
-    ).toBeInTheDocument();
+
+    const headline = screen.getByRole('heading', {
+      level: 2,
+      name: 'UNFRAMED // Episode 0: The Spectral Tiger',
+    });
+    expect(headline).toHaveAttribute('lang', 'en');
+    expect(headline).not.toHaveTextContent('Anton Merkurov');
+    expect(headline).not.toHaveTextContent('Flow');
+
     expect(screen.getByText('Pierrot, archives, and scarce attention.')).toBeInTheDocument();
-    expect(screen.getAllByText('4 items').length).toBeGreaterThan(0);
+    expect(screen.getByText('The lead story as a short editorial preview.')).toBeInTheDocument();
+  });
+
+  it('keeps the main story title free of site, author and service suffixes in both languages', () => {
+    const ru = renderPage('ru');
+
+    const headline = screen.getByRole('heading', { level: 2, name: 'Русский заголовок' });
+    expect(headline).toHaveAttribute('lang', 'ru');
+    expect(headline).not.toHaveTextContent('Антон Меркуров');
+
+    ru.unmount();
+  });
+
+  it('renders one main material and exactly four selected materials, one per format', () => {
+    const { container } = renderPage('en');
+
+    expect(screen.getByRole('heading', { name: 'Selected from this issue' })).toBeInTheDocument();
+    expect(selectedIds(container)).toEqual(['post-1', 'photo-1', 'video-1', 'link-1']);
+    expect(container.querySelectorAll('#contents [data-material-format]')).toHaveLength(4);
+    expect(
+      Array.from(container.querySelectorAll('#contents [data-material-format]')).map((element) =>
+        element.getAttribute('data-material-format')
+      )
+    ).toEqual(['post', 'photo', 'video', 'link']);
+  });
+
+  it('never repeats the main material and never renders unselected issue materials', () => {
+    const { container } = renderPage('en');
+
+    expect(container.querySelector('#contents [data-material-id="lead-1"]')).toBeNull();
+    expect(container.querySelector('#contents [data-material-id="extra-1"]')).toBeNull();
+    expect(screen.queryByText('An extra article that must stay in the full issue only')).toBeNull();
+  });
+
+  it('keeps each selected format visually distinct instead of repeating one card', () => {
+    const { container } = renderPage('en');
+
+    expect(container.querySelector('#contents [data-material-format="post"] img')).toBeNull();
+    expect(container.querySelector('#contents [data-material-format="link"] img')).toBeNull();
+    expect(container.querySelector('#contents [data-material-format="video"] img')).not.toBeNull();
+    expect(container.querySelector('#contents [data-material-format="photo"] img')).not.toBeNull();
+    expect(screen.getByText('ARTnews.com')).toBeInTheDocument();
+  });
+
+  it('links to the full issue, the lead material and every selected material', () => {
+    const { container } = renderPage('en');
+
     expect(screen.getByRole('link', { name: /Read the issue/ })).toHaveAttribute(
       'href',
       '/en/flow-issues/issue-en'
     );
-  });
-
-  it('renders the actual published materials of the issue, not only a type summary', () => {
-    const { container } = renderPage('en');
-
-    expect(screen.getByRole('heading', { name: 'Inside this issue' })).toBeInTheDocument();
-    expect(screen.getByText('Заметка о книге')).toBeInTheDocument();
-    expect(screen.getByText('A Kandinsky record at Christie’s')).toBeInTheDocument();
-    expect(screen.getByText('Ночная смена')).toBeInTheDocument();
-    expect(screen.getByText('Opening night')).toBeInTheDocument();
-
-    expect(container.querySelector('a[href="/flow/note-1"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/unframed/spectral-tiger"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/flow/post-1"]')).not.toBeNull();
     expect(container.querySelector('a[href="https://www.artnews.com/story"]')).not.toBeNull();
     expect(container.querySelector('a[href="https://www.youtube.com/watch?v=abc"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow/photo-1"]')).not.toBeNull();
-
-    expect(screen.getByAltText('Kandinsky painting')).toHaveAttribute(
-      'src',
-      'https://www.artnews.com/preview.jpg'
-    );
-    expect(screen.getByAltText('Night Shift thumbnail')).toBeInTheDocument();
-    expect(screen.getByAltText('Opening night crowd')).toBeInTheDocument();
-  });
-
-  it('groups materials only by types that actually exist', () => {
-    const { container } = renderPage('en');
-    const groups = Array.from(container.querySelectorAll('#contents [data-material-kind]')).map(
-      (element) => element.getAttribute('data-material-kind')
-    );
-
-    expect(groups).toEqual(['note', 'link', 'video', 'photo']);
-    expect(container.querySelector('[data-material-kind="article"]')).toBeNull();
   });
 
   it('labels the issue language and each material language separately', () => {
     renderPage('en');
 
-    expect(screen.getByText('Original language')).toBeInTheDocument();
-    expect(screen.getAllByText('In English').length).toBeGreaterThan(0);
+    expect(screen.getByText(/Original language/)).toBeInTheDocument();
     expect(screen.getByText('Заметка о книге')).toHaveAttribute('lang', 'ru');
     expect(screen.getByText('A Kandinsky record at Christie’s')).toHaveAttribute('lang', 'en');
     expect(screen.getAllByText('In Russian').length).toBeGreaterThan(0);
@@ -255,7 +319,7 @@ describe('Journal FrontPage editorial composition', () => {
     expect(screen.queryByRole('link', { name: /Other language edition/ })).not.toBeInTheDocument();
   });
 
-  it('keeps Recent Flow, Archive and Subscribe below the issue contents', () => {
+  it('keeps Recent Flow, Archive and Subscribe as independent sections below the issue', () => {
     const { container } = renderPage('en');
 
     expect(orderedIds(container)).toEqual(['issues', 'contents', 'stream', 'archive', 'subscribe']);
@@ -267,8 +331,6 @@ describe('Journal FrontPage editorial composition', () => {
   it('shows a compact multilingual archive preview with a link to the full archive', () => {
     const { container } = renderPage('en');
 
-    // The counterpart of the current issue stays in the full archive but is
-    // not repeated directly below the cover.
     expect(container.querySelectorAll('#archive ul li')).toHaveLength(2);
     expect(container.querySelector('#archive a[href="/flow-issues/issue-ru"]')).toBeNull();
     expect(container.querySelector('a[href="/en/flow-issues/issue-en-old"]')).not.toBeNull();
@@ -285,7 +347,7 @@ describe('Journal FrontPage editorial composition', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Журнал' })).toBeInTheDocument();
     expect(screen.getByText('Текущий выпуск')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'В этом выпуске' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Главное из выпуска' })).toBeInTheDocument();
     expect(screen.getByText('Архив выпусков')).toBeInTheDocument();
     expect(screen.getByText('Подписка на еженедельную рассылку')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Все выпуски Flow/ })).toHaveAttribute(
@@ -354,11 +416,14 @@ describe('Journal FrontPage editorial composition', () => {
 
   it('keeps the featured headline complete and unwrapped by truncation utilities', () => {
     renderPage('en');
-    const headline = screen.getByRole('heading', { level: 2, name: 'The English headline' });
+    const headline = screen.getByRole('heading', {
+      level: 2,
+      name: 'UNFRAMED // Episode 0: The Spectral Tiger',
+    });
 
     expect(headline.className).toContain('break-words');
     expect(headline.className).not.toMatch(/truncate|line-clamp|overflow-hidden/);
-    expect(headline).toHaveTextContent('The English headline');
+    expect(headline).toHaveTextContent('UNFRAMED // Episode 0: The Spectral Tiger');
   });
 
   it('does not mask layout errors with a global overflow lock', () => {
@@ -371,15 +436,11 @@ describe('Journal FrontPage editorial composition', () => {
 
   it('falls back to a typographic cover when the lead has no image', () => {
     const noImageMaterials = materials.map((material) => ({ ...material, image: null }));
-    const coverIssue: FrontIssue = {
-      ...enIssue,
-      headline: 'Заметка о книге',
-    };
 
     const { container } = render(
       <FrontPage
         lang="en"
-        featured={coverIssue}
+        featured={enIssue}
         materials={noImageMaterials}
         flow={[]}
         archive={[]}
@@ -388,31 +449,18 @@ describe('Journal FrontPage editorial composition', () => {
     );
 
     expect(container.querySelector('#issues figure')).toBeNull();
-    expect(container.querySelector('#current-issue-title')).toHaveTextContent('Заметка о книге');
+    expect(container.querySelector('#current-issue-title')).toHaveTextContent(
+      'UNFRAMED // Episode 0: The Spectral Tiger'
+    );
   });
 
-  it('does not repeat a lead story that is already the issue cover', () => {
-    const coverIssue: FrontIssue = {
-      ...enIssue,
-      headline: 'Заметка о книге',
-    };
-
-    const { container } = render(
-      <FrontPage
-        lang="en"
-        featured={coverIssue}
-        materials={materials}
-        flow={[]}
-        archive={[]}
-        subscribe={<div>Subscription form</div>}
-      />
-    );
-
+  it('uses the main material itself, not a duplicate, for the cover', () => {
+    const { container } = renderPage('en');
     const issueSection = container.querySelector('#issues');
     const contents = container.querySelector('#contents');
 
-    expect(issueSection?.textContent).toContain('Заметка о книге');
-    expect(contents?.textContent).not.toContain('Заметка о книге');
-    expect(contents?.textContent).toContain('A Kandinsky record at Christie’s');
+    expect(issueSection?.textContent).toContain('UNFRAMED // Episode 0: The Spectral Tiger');
+    expect(contents?.textContent).not.toContain('UNFRAMED // Episode 0: The Spectral Tiger');
+    expect(contents?.textContent).toContain('Заметка о книге');
   });
 });

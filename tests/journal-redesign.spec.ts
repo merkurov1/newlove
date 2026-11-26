@@ -11,7 +11,7 @@ const VIEWPORTS = [
   { label: 'desktop-1440x900', width: 1440, height: 900 },
 ] as const;
 
-const EN_TITLE = 'UNFRAMED // Episode 0: The Spectral Tiger | Anton Merkurov';
+const EN_TITLE = 'UNFRAMED // Episode 0: The Spectral Tiger';
 const EN_SUMMARY = 'Pierrot, archives, and scarce attention.';
 const RU_SUMMARY = 'Архив, Пьеро и границы авторства';
 
@@ -29,6 +29,8 @@ async function openJournal(page: Page, lang: 'en' | 'ru') {
   ).toBeVisible();
   await expect(page.locator('#current-issue-title')).toBeVisible();
   await expect(page.locator('#current-issue-title')).toHaveText(EN_TITLE);
+  await expect(page.locator('#current-issue-title')).not.toContainText('Anton Merkurov');
+  await expect(page.locator('#current-issue-title')).not.toContainText('Flow -');
 }
 
 function languageSwitcher(page: Page) {
@@ -113,13 +115,37 @@ test.describe('Journal editorial front page', () => {
         ).toHaveCount(1);
         await expect(page.locator('a[href="/unframed/spectral-tiger"]')).toHaveCount(1);
 
-        // Contents exposes real, linked materials from the issue payload.
+        // Contents is a compact selection: one main story plus at most one
+        // material per format, never a duplicate of the cover story.
         const contents = page.locator('#contents');
         await expect(contents).toContainText('Merkurov x Pierrot');
         await expect(contents).toContainText(
           'A Wassily Kandinsky Sold by the Nahmads Fetches $85.8 M.'
         );
         await expect(contents.locator('a[href]').first()).toBeVisible();
+
+        const selected = contents.locator('[data-material-id]');
+        await expect(selected).toHaveCount(4);
+        await expect(contents.locator('[data-material-id="lead-1"]')).toHaveCount(0);
+        await expect(contents.locator('[data-material-format="post"]')).toHaveCount(1);
+        await expect(contents.locator('[data-material-format="photo"]')).toHaveCount(1);
+        await expect(contents.locator('[data-material-format="video"]')).toHaveCount(1);
+        await expect(contents.locator('[data-material-format="link"]')).toHaveCount(1);
+
+        // The cover links to the complete issue, not to a shortened copy.
+        await expect(
+          page.locator(
+            lang === 'en'
+              ? 'a[href="/en/flow-issues/en-issue-18-2026-11-20"]'
+              : 'a[href="/flow-issues/ru-issue-26-2026-11-20"]'
+          )
+        ).toHaveCount(1);
+
+        // Selected material links stay real (local routes and external sources).
+        await expect(contents.locator('a[href="/flow/merkurov-x-pierrot-c1dlr"]')).toHaveCount(1);
+        await expect(contents.locator('a[href="/flow/piero-joke"]')).toHaveCount(1);
+        await expect(contents.locator('a[href^="https://www.artnews.com/"]')).toHaveCount(1);
+        await expect(contents.locator('a[href^="https://www.youtube.com/"]')).toHaveCount(1);
 
         const firstMaterial = contents.locator('[data-material-kind]').first();
         await expect(firstMaterial).toBeVisible();
@@ -141,6 +167,22 @@ test.describe('Journal editorial front page', () => {
           .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
         expect(coverSize).toBeGreaterThan(archiveSize);
 
+        // The first screen stays editorial rather than becoming a poster: the
+        // masthead is bounded and the compact selection begins in view at the
+        // desktop viewport.
+        const mastheadSize = await page
+          .getByRole('heading', { level: 1 })
+          .evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+        expect(mastheadSize).toBeLessThanOrEqual(76);
+        expect(coverSize).toBeLessThanOrEqual(56);
+
+        if (viewport.width >= 1440) {
+          const contentsTop = await contents.evaluate(
+            (element) => element.getBoundingClientRect().top + window.scrollY
+          );
+          expect(contentsTop).toBeLessThan(900);
+        }
+
         await expectNoHorizontalOverflow(page);
         await expectSectionsInsideViewport(page);
 
@@ -154,7 +196,7 @@ test.describe('Journal editorial front page', () => {
         // real asset decoded instead of a broken placeholder.
         const images = contents.locator('img');
         const imageCount = await images.count();
-        expect(imageCount).toBeGreaterThan(2);
+        expect(imageCount).toBeGreaterThanOrEqual(2);
         for (let index = 0; index < imageCount; index++) {
           const image = images.nth(index);
           await image.scrollIntoViewIfNeeded();
