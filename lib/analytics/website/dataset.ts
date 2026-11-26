@@ -1795,6 +1795,7 @@ async function internalSnapshot(
         en: activeSubscribers.filter((row) => localeGroup(row) === 'en').length,
       },
       signals: {
+        available: true,
         deliveryFailures: newsletterMetrics.deliveryFailures,
         suspectedAutomated: newsletterMetrics.suspectedAutomated,
         rateLimited: newsletterMetrics.rateLimited,

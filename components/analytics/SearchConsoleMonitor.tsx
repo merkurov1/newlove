@@ -1,5 +1,6 @@
 import type {
   AnalyticsDataset,
+  BreakdownRow,
   MetricComparison,
   SearchAnomaly,
   SearchConsoleSnapshot,
@@ -7,6 +8,7 @@ import type {
 } from '@/lib/analytics/website/types';
 
 import { getAnalyticsTimezone } from '@/lib/analytics/website/config';
+import { normalizeSearchConsoleSnapshot } from '@/lib/analytics/website/dashboardContract';
 
 function formatNumber(value: number | null | undefined): string {
   if (value === null || value === undefined || !Number.isFinite(value)) return '—';
@@ -59,7 +61,25 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function stateLabel(gsc: SearchConsoleSnapshot): string {
+function extraMetric(row: BreakdownRow, key: string): number | null {
+  const value = row.extra?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function isEmptyState(gsc: SearchConsoleSnapshot, sourceConnected: boolean): boolean {
+  return (
+    !gsc.available &&
+    sourceConnected &&
+    (gsc.dataState === 'stale' || gsc.dataState === 'partial' || gsc.dataState === 'complete')
+  );
+}
+
+function stateLabel(gsc: SearchConsoleSnapshot, empty = false): string {
+  if (!gsc.available) {
+    if (gsc.dataState === 'not_configured') return 'не настроено';
+    return empty ? 'данных нет' : 'недоступно';
+  }
+
   switch (gsc.dataState) {
     case 'complete':
       return 'данные полные';
@@ -67,14 +87,14 @@ function stateLabel(gsc: SearchConsoleSnapshot): string {
       return 'данные частичные';
     case 'stale':
       return 'данные устарели';
-    case 'not_configured':
-      return 'не настроено';
     default:
-      return 'недоступно';
+      return 'данные загружены';
   }
 }
 
-function stateTone(gsc: SearchConsoleSnapshot): string {
+function stateTone(gsc: SearchConsoleSnapshot, empty = false): string {
+  if (empty) return 'attention';
+  if (!gsc.available) return 'missing';
   if (gsc.dataState === 'complete') return 'growth';
   if (gsc.dataState === 'partial' || gsc.dataState === 'stale') return 'attention';
   return 'missing';
@@ -151,18 +171,23 @@ function TopTable({
             </tr>
           </thead>
           <tbody>
-            {rows.slice(0, limit).map((row) => (
-              <tr key={row.key}>
-                <td title={row.label}>{row.label}</td>
-                <td>{formatNumber(row.value)}</td>
-                <td>{formatNumber(Number(row.extra?.impressions ?? 0))}</td>
-                <td>{formatPercent(Number(row.extra?.ctr ?? 0) * 100)}</td>
-                <td>{formatPosition(Number(row.extra?.position ?? NaN))}</td>
-                <td>
-                  <Delta value={row.deltaPercent} />
-                </td>
-              </tr>
-            ))}
+            {rows.slice(0, limit).map((row) => {
+              const impressions = extraMetric(row, 'impressions');
+              const ctr = extraMetric(row, 'ctr');
+              const position = extraMetric(row, 'position');
+              return (
+                <tr key={row.key}>
+                  <td title={row.label}>{row.label}</td>
+                  <td>{formatNumber(row.value)}</td>
+                  <td>{formatNumber(impressions)}</td>
+                  <td>{formatPercent(ctr === null ? null : ctr * 100)}</td>
+                  <td>{formatPosition(position)}</td>
+                  <td>
+                    <Delta value={row.deltaPercent} />
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -195,15 +220,30 @@ function AnomalyList({ anomalies }: { anomalies: SearchAnomaly[] }) {
 }
 
 export default function SearchConsoleMonitor({ dataset }: { dataset: AnalyticsDataset }) {
-  const gsc = dataset.gsc;
-  const period = dataset.period;
-  const source = dataset.sources.find((entry) => entry.provider === 'search_console') ?? null;
+  const gsc = normalizeSearchConsoleSnapshot(dataset.gsc);
+  const period = dataset.period ?? {
+    key: 'unknown',
+    label: 'Период не указан',
+    timezone: 'UTC',
+    start: '—',
+    end: '—',
+    previousStart: '—',
+    previousEnd: '—',
+    previousLabel: '—',
+    comparisonRequested: false,
+  };
+  const sources = Array.isArray(dataset.sources) ? dataset.sources : [];
+  const source = sources.find((entry) => entry.provider === 'search_console') ?? null;
+  const empty = isEmptyState(gsc, source?.status === 'connected');
   const comparisonAvailable = gsc.totals.clicks.previous !== null;
-  const gaps = dataset.dataGaps.filter((gap) => /search_console/i.test(gap));
+  const gaps = (Array.isArray(dataset.dataGaps) ? dataset.dataGaps : []).filter((gap) =>
+    /search_console/i.test(gap)
+  );
 
   if (!gsc.available) {
-    const reason =
-      gsc.dataState === 'not_configured'
+    const reason = empty
+      ? 'Search Console подключён, но сохранённых строк за выбранный период нет. Это не ноль показов и не отказ источника.'
+      : gsc.dataState === 'not_configured'
         ? 'Google OAuth для Search Console не настроен. Показатели не подставляются нулём.'
         : gsc.dataState === 'stale'
           ? 'Сохранённых строк Search Console за это окно нет. Источник не равен нулю показов.'
@@ -216,7 +256,9 @@ export default function SearchConsoleMonitor({ dataset }: { dataset: AnalyticsDa
             <p className="pw-kicker">GOOGLE SEARCH CONSOLE</p>
             <h2 id="pw-analytics-gsc-title">Поисковая видимость</h2>
           </div>
-          <span className="pw-analytics-badge">{stateLabel(gsc)}</span>
+          <span className={`pw-analytics-badge pw-gsc-state--${stateTone(gsc, empty)}`}>
+            {stateLabel(gsc, empty)}
+          </span>
         </div>
         <p className="pw-analytics-action">{reason}</p>
         <dl className="pw-gsc-meta">
@@ -262,8 +304,8 @@ export default function SearchConsoleMonitor({ dataset }: { dataset: AnalyticsDa
             <strong>{gsc.expectedDataTo || '—'}</strong>.
           </p>
         </div>
-        <span className={`pw-analytics-badge pw-gsc-state--${stateTone(gsc)}`}>
-          {stateLabel(gsc)}
+        <span className={`pw-analytics-badge pw-gsc-state--${stateTone(gsc, empty)}`}>
+          {stateLabel(gsc, empty)}
         </span>
       </div>
 
@@ -289,26 +331,35 @@ export default function SearchConsoleMonitor({ dataset }: { dataset: AnalyticsDa
 
       <div className="pw-gsc-section">
         <h3>Бренд и небренд</h3>
-        <table className="pw-gsc-table">
-          <thead>
-            <tr>
-              <th>Сегмент</th>
-              <th>Клики</th>
-              <th>Показы</th>
-              <th>CTR</th>
-              <th>Позиция</th>
-              <th>Δ показов</th>
-              <th>Показы ранее</th>
-            </tr>
-          </thead>
-          <tbody>
-            <SegmentRow segment={gsc.brand.brand} />
-            <SegmentRow segment={gsc.brand.nonBrand} />
-          </tbody>
-        </table>
-        <p className="pw-analytics-hint">
-          {gsc.brand.heuristic} Термины: {gsc.brand.brandTerms.join(', ') || '—'}.
-        </p>
+        {gsc.brand.available ? (
+          <>
+            <table className="pw-gsc-table">
+              <thead>
+                <tr>
+                  <th>Сегмент</th>
+                  <th>Клики</th>
+                  <th>Показы</th>
+                  <th>CTR</th>
+                  <th>Позиция</th>
+                  <th>Δ показов</th>
+                  <th>Показы ранее</th>
+                </tr>
+              </thead>
+              <tbody>
+                <SegmentRow segment={gsc.brand.brand} />
+                <SegmentRow segment={gsc.brand.nonBrand} />
+              </tbody>
+            </table>
+            <p className="pw-analytics-hint">
+              {gsc.brand.heuristic} Термины: {gsc.brand.brandTerms.join(', ') || '—'}.
+            </p>
+          </>
+        ) : (
+          <p className="pw-gsc-muted">
+            {gsc.brand.unavailableReason ??
+              'Разбивка бренд/небренд недоступна в этом снимке данных. Нули не подставляются.'}
+          </p>
+        )}
       </div>
 
       <div className="pw-gsc-section">

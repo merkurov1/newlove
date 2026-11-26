@@ -12,6 +12,7 @@ import {
 } from '@/lib/analytics/website/config';
 import { loadSourceHealth } from '@/lib/analytics/website/dataset';
 import { loadWebsiteDashboard } from '@/lib/analytics/website/dashboard';
+import { normalizeWebsiteDashboard } from '@/lib/analytics/website/dashboardContract';
 import { loadYouTubeConnectionState } from '@/lib/youtube/connection';
 import { getYouTubeChannelId, getYouTubeDataApiKey } from '@/lib/youtube/config';
 import type { ProviderHealth } from '@/lib/analytics/website/types';
@@ -24,7 +25,8 @@ export const dynamic = 'force-dynamic';
 
 const loadDashboardCached = unstable_cache(
   async (days: number) => loadWebsiteDashboard({ days: days as 7 | 30 | 90 }),
-  ['website-analytics-dashboard-v1'],
+  // v2 matches the dashboard schema; v1 snapshots are never read as current.
+  ['website-analytics-dashboard-v2'],
   { revalidate: 60 }
 );
 
@@ -419,7 +421,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
 
   const params = searchParams ?? {};
   const health = await loadSourceHealth();
-  const dashboard = await loadDashboardCached(30).catch(() => null);
+  const cachedDashboard = await loadDashboardCached(30).catch(() => null);
+  const dashboard = normalizeWebsiteDashboard(cachedDashboard);
+  // A cached snapshot from an older schema is never rendered as current data.
+  const dashboardOutdated = Boolean(cachedDashboard) && !dashboard;
   const google = getGoogleOAuthConfig();
   const umami = getUmamiConfig();
   const message = banner(params);
@@ -455,6 +460,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
           : 'не подключён';
   const blueskyDashboard = dashboard?.dataset.bluesky ?? null;
   const blueskyPeriodPosts = blueskyDashboard?.period.posts ?? [];
+  const newsletterSignals = dashboard?.dataset.internal.newsletter.signals ?? null;
+  const newsletterSignalsAvailable = newsletterSignals?.available === true;
   const recentRuns = health.runs.slice(0, 12);
   const youtubeStatusHref = '/api/admin/pierrot/youtube/status';
 
@@ -482,6 +489,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
         {message && (
           <div className={`pw-analytics-banner pw-analytics-banner--${message.tone}`}>
             {message.text}
+          </div>
+        )}
+
+        {dashboardOutdated && (
+          <div className="pw-analytics-banner pw-analytics-banner--warn">
+            Сохранённый снимок аналитики создан по старой схеме и не отображается как актуальный.
+            Показатели не подставляются; дождитесь обновления кеша или запустите синхронизацию.
           </div>
         )}
 
@@ -629,21 +643,21 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               <div>
                 <dt>Доля подтверждений</dt>
                 <dd>
-                  {dashboard?.dataset.internal.newsletter.signals.confirmationRate == null
+                  {newsletterSignals?.confirmationRate == null
                     ? '—'
-                    : `${Math.round(
-                        dashboard.dataset.internal.newsletter.signals.confirmationRate * 100
-                      )}%`}
+                    : `${Math.round(newsletterSignals.confirmationRate * 100)}%`}
                 </dd>
               </div>
               <div>
                 <dt>Всплеск регистраций</dt>
                 <dd>
-                  {dashboard?.dataset.internal.newsletter.signals.signupSpike?.detected
-                    ? `да — ${formatNumber(
-                        dashboard.dataset.internal.newsletter.signals.signupSpike.latestHourCount
-                      )} за час`
-                    : 'нет'}
+                  {!newsletterSignalsAvailable || newsletterSignals?.signupSpike == null
+                    ? '—'
+                    : newsletterSignals.signupSpike.detected
+                      ? `да — ${formatNumber(
+                          newsletterSignals.signupSpike.latestHourCount
+                        )} за час`
+                      : 'нет'}
                 </dd>
               </div>
               <div>
@@ -656,17 +670,19 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
               </div>
               <div>
                 <dt>Ошибки отправки подтверждения</dt>
-                <dd>
-                  {formatNumber(dashboard?.dataset.internal.newsletter.signals.deliveryFailures)}
-                </dd>
+                <dd>{formatNumber(newsletterSignals?.deliveryFailures)}</dd>
               </div>
               <div>
                 <dt>Заблокировано ботов (эвристика)</dt>
-                <dd>
-                  {formatNumber(dashboard?.dataset.internal.newsletter.signals.suspectedAutomated)}
-                </dd>
+                <dd>{formatNumber(newsletterSignals?.suspectedAutomated)}</dd>
               </div>
             </dl>
+            {dashboard && !newsletterSignalsAvailable && (
+              <p className="pw-analytics-hint">
+                {newsletterSignals?.unavailableReason ??
+                  'Сигналы рассылки недоступны в этом снимке. Значения не подставляются нулём.'}
+              </p>
+            )}
             <p className="pw-analytics-hint">
               Аудитория — только подтверждённые адреса. Ожидающие подтверждения и ошибки доставки
               показаны отдельно и не считаются ростом аудитории. Подозрительные регистрации — это

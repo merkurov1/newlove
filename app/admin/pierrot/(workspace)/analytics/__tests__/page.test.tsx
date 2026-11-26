@@ -6,6 +6,8 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { fixtureDashboard } from '@/lib/analytics/website/__fixtures__/dashboardFixture';
+
 jest.mock('next/cache', () => ({
   unstable_cache: (fn: unknown) => fn,
 }));
@@ -59,6 +61,9 @@ jest.mock('@/components/analytics/SearchConsoleMonitor', () => ({
 
 const { loadSourceHealth } = require('@/lib/analytics/website/dataset') as {
   loadSourceHealth: jest.Mock;
+};
+const { loadWebsiteDashboard } = require('@/lib/analytics/website/dashboard') as {
+  loadWebsiteDashboard: jest.Mock;
 };
 const { loadYouTubeConnectionState } = require('@/lib/youtube/connection') as {
   loadYouTubeConnectionState: jest.Mock;
@@ -145,6 +150,7 @@ describe('Pierrot analytics workspace', () => {
     jest.clearAllMocks();
     (loadSourceHealth as unknown as jest.Mock).mockResolvedValue(health());
     (loadYouTubeConnectionState as unknown as jest.Mock).mockResolvedValue(youtubeState());
+    (loadWebsiteDashboard as unknown as jest.Mock).mockResolvedValue(null);
   });
 
   it('renders read-only YouTube source health without management actions', async () => {
@@ -189,5 +195,45 @@ describe('Pierrot analytics workspace', () => {
     expect(file).not.toMatch(/YouTubeChannelManager/);
     expect(file).not.toMatch(/\/api\/admin\/youtube\/management/);
     expect(file).not.toMatch(/youtube_management/);
+  });
+
+  it('renders a full current-schema dashboard payload', async () => {
+    (loadWebsiteDashboard as unknown as jest.Mock).mockResolvedValue(fixtureDashboard());
+
+    const html = await renderPage();
+
+    expect(html).toContain('Подтверждённые подписчики');
+    expect(html).toContain('42');
+    expect(html).toContain('Ошибки отправки подтверждения');
+    expect(html).toContain('>5<');
+    expect(html).not.toContain('создан по старой схеме');
+  });
+
+  it('does not render an old cached dashboard as current data', async () => {
+    (loadWebsiteDashboard as unknown as jest.Mock).mockResolvedValue(
+      fixtureDashboard({ schemaVersion: 1 })
+    );
+
+    const html = await renderPage();
+
+    expect(html).toContain('создан по старой схеме');
+    expect(html).toContain('Подтверждённые подписчики');
+    expect(html).not.toContain('>42<');
+    expect(html).not.toContain('Ошибки доставки писем</dt><dd>100');
+  });
+
+  it('does not crash when newsletter signals are missing from the cached payload', async () => {
+    const payload = fixtureDashboard();
+    const dataset = payload.dataset as Record<string, unknown>;
+    const internal = dataset.internal as Record<string, unknown>;
+    const newsletter = internal.newsletter as Record<string, unknown>;
+    delete newsletter.signals;
+    (loadWebsiteDashboard as unknown as jest.Mock).mockResolvedValue(payload);
+
+    const html = await renderPage();
+
+    expect(html).toContain('Ошибки отправки подтверждения');
+    expect(html).toContain('Сигналы рассылки');
+    expect(html).not.toContain('создан по старой схеме');
   });
 });
