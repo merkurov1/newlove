@@ -303,8 +303,10 @@ describe('Journal FrontPage editorial composition', () => {
 
     expect(mainAction?.closest('[data-role="main-material"]')).not.toBeNull();
     expect(fullIssue).toHaveAttribute('data-role', 'full-issue');
-    expect(fullIssue.className).toContain('bg-[#1D1B18]');
-    expect(mainAction?.className).not.toContain('bg-[#1D1B18]');
+    // The full-issue transition is an editorial text link, not a filled CTA.
+    expect(fullIssue.className).not.toContain('bg-[#1D1B18]');
+    expect(fullIssue.className).not.toContain('text-[#F5F2EB]');
+    expect(fullIssue.className).toContain('border-t');
     expect(container.querySelector('#issues [data-role="full-issue"]')).not.toBeNull();
     expect(container.querySelector('#contents [data-role="full-issue"]')).toBeNull();
   });
