@@ -1,82 +1,89 @@
-# Journal editorial front page — verification report
+# Journal — current issue as one editorial object
 
 Date: 2026-11-26
-Task: `58530381-168a-493a-a1f7-4c24a4b7a022`
 Routes: `/journal` (EN), `/ru/journal` (RU)
 
-## 1. What changed
+## 1. Design decision
 
-The current-issue block now reads as one explicit hierarchy — main material,
-then the “What’s inside” selection, then the full issue:
+The current-issue block was rebuilt as a single bordered “issue sheet” instead
+of a cover section followed by a separate card grid. The sheet has one reading
+order and one visual rhythm:
 
-- the cover is labelled `Main story` / `Главный материал` and keeps the
-  headline, editorial summary, lead preview and the separate `Open material`
-  action for the lead publication;
-- the full-issue action no longer sits inside the cover metadata row;
-- it is now a solid, high-contrast button in the “What’s inside” block, labelled
-  `Read the full issue` / `Читать полный выпуск`, and points to the complete
-  issue route (`/en/flow-issues/...` for EN, `/flow-issues/...` for RU);
-- the selection heading is now literally `What’s inside` / `Что внутри`, with
-  the note that it is a selection, not the full issue;
-- the selection still contains at most four additional materials, one per
-  format `post`, `photo`, `video` and `link`, and never repeats the main story;
-- the main material link and the full-issue button have deliberately different
-  treatments: a small underlined text action versus a filled primary button;
-- on 390 px the button spans the block width and stays above the selection
-  cards, so it is not buried in metadata;
-- RU and EN use the same order, labels and destination rules;
-- Flow, the archive and subscription remain separate sections; Flow is still
-  its own chronological stream.
+1. **Issue rail** — `Current issue` / `Текущий выпуск`, the real issue number,
+   publication period, material count, original language and the other-language
+   edition. This is an `h2` and is deliberately separated from the story title.
+2. **Main story** — `01 / Main story`, the normalized lead headline, editorial
+   summary, lead preview and the single `Open material` action. The module is
+   visually dominant but bounded: it is one numbered chapter of the sheet, not
+   the whole issue. On desktop the lead image sits in a dedicated right column;
+   on phones the text leads and the image follows it.
+3. **Editorial selection** — `What’s inside` / `Что внутри` is a numbered index
+   (`02`–`05`), not four equal cards. Text materials use a larger text-only row,
+   photography gets a portrait thumbnail, video gets a landscape thumbnail with
+   a play marker, and links get a source label with an external-arrow tile. The
+   lead story is never repeated.
+4. **Full issue** — the dark `Read the full issue` / `Читать полный выпуск` bar
+   is now the last element of the sheet, after the selection. It repeats the
+   issue number and material count, so the transition is obvious without
+   hunting through metadata.
 
-No routes, metadata, canonical/hreflang values, JSON-LD contracts, APIs,
-database migrations or editorial source text were changed.
+The issue sheet uses the existing paper/ink/accent palette and rules, with one
+outer border, shared gutters and continuous numbering. Flow, the archive and
+subscription stay outside the sheet as separate page sections.
 
-## 2. Browser verification
+No story titles, descriptions, images, issue numbers or materials were invented.
+When no issue exists, the sheet becomes a localized empty state. When a support
+format is missing, the row is skipped. When the lead has no image, the cover
+stays typographic. When only the lead exists, the selection says that the main
+story is presented above. No synthetic cards are added.
 
-Real Chromium (Playwright 1.65.1) was used against the running Next.js app with
-the local Supabase fixture (EN #18 / RU #26, same period).
+RU/EN copy, locale routes, canonical/hreflang metadata, JSON-LD inputs and all
+material links are unchanged.
 
-Viewports:
+## 2. Responsive behaviour
 
-- mobile: 390 × 844
-- iPad portrait: 768 × 1024
-- iPad landscape: 1024 × 768
-- desktop: 1440 × 900
+| Width | Composition                                                                                                                                                                                      |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 390   | Masthead and issue identity stack; the issue rail metadata becomes a two-column grid; the main story is a text-led module followed by a full-width image; index rows place media below the text. |
+| 768   | Issue rail remains stacked but metadata gains a three-column reading; main story is full width; selection rows keep text and a right-side media tile.                                            |
+| 1024  | Issue rail splits into identity + metadata columns; the lead story and image become side by side.                                                                                                |
+| 1440  | The sheet spans the editorial grid with a large issue number, split rail, asymmetric lead story with image, and wide numbered index rows.                                                        |
 
-Languages: EN and RU for every viewport.
+## 3. Browser verification
 
-For every combination the automated run checked:
+Real Chromium (Playwright 1.65.1) against the running Next.js app with the local
+Supabase fixture (EN #18 / RU #26, same period).
 
-- `<html lang>` matches the route;
-- exactly one page-level language switcher;
-- canonical and `hreflang` URLs for `/journal` and `/ru/journal`;
-- OG locale;
-- the correct published edition: EN #18 on `/journal`, RU #26 on
-  `/ru/journal`;
-- a normalized main headline without the duplicated author or Flow signature;
+Viewports: 390 × 844, 768 × 1024, 1024 × 768 and 1440 × 900. Languages: EN and
+RU for every viewport.
+
+For each combination the automated run checks:
+
+- `<html lang>`, one language switcher, canonical and hreflang URLs, OG locale;
+- the correct published edition: EN #18 on `/journal`, RU #26 on `/ru/journal`;
+- issue identity in its own rail, outside `[data-role="main-material"]`;
+- a normalized lead headline without duplicated author, source or Flow suffix;
 - exactly four selected materials with one `post`, `photo`, `video` and `link`;
-- the main material is not repeated in the selection;
-- direct links to the full issue, the lead material and every selected
-  material;
-- exactly one full-issue button, located inside `#contents` rather than the
-  cover metadata, with the localized label and the correct issue route;
-- at 390 px the full-issue button is in view at the start of the selection and
-  is at least 40 px tall;
+- the lead is not repeated and unselected materials are absent;
+- all selected and lead links;
+- exactly one full-issue action, inside `#issues` but after `#contents`, with the
+  localized label and the correct issue route;
+- the full-issue bar is at least 40 px tall and visible when scrolled to;
 - no horizontal overflow at document or section level;
-- no broken images in the selected media cards;
-- the masthead/cover type stays bounded and the compact selection begins in
-  view at desktop;
-- no site-wide `overflow` lock is used.
+- no broken selected-media images;
+- the lead type stays bounded and the selection begins in view on desktop;
+- no site-wide overflow lock.
 
-The language-switch test clicks RU from `/journal` and EN from `/ru/journal`,
-then verifies the issue context stays on the same period while the real edition
-and interface language change.
+The language-switch test changes RU → EN and EN → RU and confirms that the issue
+context stays on the same period while the real edition and interface language
+change.
 
-Screenshots (24 files):
+Screenshots (32 files):
 
 - `*-first.png` — first screen;
-- `*-contents.png` — the compact selection;
-- `*-archive.png` — continuation at the issue archive;
+- `*-contents.png` — editorial selection;
+- `*-full-issue.png` — closing full-issue transition;
+- `*-archive.png` — continuation at the issue archive.
 
 for:
 
@@ -85,27 +92,25 @@ for:
 - `ipad-landscape-1024x768-en-*`, `ipad-landscape-1024x768-ru-*`
 - `desktop-1440x900-en-*`, `desktop-1440x900-ru-*`
 
-## 3. Commands
+## 4. Commands
 
-| Command                                                                                                                | Result                                                                    |
-| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `pnpm typecheck`                                                                                                       | exit 0                                                                    |
-| `pnpm exec jest components/journal/__tests__ lib/journal/__tests__ lib/i18n/__tests__/journal.test.ts --runInBand`     | 9 suites, 82 tests passed                                                 |
-| `pnpm exec playwright test tests/journal-redesign.spec.ts --config=tests/pierrot.playwright.config.ts --reporter=list` | 9 tests passed                                                            |
-| `pnpm exec eslint <touched files>`                                                                                     | exit 0, warnings only (`<img>` policy already used by the issue renderer) |
-| `pnpm exec prettier --write <touched files>`                                                                           | passed after apply                                                        |
+| Command                                                                                                                | Result                               |
+| ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `pnpm typecheck`                                                                                                       | exit 0                               |
+| `pnpm exec jest components/journal/__tests__ lib/journal/__tests__ lib/i18n/__tests__/journal.test.ts --runInBand`     | 9 suites, 82 tests passed            |
+| `pnpm exec playwright test tests/journal-redesign.spec.ts --config=tests/pierrot.playwright.config.ts --reporter=list` | 9 tests passed                       |
+| `pnpm exec eslint <touched files>`                                                                                     | exit 0, `<img>` policy warnings only |
+| `pnpm exec prettier --write <touched files>`                                                                           | applied                              |
 
 The full repository test suite and production build were not rerun for this
-focused presentation change; the changed area is covered by the focused Jest
-and Playwright runs above.
+focused presentation change.
 
-## 4. Fixture note and limitations
+## 5. Fixture note
 
 Production credentials are not available in the execution environment, so the
-browser run uses the existing local Supabase test stub extended with a fixture
-that mirrors the researched production issue pair EN #18 / RU #26 (same
-period, translated RU summary/lead, the same real material titles and links).
-Images in the fixture are deterministic inline SVG placeholders with landscape
-and portrait proportions so the responsive image behaviour is testable offline.
-Production uses the real issue images; no fixture data or support code is
-imported by the application.
+browser run uses the existing local Supabase test stub and the fixture that
+mirrors the researched production issue pair EN #18 / RU #26 (same period,
+translated RU summary/lead, the same real material titles and links). Fixture
+images are deterministic inline SVG placeholders with landscape and portrait
+proportions so responsive image behaviour is testable offline. No fixture data
+or support code is imported by the application.
