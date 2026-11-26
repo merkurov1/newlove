@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import { createBrainStorage } from '@/lib/knowledge/brain/storage';
@@ -24,7 +25,12 @@ function json(body: unknown, status = 200) {
 export async function POST(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

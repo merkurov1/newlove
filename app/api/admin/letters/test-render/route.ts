@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { renderNewsletterEmail } from '@/emails/NewsletterEmail';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
@@ -5,7 +6,12 @@ import { requireAdminFromRequest } from '@/lib/serverAuth';
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401 },

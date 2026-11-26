@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import {
   downloadAndStoreImageDetailed,
   imageMetadataFromStoredImage,
@@ -52,7 +53,12 @@ export async function POST(req: Request) {
 
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -305,12 +311,18 @@ export async function POST(req: Request) {
       image_availability: imageMeta?.availability || 'missing',
     });
   } catch (error: any) {
-    console.error('Error saving lot:', error);
-    const message = error?.message || 'Internal Server Error';
+    const unauthorized = isAuthenticationError(error);
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error?.message || 'Internal Server Error';
+
+    if (!unauthorized) {
+      console.error('Error saving lot:', error);
+    }
 
     return NextResponse.json(
       { error: message },
-      { status: message.includes('Unauthorized') ? 401 : 500 },
+      { status: unauthorized ? 401 : 500 },
     );
   }
 }

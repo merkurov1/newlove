@@ -5,6 +5,7 @@ import {
 
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { generateFlowContext } from '@/lib/flow/ai';
 import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import {
@@ -59,10 +60,23 @@ export async function POST(
       req,
     );
   } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error(
+        '[admin-item-ai] auth check failed:',
+        error,
+      );
+
+      return NextResponse.json(
+        {
+          error: 'Failed to authorize request.',
+        },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json(
       {
-        error:
-          errorMessage(error),
+        error: 'Unauthorized',
       },
       { status: 401 },
     );

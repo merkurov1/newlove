@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { attachDevTaskResult, getDevTask, updateDevTask } from '@/lib/pierrot/dev/tasks';
@@ -80,7 +81,12 @@ export async function GET(req: Request, context: { params: Promise<{ id: string 
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -99,7 +105,12 @@ export async function PATCH(req: Request, context: { params: Promise<{ id: strin
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

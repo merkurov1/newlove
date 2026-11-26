@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import {
   fetchConfirmedActiveSubscribers,
   maskNewsletterEmail,
@@ -59,7 +60,11 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка предпросмотра';
-    const unauthorized = /unauthorized|admin access required/i.test(message);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[newsletter-preview]', error);
+    }
 
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },

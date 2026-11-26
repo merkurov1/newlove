@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import crypto from 'node:crypto';
 import { NextResponse } from 'next/server';
 
@@ -92,7 +93,12 @@ export async function GET(request: Request) {
     });
 
     return response;
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 }

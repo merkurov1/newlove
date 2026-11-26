@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
 import { getClientIp } from '@/lib/rateLimit';
@@ -59,7 +60,12 @@ export async function GET(req: Request) {
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -74,7 +80,12 @@ export async function POST(req: Request) {
   let admin: Awaited<ReturnType<typeof requireAdminFromRequest>>;
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

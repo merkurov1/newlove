@@ -5,6 +5,7 @@ import net from 'node:net';
 
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import {
   getYouTubeCanonicalUrl,
   isYouTubeUrl,
@@ -440,12 +441,22 @@ export async function POST(req: NextRequest) {
   try {
     await requireAdminFromRequest(req);
   } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[parse-link] auth check failed:', error);
+
+      return NextResponse.json(
+        {
+          error: 'Failed to authorize request.',
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
     return NextResponse.json(
       {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Unauthorized',
+        error: 'Unauthorized',
       },
       {
         status: 401,

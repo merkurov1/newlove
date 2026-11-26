@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import {
@@ -28,7 +29,12 @@ function serialize(offerId: (typeof PIERROT_OFFER_IDS)[number]) {
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 
@@ -54,7 +60,12 @@ export async function PATCH(request: Request) {
   try {
     const admin = await requireAdminFromRequest(request);
     actor = admin.id;
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return json({ error: 'Unauthorized' }, 401);
   }
 

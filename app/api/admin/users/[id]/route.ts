@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getCurrentUser, getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
@@ -16,7 +17,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     let authenticated = false;
 
     try {

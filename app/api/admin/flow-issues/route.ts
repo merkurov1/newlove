@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { buildIssuePayload, resolveIssueWindow } from '@/lib/flow-issue/build';
 import { renderIssue } from '@/lib/flow-issue/render';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
@@ -165,7 +166,7 @@ export async function GET(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка загрузки выпусков';
 
-    const unauthorized = /unauthorized|admin access required/i.test(message);
+    const unauthorized = isAuthenticationError(error);
 
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },
@@ -349,11 +350,13 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('[flow-issues] build failed', error);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[flow-issues] build failed', error);
+    }
 
     const message = error instanceof Error ? error.message : 'Ошибка сборки выпуска';
-
-    const unauthorized = /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },
@@ -641,11 +644,13 @@ export async function PATCH(request: Request) {
               : 'Выпуск опубликован и разослан.',
     });
   } catch (error) {
-    console.error('[flow-issues] PATCH failed', error);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[flow-issues] PATCH failed', error);
+    }
 
     const message = error instanceof Error ? error.message : 'Ошибка обработки выпуска';
-
-    const unauthorized = /unauthorized|admin access required/i.test(message);
 
     return NextResponse.json(
       { error: unauthorized ? 'Доступ запрещён' : message },

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import {
   approveManuscriptEdit,
   buildEditDiff,
@@ -65,10 +66,21 @@ export async function GET(request: Request) {
       revisions: revisions.revisions,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Editorial request failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/manuscript/edits] list failed:', error);
+    }
+
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error instanceof Error
+        ? error.message
+        : 'Editorial request failed';
+
     return NextResponse.json(
       { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -115,10 +127,21 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Proposal failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/manuscript/edits] proposal failed:', error);
+    }
+
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error instanceof Error
+        ? error.message
+        : 'Proposal failed';
+
     return NextResponse.json(
       { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -174,10 +197,21 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ rejected: true, source_modified: false });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Review failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/manuscript/edits] review failed:', error);
+    }
+
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error instanceof Error
+        ? error.message
+        : 'Review failed';
+
     return NextResponse.json(
       { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }

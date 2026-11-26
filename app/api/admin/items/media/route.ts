@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { normalizeFlowItem } from '@/lib/flow/content';
 import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import { optimizeUploadImage } from '@/lib/images/optimizeUpload';
@@ -29,7 +30,29 @@ function cleanFilename(filename: string) {
 export async function POST(req: NextRequest) {
   try {
     await requireAdminFromRequest(req);
+  } catch (error) {
+    if (isAuthenticationError(error)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Unauthorized',
+        },
+        { status: 401 },
+      );
+    }
 
+    console.error('[admin-items-media] auth check failed:', error);
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to authorize request.',
+      },
+      { status: 500 },
+    );
+  }
+
+  try {
     const form = await req.formData();
     const file = form.get('file');
     const itemId = form.get('item_id');
@@ -287,9 +310,9 @@ export async function POST(req: NextRequest) {
         error:
           error instanceof Error
             ? error.message
-            : 'Unauthorized',
+            : 'Failed to upload media.',
       },
-      { status: 401 },
+      { status: 500 },
     );
   }
 }

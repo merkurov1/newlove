@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { invalidateFlowCache } from '@/lib/flow/items-cash';
 import {
   isTechnicalText,
@@ -82,13 +83,28 @@ function errorMessage(error: unknown) {
 export async function GET(req: NextRequest, context: RouteContext) {
   try {
     await requireAdminFromRequest(req);
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin/items/:id] auth check failed:', error);
 
+      return NextResponse.json(
+        { error: 'Failed to authorize request.' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
     const { id } = await context.params;
     const supabase = getSupabaseAdmin();
 
     const { data, error } = await supabase.from('items').select('*').eq('id', id).maybeSingle();
 
     if (error) {
+      console.error('[admin/items/:id] database error:', error);
+
       return NextResponse.json(
         {
           error: 'Failed to load item.',
@@ -125,7 +141,9 @@ export async function GET(req: NextRequest, context: RouteContext) {
       }
     );
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 401 });
+    console.error('[admin/items/:id] GET failed:', error);
+
+    return NextResponse.json({ error: errorMessage(error) }, { status: 500 });
   }
 }
 
@@ -133,7 +151,13 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
   try {
     await requireAdminFromRequest(req);
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 401 });
+    if (!isAuthenticationError(error)) {
+      console.error('[admin/items/:id] auth check failed:', error);
+
+      return NextResponse.json({ error: 'Failed to authorize request.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await context.params;
@@ -226,7 +250,13 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
   try {
     await requireAdminFromRequest(req);
   } catch (error) {
-    return NextResponse.json({ error: errorMessage(error) }, { status: 401 });
+    if (!isAuthenticationError(error)) {
+      console.error('[admin/items/:id] auth check failed:', error);
+
+      return NextResponse.json({ error: 'Failed to authorize request.' }, { status: 500 });
+    }
+
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const { id } = await context.params;

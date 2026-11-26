@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { createPierrotStore } from '@/lib/pierrot/serverStore';
 import { loadWorkspaceHealth } from '@/lib/pierrot/grooming/service';
 import { isGroomingStorageUnavailable, listRecentOperations } from '@/lib/pierrot/grooming/store';
@@ -47,9 +48,15 @@ export async function GET(request: Request) {
       );
     }
     const message = error instanceof Error ? error.message : 'Workspace health failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/workspace-health]', error);
+    }
+
     return NextResponse.json(
-      { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { error: unauthorized ? 'Unauthorized' : message },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }

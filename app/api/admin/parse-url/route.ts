@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 import { assertSafePublicUrl } from '@/lib/flow/parseUrl';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
@@ -60,7 +61,12 @@ export async function POST(req: Request) {
 
   try {
     admin = await requireAdminFromRequest(req);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

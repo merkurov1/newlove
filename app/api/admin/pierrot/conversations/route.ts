@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { loadOwnerConversation } from '@/lib/pierrot/workspace/data';
 import { loadHistoryMessagePage, resolveHistoryScope } from '@/lib/pierrot/history/store';
 
@@ -67,10 +68,20 @@ export async function GET(request: Request) {
       oldestMessageIndex: conversation.oldestMessageIndex ?? null,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Lookup failed';
+    const unauthorized = isAuthenticationError(error);
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error instanceof Error
+        ? error.message
+        : 'Lookup failed';
+
+    if (!unauthorized) {
+      console.error('[pierrot/conversations]', error);
+    }
+
     return NextResponse.json(
       { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -78,7 +89,13 @@ export async function GET(request: Request) {
 export async function DELETE(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[pierrot/conversations] auth check failed:', error);
+
+      return NextResponse.json({ error: 'Failed to authorize request.' }, { status: 500 });
+    }
+
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

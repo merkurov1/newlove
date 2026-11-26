@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import {
   createPierrotProject,
   getPierrotProjectSnapshot,
@@ -17,10 +18,15 @@ export async function GET(request: Request) {
     if (ref) return NextResponse.json({ project: await getPierrotProjectSnapshot(admin.id, ref) });
     return NextResponse.json({ projects: await listPierrotProjects(admin.id) });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Project lookup failed';
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('[pierrot/projects] lookup failed:', error);
+    }
+
     return NextResponse.json(
-      { error: message },
-      { status: message === 'Unauthorized' ? 401 : 500 }
+      { error: unauthorized ? 'Unauthorized' : error instanceof Error ? error.message : 'Project lookup failed' },
+      { status: unauthorized ? 401 : 500 }
     );
   }
 }
@@ -40,9 +46,15 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : 'Project could not be created';
     const validation = error instanceof PierrotProjectValidationError;
     const duplicate = /duplicate|unique/i.test(message);
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized && !validation && !duplicate) {
+      console.error('[pierrot/projects] create failed:', error);
+    }
+
     return NextResponse.json(
-      { error: validation ? validationCopy(error.code) : duplicate ? 'Проект с таким именем уже существует.' : message },
-      { status: validation || duplicate ? 400 : message === 'Unauthorized' ? 401 : 500 }
+      { error: validation ? validationCopy(error.code) : duplicate ? 'Проект с таким именем уже существует.' : unauthorized ? 'Unauthorized' : message },
+      { status: validation || duplicate ? 400 : unauthorized ? 401 : 500 }
     );
   }
 }

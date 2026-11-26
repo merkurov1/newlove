@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { generateAndUploadReel } from '@/lib/video/reelGenerator';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 // Инициализируем серверный клиент Supabase
 const supabase = createClient(
@@ -106,8 +107,15 @@ export async function POST(
     return NextResponse.json({ success: true, videoUrl });
 
   } catch (error: any) {
-    console.error('API Error:', error);
-    const message = error?.message || 'Server error while generating the reel';
-    return NextResponse.json({ error: message }, { status: message.includes('Unauthorized') ? 401 : 500 });
+    const unauthorized = isAuthenticationError(error);
+
+    if (!unauthorized) {
+      console.error('API Error:', error);
+    }
+
+    const message = unauthorized
+      ? 'Unauthorized'
+      : error?.message || 'Server error while generating the reel';
+    return NextResponse.json({ error: message }, { status: unauthorized ? 401 : 500 });
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -24,7 +25,20 @@ function getSupabaseAdmin() {
 export async function GET(request: Request) {
   try {
     await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[api/flow/items] Auth check failed:', error);
+
+      return NextResponse.json(
+        {
+          error: 'Failed to load Flow items.',
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 },

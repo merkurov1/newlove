@@ -1,4 +1,5 @@
 import { requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 
 export type KnowledgeAdminAuthorization =
   | { ok: true; via: 'session' | 'github_owner'; actor: string }
@@ -23,8 +24,13 @@ export async function authorizeKnowledgeAdmin(
     if (admin?.role === 'ADMIN') {
       return { ok: true, via: 'session', actor: admin.id };
     }
-  } catch {
-    // Fall through to the GitHub owner credential.
+  } catch (error) {
+    // Only a real authentication denial may fall through to the alternative
+    // owner credential. Database/internal failures must surface as 500.
+    if (!isAuthenticationError(error)) {
+      console.error('[knowledge/adminAuth] auth check failed:', error);
+      throw error;
+    }
   }
 
   const header = request.headers.get('authorization') || '';

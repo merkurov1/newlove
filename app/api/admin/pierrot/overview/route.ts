@@ -1,3 +1,4 @@
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { NextResponse } from 'next/server';
 
 import { requireAdminFromRequest } from '@/lib/serverAuth';
@@ -23,7 +24,12 @@ export async function POST(request: Request) {
 
   try {
     user = await requireAdminFromRequest(request);
-  } catch {
+  } catch (error) {
+    if (!isAuthenticationError(error)) {
+      console.error('[admin-auth]', error);
+      throw error;
+    }
+
     return NextResponse.json(
       { ok: false, error: 'Unauthorized' },
       { status: 401, headers: NO_STORE_HEADERS }
