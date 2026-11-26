@@ -46,6 +46,11 @@ const NORMAL_TEXT_PAIRS: Array<[name: string, foreground: string, background: st
   ['Cast modal muted on night', '#d6d3d1', '#141210'],
   ['Cast modal faint on night', '#a8a29e', '#141210'],
   ['Cast error on night', '#fca5a5', '#141210'],
+  ['Chronicles ink on stone', '#f6f1e8', '#443521'],
+  ['Chronicles muted on stone', '#cfc0a8', '#443521'],
+  ['Chronicles faint on stone', '#b8a78f', '#443521'],
+  ['Chronicles gold on stone', '#e4bc72', '#443521'],
+  ['Chronicles focus on stone', '#a9c8f0', '#443521'],
 ];
 
 describe('Temple contrast tokens', () => {

@@ -854,34 +854,20 @@ describe('Temple home composition', () => {
     ]);
   });
 
-  it('states that the Temple stays light at every hour', async () => {
+  it('moves focus into the Chronicles dialog and restores it on Escape', async () => {
     render(<TempleClient />);
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Open Sanctuary information' })
-    );
-
-    const dialog = await screen.findByRole('dialog', { name: 'The Sanctuary' });
-
-    expect(dialog).toHaveTextContent('It stays light at every hour');
-  });
-
-  it('moves focus into the information dialog and restores it on Escape', async () => {
-    render(<TempleClient />);
-
-    const trigger = screen.getByRole('button', {
-      name: 'Open Sanctuary information',
-    });
+    const trigger = screen.getByRole('button', { name: 'Chronicles' });
 
     trigger.focus();
     fireEvent.click(trigger);
 
-    const dialog = await screen.findByRole('dialog', { name: 'The Sanctuary' });
+    const dialog = await screen.findByRole('dialog', { name: 'Chronicles' });
 
     await waitFor(() =>
       expect(
         within(dialog).getByRole('button', {
-          name: 'Close Sanctuary information',
+          name: 'Close Chronicles',
         })
       ).toHaveFocus()
     );
@@ -890,7 +876,7 @@ describe('Temple home composition', () => {
 
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'The Sanctuary' })
+        screen.queryByRole('dialog', { name: 'Chronicles' })
       ).toBeNull()
     );
     await waitFor(() => expect(trigger).toHaveFocus());

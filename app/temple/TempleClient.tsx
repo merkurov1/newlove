@@ -298,9 +298,9 @@ function formatTime(iso?: string) {
 /**
  * The Temple page transition leaves a transformed ancestor around this page.
  * A fixed dialog rendered inside it is positioned against that ancestor and
- * can be clipped after the page scrolls on a phone. Portals keep the
- * non-payment information dialogs anchored to the real viewport on iPhone,
- * iPad and Telegram WebView.
+ * can be clipped after the page scrolls on a phone. The portal keeps the
+ * Chronicles dialog anchored to the real viewport on iPhone, iPad and
+ * Telegram WebView.
  */
 function ModalPortal({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
@@ -322,13 +322,9 @@ export default function TempleClient({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
   const [isChroniclesOpen, setIsChroniclesOpen] = useState(false);
-  const infoDialogRef = useRef<HTMLDivElement>(null);
-  const infoCloseRef = useRef<HTMLButtonElement>(null);
   const chroniclesDialogRef = useRef<HTMLDivElement>(null);
   const chroniclesCloseRef = useRef<HTMLButtonElement>(null);
-  const closeInfo = useCallback(() => setIsInfoOpen(false), []);
   const closeChronicles = useCallback(() => setIsChroniclesOpen(false), []);
   const [tgUser, setTgUser] = useState<any>(null);
   const [pendingAmount, setPendingAmount] = useState<number | null>(null);
@@ -430,13 +426,6 @@ export default function TempleClient({
   }, [isTelegramApp]);
 
   useDialogFocus({
-    open: isInfoOpen,
-    onClose: closeInfo,
-    dialogRef: infoDialogRef,
-    initialFocusRef: infoCloseRef,
-  });
-
-  useDialogFocus({
     open: isChroniclesOpen,
     onClose: closeChronicles,
     dialogRef: chroniclesDialogRef,
@@ -444,27 +433,13 @@ export default function TempleClient({
   });
 
   useEffect(() => {
-    if (!isInfoOpen && !isChroniclesOpen) return;
+    if (!isChroniclesOpen) return;
 
     return registerTelegramBackHandler(() => {
-      if (isChroniclesOpen) {
-        closeChronicles();
-        return true;
-      }
-
-      if (isInfoOpen) {
-        closeInfo();
-        return true;
-      }
-
-      return false;
+      closeChronicles();
+      return true;
     });
-  }, [
-    closeChronicles,
-    closeInfo,
-    isChroniclesOpen,
-    isInfoOpen,
-  ]);
+  }, [closeChronicles, isChroniclesOpen]);
 
   useEffect(() => {
     if (!isChroniclesOpen) return;
@@ -755,7 +730,7 @@ export default function TempleClient({
   // In Telegram, the native BottomButton is the single primary Temple action.
   // It is hidden while an in-page modal/payment surface owns the screen so it
   // never competes with the modal's own actions.
-  const modalOpen = isInfoOpen || isChroniclesOpen;
+  const modalOpen = isChroniclesOpen;
 
   useTelegramBottomButton({
     text: 'KEEP THE VIGIL',
@@ -1348,15 +1323,6 @@ export default function TempleClient({
                 <Activity size={12} className="mr-1.5" aria-hidden="true" />
                 Chronicles
               </button>
-
-              <button
-                type="button"
-                onClick={() => setIsInfoOpen(true)}
-                className={styles.ghostButton}
-                aria-label="Open Sanctuary information"
-              >
-                Info
-              </button>
             </div>
           </footer>
         </div>
@@ -1381,55 +1347,6 @@ export default function TempleClient({
           </figure>
         </aside>
       </div>
-
-      <ModalPortal>
-        <AnimatePresence>
-          {isInfoOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={closeInfo}
-              role="presentation"
-              className={styles.modalOverlay}
-            >
-              <motion.div
-                ref={infoDialogRef}
-                initial={{ scale: 0.97, y: 8 }}
-                animate={{ scale: 1, y: 0 }}
-                exit={{ scale: 0.97, y: 8 }}
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="temple-info-title"
-                aria-describedby="temple-info-lead"
-                tabIndex={-1}
-                className={styles.modalPanel}
-              >
-                <button
-                  ref={infoCloseRef}
-                  type="button"
-                  onClick={closeInfo}
-                  aria-label="Close Sanctuary information"
-                  className={styles.modalClose}
-                >
-                  <X size={16} aria-hidden="true" />
-                </button>
-
-                <h3 id="temple-info-title" className={styles.modalTitle}>
-                  The Sanctuary
-                </h3>
-
-                <p id="temple-info-lead" className={styles.modalLead}>
-                  This digital temple is a quiet space of presence. It stays
-                  light at every hour. Here, rituals work, and every visit
-                  leaves a mark.
-                </p>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </ModalPortal>
 
       <ModalPortal>
         <AnimatePresence>
