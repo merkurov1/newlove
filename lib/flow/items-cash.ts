@@ -1,6 +1,7 @@
 
 import { revalidatePath, revalidateTag, unstable_cache } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
+import { normalizeFlowItem, type FlowItemInput } from './content';
 
 export const FLOW_ITEMS_CACHE_TAG = 'flow-items';
 
@@ -119,6 +120,64 @@ export async function getCachedFlowItems(
   offset: number,
 ): Promise<CachedFlowItemsResult> {
   return readCachedFlowItems(limit, offset);
+}
+
+/**
+ * Apply the shared Flow content resolver to one public list row.
+ *
+ * The database snapshot stays cached; normalization is cheap and guarantees
+ * the page, the public API, feeds and social cards all make the same
+ * title/image/link decisions for an item.
+ */
+export function normalizeFlowListItem(
+  item: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = normalizeFlowItem(item as FlowItemInput);
+
+  return {
+    ...item,
+    title: normalized.title,
+    titleSource: normalized.titleSource,
+    contentType: normalized.contentType,
+    description: normalized.description,
+    bodyText: normalized.bodyText,
+    bodyExcerpt: normalized.bodyExcerpt,
+    bodyTruncated: normalized.bodyTruncated,
+    showTitle: normalized.showTitle,
+    titleIsRedundant: normalized.titleIsRedundant,
+    images: normalized.images,
+    videos: normalized.videos,
+    links: normalized.links,
+    canonicalUrl: normalized.canonicalUrl,
+    sourceName: normalized.sourceName,
+    imageAlt: normalized.imageAlt,
+    language: normalized.language,
+    version: normalized.version,
+  };
+}
+
+/**
+ * The single server-side loader for public Flow list pages.
+ *
+ * Both `/api/flow/items` and the Journal front page read Flow items through
+ * this function, so the publication (`status = published`), visibility
+ * (`visibility = public`) and ordering rules live in one place. Journal shows
+ * both languages, so it calls this without a language filter; callers that
+ * need one can filter the returned rows or use `getCachedFlowFeedItems`.
+ *
+ * Errors are propagated instead of being replaced with an empty list: an
+ * empty page and a failed database read must remain distinguishable.
+ */
+export async function loadFlowItemsPage(
+  limit: number,
+  offset: number,
+): Promise<CachedFlowItemsResult> {
+  const result = await getCachedFlowItems(limit, offset);
+
+  return {
+    ...result,
+    items: result.items.map(normalizeFlowListItem),
+  };
 }
 
 const FEED_FIELDS = [
