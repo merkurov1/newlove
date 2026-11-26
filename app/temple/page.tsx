@@ -11,7 +11,10 @@ export const dynamic = 'force-dynamic';
 
 const TEMPLE_URL = 'https://www.merkurov.love/temple';
 
-const TEMPLE_IMAGE = TEMPLE_HOME_ASSETS.left;
+const TEMPLE_IMAGE = TEMPLE_HOME_ASSETS.heart;
+
+const TEMPLE_IMAGE_ALT =
+  'The shared heart medallion at the centre of the Digital Temple';
 
 export const metadata: Metadata = {
   title: 'The Sanctuary — Digital Temple | Merkurov Love',
@@ -57,9 +60,9 @@ export const metadata: Metadata = {
     images: [
       {
         url: TEMPLE_IMAGE,
-        width: 896,
-        height: 1200,
-        alt: 'The Sanctuary — Heart & Angel Digital Temple',
+        width: 672,
+        height: 672,
+        alt: TEMPLE_IMAGE_ALT,
       },
     ],
 
@@ -76,7 +79,14 @@ export const metadata: Metadata = {
     description:
       'A living digital sanctuary of presence, ritual and traces.',
 
-    images: [TEMPLE_IMAGE],
+    images: [
+      {
+        url: TEMPLE_IMAGE,
+        width: 672,
+        height: 672,
+        alt: TEMPLE_IMAGE_ALT,
+      },
+    ],
 
     creator: '@merkurov',
   },

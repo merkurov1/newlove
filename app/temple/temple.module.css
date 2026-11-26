@@ -477,7 +477,12 @@
   justify-content: center;
   width: min(46%, 230px);
   aspect-ratio: 1;
-  margin-top: clamp(0.5rem, 2.4vh, 1.6rem);
+  /*
+   * The original top margin let the medallion hang below the altar shelf.
+   * Lift the stage by 1rem so the heart seats into the backing, while the
+   * `max()` keeps the margin non-negative on very short viewports.
+   */
+  margin-top: max(0rem, calc(clamp(0.5rem, 2.4vh, 1.6rem) - 1rem));
   margin-bottom: clamp(0.6rem, 2vh, 1.15rem);
 }
 
