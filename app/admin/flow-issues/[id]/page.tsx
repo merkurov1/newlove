@@ -6,6 +6,7 @@ import FlowIssueEditor, {
   type EditableIssueEntryData,
 } from '@/components/admin/FlowIssueEditor';
 import type { IssuePayload } from '@/lib/flow-issue/types';
+import { compositionCoverage } from '@/lib/flow-issue/composition';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,6 +117,7 @@ export default async function FlowIssueEditorPage({ params }: PageProps) {
     links: editableList(payload.links),
     videos: editableList(payload.videos),
     photos: editableList(payload.photos),
+    composition: compositionCoverage(payload),
   };
 
   return <FlowIssueEditor key={issue.id} issue={issue} />;

@@ -227,11 +227,22 @@ export function applyIssueEdits(
       })
     : null;
 
+  // Keep the versioned composition's summary and column aligned with the
+  // editorial edits. Source identity, ledger and part order stay untouched.
+  const editorialComposition = payload.editorialComposition
+    ? {
+        ...payload.editorialComposition,
+        ...(summary !== undefined ? { summary } : {}),
+        ...(pierrotIntro !== undefined ? { column: pierrotIntro } : {}),
+      }
+    : undefined;
+
   return {
     ...payload,
     ...(items ? { items } : {}),
     ...(summary !== undefined ? { summary } : {}),
     ...(pierrotIntro !== undefined ? { pierrotIntro } : {}),
+    ...(editorialComposition ? { editorialComposition } : {}),
     lead,
     latest,
     links,
