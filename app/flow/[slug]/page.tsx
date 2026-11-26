@@ -163,7 +163,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
   const headingId = (line: number | undefined) => (line ? headingIds.get(line) : undefined);
 
   return (
-    <div className="flow-item__body min-w-0">
+    <div className="flow-item__body min-w-0 max-w-full">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -171,7 +171,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h2
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-4 mt-10 break-words font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl"
+              className="mb-4 mt-10 break-words [overflow-wrap:anywhere] font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl"
             >
               {children}
             </h2>
@@ -180,7 +180,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h2
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-3.5 mt-9 break-words font-serif text-2xl font-light leading-tight text-stone-900 first:mt-0 sm:text-3xl"
+              className="mb-3.5 mt-9 break-words [overflow-wrap:anywhere] font-serif text-2xl font-light leading-tight text-stone-900 first:mt-0 sm:text-3xl"
             >
               {children}
             </h2>
@@ -189,7 +189,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h3
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-3 mt-8 break-words font-serif text-xl font-light leading-tight text-stone-900 first:mt-0 sm:text-2xl"
+              className="mb-3 mt-8 break-words [overflow-wrap:anywhere] font-serif text-xl font-light leading-tight text-stone-900 first:mt-0 sm:text-2xl"
             >
               {children}
             </h3>
@@ -198,7 +198,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h4
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-2.5 mt-7 break-words font-serif text-lg font-medium leading-snug text-stone-900 first:mt-0 sm:text-xl"
+              className="mb-2.5 mt-7 break-words [overflow-wrap:anywhere] font-serif text-lg font-medium leading-snug text-stone-900 first:mt-0 sm:text-xl"
             >
               {children}
             </h4>
@@ -213,7 +213,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             }
 
             return (
-              <p className="mb-5 whitespace-pre-wrap break-words font-serif text-[18px] font-normal leading-[1.75] text-stone-800 sm:text-[20px]">
+              <p className="mb-5 whitespace-pre-wrap break-words [overflow-wrap:anywhere] font-serif text-[18px] font-normal leading-[1.75] text-stone-800 sm:text-[20px]">
                 {children}
               </p>
             );
@@ -223,7 +223,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
-            <blockquote className="my-8 border-l border-stone-400 pl-5 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
+            <blockquote className="my-8 max-w-full break-words border-l border-stone-400 pl-5 font-serif text-xl font-light leading-relaxed text-stone-600 [overflow-wrap:anywhere] sm:text-2xl">
               {children}
             </blockquote>
           ),
@@ -234,7 +234,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
               return (
                 <Link
                   href={href}
-                  className="break-words underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+                  className="break-words [overflow-wrap:anywhere] underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
                 >
                   {children}
                 </Link>
@@ -246,7 +246,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-words underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+                className="break-words [overflow-wrap:anywhere] underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
               >
                 {children}
               </a>
@@ -256,12 +256,12 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             const imageSrc = typeof src === 'string' ? src : '';
 
             return (
-              <figure className="my-8">
+              <figure className="my-8 max-w-full">
                 <a
                   href={imageSrc || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block overflow-hidden rounded-2xl bg-stone-100"
+                  className="block max-w-full overflow-hidden rounded-2xl bg-stone-100"
                   data-flow-image
                   data-flow-image-src={imageSrc}
                   data-flow-image-alt={alt ?? ''}
@@ -279,7 +279,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
                   />
                 </a>
                 {alt && (
-                  <figcaption className="mt-2 break-words font-serif text-sm italic text-stone-500">
+                  <figcaption className="mt-2 break-words [overflow-wrap:anywhere] font-serif text-sm italic text-stone-500">
                     {alt}
                   </figcaption>
                 )}
@@ -287,18 +287,21 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             );
           },
           ul: ({ children }) => (
-            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
+            <ul className="mb-6 max-w-full list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
+            <ol className="mb-6 max-w-full list-decimal space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
               {children}
             </ol>
           ),
+          li: ({ children }) => (
+            <li className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</li>
+          ),
           hr: () => <hr className="my-9 border-0 border-t border-stone-200" />,
           pre: ({ children }) => (
-            <pre className="my-7 max-w-full overflow-x-auto rounded-2xl bg-stone-950 p-4 font-mono text-sm leading-relaxed text-stone-100">
+            <pre className="my-7 w-full max-w-full overflow-x-auto overscroll-x-contain rounded-2xl bg-stone-950 p-4 font-mono text-sm leading-relaxed text-stone-100">
               {children}
             </pre>
           ),
@@ -306,29 +309,31 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             const isBlock = Boolean(className) || String(children).includes('\n');
 
             if (isBlock) {
-              return <code className="font-mono text-[0.85em]">{children}</code>;
+              return <code className="whitespace-pre font-mono text-[0.85em]">{children}</code>;
             }
 
             return (
-              <code className="break-words bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">
+              <code className="break-words bg-stone-100 px-1 py-0.5 font-mono text-[0.85em] [overflow-wrap:anywhere]">
                 {children}
               </code>
             );
           },
           table: ({ children }) => (
-            <div className="my-7 max-w-full overflow-x-auto">
+            <div className="my-7 w-full max-w-full overflow-x-auto overscroll-x-contain">
               <table className="w-full border-collapse text-left font-serif text-[16px] leading-relaxed text-inherit">
                 {children}
               </table>
             </div>
           ),
           th: ({ children }) => (
-            <th className="border-b border-stone-300 px-3 py-2 font-medium text-stone-900">
+            <th className="border-b border-stone-300 px-3 py-2 font-medium text-stone-900 break-words [overflow-wrap:anywhere]">
               {children}
             </th>
           ),
           td: ({ children }) => (
-            <td className="border-b border-stone-200 px-3 py-2 align-top">{children}</td>
+            <td className="border-b border-stone-200 px-3 py-2 align-top break-words [overflow-wrap:anywhere]">
+              {children}
+            </td>
           ),
         }}
       >

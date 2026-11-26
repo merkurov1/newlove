@@ -2,6 +2,7 @@ import { DEFAULT_ISSUE_TEMPLATE } from './template';
 import { buildIssueHeader } from './header';
 import { issueEntries } from './title';
 import { readEditorialComposition } from './composition';
+import { containsIssueMarkdown, renderIssueMarkdown } from './markdown';
 import type {
   EditorialComposition,
   EditorialLedgerEntry,
@@ -273,6 +274,21 @@ function paragraphs(value: string | undefined | null, font: string, size: number
     .join('');
 }
 
+/**
+ * Published item bodies are Markdown, but most old issues contain plain notes.
+ * Render rich Markdown only when it is present; otherwise keep the historical
+ * paragraph markup byte-for-byte. Every generated element is scoped by the
+ * `.md` web rules, so a table or code block can scroll locally instead of
+ * widening the issue.
+ */
+function issueBodyHtml(value: string | undefined | null, font: string, size: number): string {
+  const body = String(value ?? '').trim();
+
+  if (!body) return '';
+
+  return containsIssueMarkdown(body) ? renderIssueMarkdown(body) : paragraphs(body, font, size);
+}
+
 const looksLikeFile = (s: unknown) =>
   typeof s === 'string' && /\.(jpe?g|png|gif|webp|heic)$/i.test(s.trim());
 const photoAlt = (p: PhotoItem) =>
@@ -531,6 +547,33 @@ function webCss(payload: IssuePayload): string {
 .flow-issue-root .item h3 a:hover{text-decoration:underline;text-underline-offset:5px;text-decoration-color:var(--line)}
 .flow-issue-root .item p{max-width:72ch;margin:0 0 12px;color:var(--ink);font:400 17px/1.72 var(--serif);overflow-wrap:anywhere}
 .flow-issue-root .item .item-dek{max-width:76ch;color:var(--soft);font:italic 18px/1.58 var(--serif)}
+.flow-issue-root .md{min-width:0;max-width:100%;overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md>:first-child{margin-top:0}
+.flow-issue-root .md>:last-child{margin-bottom:0}
+.flow-issue-root .md p{max-width:72ch;margin:0 0 12px;color:var(--ink);font:400 17px/1.72 var(--serif);overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md h1,.flow-issue-root .md h2,.flow-issue-root .md h3,.flow-issue-root .md h4{max-width:100%;margin:22px 0 10px;color:var(--ink);font-family:var(--serif);font-weight:400;line-height:1.2;letter-spacing:-.01em;overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md h1{font-size:clamp(24px,3vw,34px)}
+.flow-issue-root .md h2{font-size:clamp(22px,2.7vw,30px)}
+.flow-issue-root .md h3{font-size:clamp(19px,2.2vw,24px)}
+.flow-issue-root .md h4{font-size:18px}
+.flow-issue-root .md ul,.flow-issue-root .md ol{max-width:100%;margin:0 0 14px;padding-left:1.4em;font:400 17px/1.72 var(--serif)}
+.flow-issue-root .md li{min-width:0;margin:4px 0;overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md li>p,.flow-issue-root .md li>ul,.flow-issue-root .md li>ol{margin:0}
+.flow-issue-root .md li>ul,.flow-issue-root .md li>ol{margin-top:4px}
+.flow-issue-root .md blockquote{max-width:100%;margin:18px 0;padding:2px 0 2px 16px;border-left:2px solid var(--line);color:var(--soft);font:italic 18px/1.6 var(--serif);overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md blockquote>:last-child{margin-bottom:0}
+.flow-issue-root .md blockquote p{max-width:none;font-size:inherit;line-height:inherit;color:inherit}
+.flow-issue-root .md code{font-family:var(--mono);font-size:.86em;overflow-wrap:anywhere;word-break:break-word;background:var(--tint);color:var(--ink);padding:1px 4px;border-radius:4px}
+.flow-issue-root .md pre{max-width:100%;margin:16px 0;padding:14px 16px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:12px;background:var(--tint);font:13px/1.6 var(--mono);-webkit-overflow-scrolling:touch}
+.flow-issue-root .md pre code{display:block;min-width:max-content;padding:0;border:0;border-radius:0;background:transparent;color:inherit;overflow-wrap:normal;word-break:normal;white-space:pre}
+.flow-issue-root .md .md-table{max-width:100%;margin:16px 0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;border:1px solid var(--line);border-radius:12px;background:var(--glass);-webkit-overflow-scrolling:touch}
+.flow-issue-root .md .md-table table{width:max-content;min-width:100%;max-width:none;table-layout:auto;border-collapse:collapse;font:14px/1.55 var(--sans)}
+.flow-issue-root .md .md-table th,.flow-issue-root .md .md-table td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md .md-table th{border-bottom-color:var(--ink);color:var(--soft);font:500 11px/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.flow-issue-root .md .md-table tr:last-child td{border-bottom:0}
+.flow-issue-root .md img{display:block;max-width:100%;height:auto;margin:16px auto;border-radius:12px;background:var(--tint);object-fit:contain}
+.flow-issue-root .md a{overflow-wrap:anywhere;word-break:break-word}
+.flow-issue-root .md hr{margin:22px 0;border:0;border-top:1px solid var(--line)}
 .flow-issue-root .item-image{display:block;max-width:min(100%,780px);margin:16px 0 14px}
 .flow-issue-root .item-image img{display:block;width:100%;height:auto;border-radius:14px;background:var(--tint);object-fit:contain}
 .flow-issue-root .item-open{display:inline-block;padding-bottom:2px;border-bottom:1px solid transparent;color:var(--soft);font:11px/1.4 var(--mono);letter-spacing:.16em;text-transform:uppercase;text-decoration:none}
@@ -764,7 +807,7 @@ function compositionEntryHtml(
   <div class="item-meta"><span>${esc(typeLabel)}</span>${date ? `<time>${esc(date)}</time>` : ''}${ledger ? `<span>${esc(ledger.role)}</span>` : ''}</div>
   <h3><a href="${esc(href)}">${esc(title)}</a></h3>
   ${image ? `<figure class="item-image"><img src="${esc(image)}" alt="${esc(entry.type === 'photo' ? photoAlt(entry as PhotoItem) : caption || title)}" loading="lazy"></figure>` : ''}
-  ${visibleBody ? paragraphs(visibleBody, 'var(--serif)', 17) : ''}
+  ${visibleBody ? issueBodyHtml(visibleBody, 'var(--serif)', 17) : ''}
   ${description ? `<p class="item-dek">${esc(description)}</p>` : ''}
   ${caption && entry.type !== 'photo' ? `<p class="meta">${esc(caption)}</p>` : ''}
   ${entry.type === 'photo' && caption ? `<p class="meta">${esc(caption)}</p>` : ''}
@@ -919,7 +962,7 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
         <p class="k">${esc(labels.lead)}</p>
         <h2>${esc(sections.lead.title || labels.lead)}</h2>
         <p class="by">${esc(dateLong(sections.lead.publishedAt, lang))}, ${esc(hhmm(sections.lead.publishedAt, lang))} UTC</p>
-        ${paragraphs(sections.lead.body, 'var(--serif)', 18)}
+        ${issueBodyHtml(sections.lead.body, 'var(--serif)', 18)}
         ${safeUrl(sections.lead.url) ? `<p class="meta"><a href="${esc(safeUrl(sections.lead.url))}" style="color:var(--claret)">${esc(sections.lead.url)}</a></p>` : ''}
       </section>`
     : '';

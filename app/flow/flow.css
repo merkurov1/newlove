@@ -342,6 +342,62 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   color: inherit;
 }
 
+/* Markdown is allowed to be wide, but it must stay inside the reader column.
+ * Long URLs/tokens wrap, while code blocks and wide tables scroll locally. */
+.flow-item__body {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.flow-item__body :is(p, li, blockquote, th, td, h1, h2, h3, h4) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.flow-item__body :is(ul, ol, blockquote, table, figure, pre, img) {
+  max-width: 100%;
+}
+
+.flow-item__body li {
+  min-width: 0;
+}
+
+.flow-item__body pre {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.flow-item__body pre code {
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.flow-item__body th,
+.flow-item__body td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Feed excerpts are plain text, but a pasted URL or token must not widen an
+ * entry card either. */
+.flow-entry__body,
+.flow-entry__links {
+  min-width: 0;
+}
+
+.flow-entry__body p {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.flow-entry__title {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 @media (max-width: 480px) {
   .flow-entry {
     padding-block: 1.9rem;
