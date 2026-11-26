@@ -1,10 +1,6 @@
 import { DEFAULT_ISSUE_TEMPLATE } from '../template';
-import { buildIssueTitle } from '../title';
-import {
-  buildIssueHeader,
-  formatIssueNumber,
-  formatIssuePeriod,
-} from '../header';
+import { buildIssueTitle, hasLegacyQuotedIssueSignature, resolveIssueTitle } from '../title';
+import { buildIssueHeader, formatIssueNumber, formatIssuePeriod } from '../header';
 import type { IssueEntry, IssuePayload } from '../types';
 
 const entry: IssueEntry = {
@@ -96,22 +92,22 @@ describe('Flow issue header contract', () => {
   it('keeps number and period formatting shared with the archive', () => {
     expect(formatIssueNumber(25, 'ru')).toBe('ВЫПУСК №25');
     expect(formatIssueNumber(null, 'en')).toBe('ISSUE');
-    expect(
-      formatIssuePeriod('2026-11-06T00:00:00.000Z', '2026-11-13T00:00:00.000Z', 'ru')
-    ).toBe('6 НОЯБРЯ 2026 Г. — 13 НОЯБРЯ 2026 Г.');
+    expect(formatIssuePeriod('2026-11-06T00:00:00.000Z', '2026-11-13T00:00:00.000Z', 'ru')).toBe(
+      '6 НОЯБРЯ 2026 Г. — 13 НОЯБРЯ 2026 Г.'
+    );
   });
 });
 
 describe('Flow issue title contract', () => {
-  it('includes the original title, its source and the RU issue signature', () => {
+  it('includes the original title, its source and the unquoted RU issue signature', () => {
     expect(buildIssueTitle(payload('ru'))).toBe(
-      'Tomb in Siberia reveals humans were using cannabis 2800 years ago | New Scientist «| Поток - 13 ноября 2026 г.»'
+      'Tomb in Siberia reveals humans were using cannabis 2800 years ago | New Scientist | Поток - 13 ноября 2026 г.'
     );
   });
 
-  it('uses the English signature in the English edition', () => {
+  it('uses the unquoted English signature in the English edition', () => {
     expect(buildIssueTitle(payload('en'))).toBe(
-      'Tomb in Siberia reveals humans were using cannabis 2800 years ago | New Scientist «| Flow - 13 November 2026»'
+      'Tomb in Siberia reveals humans were using cannabis 2800 years ago | New Scientist | Flow - 13 November 2026'
     );
   });
 
@@ -127,7 +123,20 @@ describe('Flow issue title contract', () => {
     };
 
     expect(buildIssueTitle(payload('ru', ownNote))).toBe(
-      'Собственная заметка «| Поток - 13 ноября 2026 г.»'
+      'Собственная заметка | Поток - 13 ноября 2026 г.'
     );
+  });
+
+  it('keeps a stored legacy quoted title instead of renaming it retroactively', () => {
+    const legacy =
+      'Tomb in Siberia reveals humans were using cannabis 2800 years ago | New Scientist «| Поток - 13 ноября 2026 г.»';
+
+    expect(hasLegacyQuotedIssueSignature(legacy)).toBe(true);
+    expect(resolveIssueTitle(payload('ru'), legacy)).toBe(legacy);
+    expect(hasLegacyQuotedIssueSignature(buildIssueTitle(payload('ru')))).toBe(false);
+  });
+
+  it('falls back to the new title for a new record without a stored title', () => {
+    expect(resolveIssueTitle(payload('ru'), '')).toBe(buildIssueTitle(payload('ru')));
   });
 });

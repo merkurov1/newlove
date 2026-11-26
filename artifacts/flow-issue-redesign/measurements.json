@@ -1,0 +1,381 @@
+[
+  {
+    "width": 1440,
+    "height": 1200,
+    "name": "desktop-1440",
+    "viewportWidth": 1440,
+    "documentScrollWidth": 1440,
+    "bodyScrollWidth": 1440,
+    "rootWidth": 1440,
+    "pageWidth": 1440,
+    "headline": {
+      "width": 1120,
+      "height": 268,
+      "scrollHeight": 268,
+      "clientHeight": 268,
+      "scrollWidth": 1120,
+      "clientWidth": 1120
+    },
+    "overflowers": [],
+    "media": [
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "389x243",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "389x243",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "389x243",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "273x154",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "273x154",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "311x200",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "900x1400",
+        "rendered": "311x484",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "311x200",
+        "loaded": true
+      }
+    ]
+  },
+  {
+    "width": 1024,
+    "height": 1200,
+    "name": "tablet-landscape-1024",
+    "viewportWidth": 1024,
+    "documentScrollWidth": 1024,
+    "bodyScrollWidth": 1024,
+    "rootWidth": 1024,
+    "pageWidth": 1024,
+    "headline": {
+      "width": 881,
+      "height": 282,
+      "scrollHeight": 283,
+      "clientHeight": 282,
+      "scrollWidth": 881,
+      "clientWidth": 881
+    },
+    "overflowers": [],
+    "media": [
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "261x163",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "261x163",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "261x163",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "421x237",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "421x237",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "459x295",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "900x1400",
+        "rendered": "459x714",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "459x295",
+        "loaded": true
+      }
+    ]
+  },
+  {
+    "width": 768,
+    "height": 1200,
+    "name": "tablet-768",
+    "viewportWidth": 768,
+    "documentScrollWidth": 768,
+    "bodyScrollWidth": 768,
+    "rootWidth": 768,
+    "pageWidth": 768,
+    "headline": {
+      "width": 661,
+      "height": 211,
+      "scrollHeight": 211,
+      "clientHeight": 211,
+      "scrollWidth": 661,
+      "clientWidth": 661
+    },
+    "overflowers": [],
+    "media": [
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "315x197",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "315x197",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "315x197",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "314x177",
+        "loaded": true
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "1280x720",
+        "rendered": "314x177",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "344x221",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "900x1400",
+        "rendered": "344x535",
+        "loaded": true
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "1400x900",
+        "rendered": "344x221",
+        "loaded": true
+      }
+    ]
+  },
+  {
+    "width": 390,
+    "height": 844,
+    "name": "mobile-390",
+    "viewportWidth": 390,
+    "documentScrollWidth": 390,
+    "bodyScrollWidth": 390,
+    "rootWidth": 390,
+    "pageWidth": 390,
+    "headline": {
+      "width": 335,
+      "height": 227,
+      "scrollHeight": 227,
+      "clientHeight": 227,
+      "scrollWidth": 335,
+      "clientWidth": 335
+    },
+    "overflowers": [
+      {
+        "tag": "table",
+        "className": "",
+        "left": 17,
+        "right": 577,
+        "width": 560
+      },
+      {
+        "tag": "tbody",
+        "className": "",
+        "left": 17,
+        "right": 577,
+        "width": 560
+      },
+      {
+        "tag": "tr",
+        "className": "",
+        "left": 17,
+        "right": 577,
+        "width": 560
+      },
+      {
+        "tag": "th",
+        "className": "",
+        "left": 118,
+        "right": 398,
+        "width": 280
+      },
+      {
+        "tag": "th",
+        "className": "",
+        "left": 398,
+        "right": 499,
+        "width": 101
+      },
+      {
+        "tag": "th",
+        "className": "",
+        "left": 499,
+        "right": 577,
+        "width": 78
+      },
+      {
+        "tag": "tr",
+        "className": "",
+        "left": 17,
+        "right": 577,
+        "width": 560
+      },
+      {
+        "tag": "td",
+        "className": "",
+        "left": 118,
+        "right": 398,
+        "width": 280
+      },
+      {
+        "tag": "td",
+        "className": "",
+        "left": 398,
+        "right": 499,
+        "width": 101
+      },
+      {
+        "tag": "td",
+        "className": "",
+        "left": 499,
+        "right": 577,
+        "width": 78
+      }
+    ],
+    "media": [
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "328x205",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "1200x900",
+        "rendered": "328x205",
+        "loaded": true
+      },
+      {
+        "className": "thumb",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "328x205",
+        "loaded": false
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "328x185",
+        "loaded": false
+      },
+      {
+        "className": "",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "328x185",
+        "loaded": false
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "358x0",
+        "loaded": false
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "358x0",
+        "loaded": false
+      },
+      {
+        "className": "frame",
+        "objectFit": "contain",
+        "natural": "0x0",
+        "rendered": "358x0",
+        "loaded": false
+      }
+    ]
+  }
+]

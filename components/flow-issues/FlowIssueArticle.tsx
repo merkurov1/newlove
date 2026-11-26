@@ -1,5 +1,5 @@
 import { renderIssueWeb } from '@/lib/flow-issue/render';
-import { buildIssueTitle } from '@/lib/flow-issue/title';
+import { resolveIssueTitle } from '@/lib/flow-issue/title';
 import type { IssueLang, IssuePayload } from '@/lib/flow-issue/types';
 
 export type FlowIssueNavItem = {
@@ -37,7 +37,7 @@ function resolveHtml(
 
   try {
     return renderIssueWeb(payload, {
-      title: buildIssueTitle(payload) || title || (payload.lang === 'ru' ? 'Поток' : 'Flow'),
+      title: resolveIssueTitle(payload, title) || (payload.lang === 'ru' ? 'Поток' : 'Flow'),
       slug,
       number: number ?? null,
     });
@@ -84,58 +84,126 @@ export default function FlowIssueArticle({
   const archiveLabel = indexLabel || (lang === 'ru' ? 'Все выпуски' : 'All issues');
 
   return (
-    <div lang={lang} className="flow-issue-page min-h-screen bg-[#FAF8F5] text-[#1C1A1B]">
+    <div lang={lang} className="flow-issue-page flow-issue-root min-h-screen">
       <style>{styles}</style>
       <style>{`
-        body:has(.flow-issue-page) {
-          background: #FAF8F5 !important;
-        }
-        /* The global site header is fixed; start the issue below it. */
-        .flow-issue-page {
+        /* Site-shell chrome for the issue. Every rule stays under the issue
+         * roots so the global header and neighbouring pages are untouched. */
+        .flow-issue-root.flow-issue-page {
           --font-serif: ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
           --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          min-width: 0;
           max-width: 100%;
-          overflow-x: clip;
-          padding-top: 6rem;
+          min-height: 100vh;
+          background: var(--bg, #f7f3ec);
+          color: var(--ink, #201e1a);
+          padding-top: 5.5rem;
         }
-        .flow-issue-page img,
-        .flow-issue-page video,
-        .flow-issue-page iframe {
+        .flow-issue-root.flow-issue-page img,
+        .flow-issue-root.flow-issue-page video,
+        .flow-issue-root.flow-issue-page iframe {
           max-width: 100%;
         }
         @media (min-width: 640px) {
-          .flow-issue-page {
+          .flow-issue-root.flow-issue-page {
             padding-top: 7rem;
           }
         }
-        .flow-issue-back {
+        .flow-issue-root.flow-issue-page .flow-issue-back {
           position: relative;
           z-index: 11;
+          display: flex;
           max-width: 1440px;
           min-width: 0;
-          margin: 0 auto;
-          padding: 0 clamp(18px, 3vw, 44px) 10px;
-          display: flex;
-          align-items: center;
           flex-wrap: wrap;
-          gap: 10px;
-          font: 12px ui-monospace, monospace;
-          letter-spacing: .08em;
+          align-items: center;
+          gap: 8px 12px;
+          margin: 0 auto;
+          padding: 0 clamp(16px, 4vw, 56px) 14px;
+          color: var(--soft, #6b6257);
+          font: 11px/1.4 ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
-          color: #5B5658;
         }
-        .flow-issue-back a {
+        .flow-issue-root.flow-issue-page .flow-issue-back a {
+          min-height: 32px;
+          display: inline-flex;
+          align-items: center;
           overflow-wrap: anywhere;
           word-break: break-word;
           color: inherit;
           text-decoration: none;
           border-bottom: 1px solid transparent;
+          transition: color 140ms ease, border-color 140ms ease;
         }
-        .flow-issue-back a:hover {
+        .flow-issue-root.flow-issue-page .flow-issue-back a:hover {
+          color: var(--ink, #201e1a);
           border-bottom-color: currentColor;
         }
-        .flow-issue-back span {
-          color: #DAD3CC;
+        .flow-issue-root.flow-issue-page .flow-issue-back span {
+          color: var(--line, #ddd4c5);
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-back a:focus-visible,
+        .flow-issue-root.flow-issue-page .flow-issue-pager a:focus-visible {
+          outline: 2px solid var(--ink, #201e1a);
+          outline-offset: 3px;
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr);
+          gap: 14px;
+          max-width: 1440px;
+          min-width: 0;
+          margin: 0 auto;
+          padding: 0 clamp(16px, 4vw, 56px) clamp(44px, 6vw, 72px);
+        }
+        @media (min-width: 640px) {
+          .flow-issue-root.flow-issue-page .flow-issue-pager {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager a {
+          display: block;
+          min-width: 0;
+          padding: 16px 0 0;
+          border-top: 1px solid var(--line, #ddd4c5);
+          color: var(--ink, #201e1a);
+          text-decoration: none;
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager a:hover .flow-issue-pager__title {
+          color: var(--claret, #7a2233);
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager--next {
+          text-align: left;
+        }
+        @media (min-width: 640px) {
+          .flow-issue-root.flow-issue-page .flow-issue-pager--next {
+            text-align: right;
+          }
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager__label {
+          display: block;
+          color: var(--soft, #6b6257);
+          font: 10px/1.4 ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+          letter-spacing: 0.18em;
+          text-transform: uppercase;
+          overflow-wrap: anywhere;
+        }
+        .flow-issue-root.flow-issue-page .flow-issue-pager__title {
+          display: block;
+          min-width: 0;
+          margin-top: 8px;
+          font-family: var(--serif, var(--font-serif));
+          font-size: 18px;
+          line-height: 1.35;
+          overflow-wrap: anywhere;
+          transition: color 140ms ease;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .flow-issue-root.flow-issue-page .flow-issue-back a,
+          .flow-issue-root.flow-issue-page .flow-issue-pager__title {
+            transition: none;
+          }
         }
       `}</style>
       <div className="flow-issue-back">
@@ -152,22 +220,15 @@ export default function FlowIssueArticle({
       {(previousIssue || nextIssue) && (
         <nav
           aria-label={lang === 'ru' ? 'Навигация по выпускам' : 'Issue navigation'}
-          className="mx-auto grid max-w-[1440px] gap-4 px-[clamp(18px,3vw,44px)] py-10 sm:grid-cols-2"
+          className="flow-issue-pager"
         >
           {previousIssue ? (
-            <a
-              href={previousIssue.href}
-              rel="prev"
-              className="group border-t border-[#DAD3CC] pt-4 text-left"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8380]">
+            <a href={previousIssue.href} rel="prev" className="flow-issue-pager--prev">
+              <span className="flow-issue-pager__label">
                 ← {lang === 'ru' ? 'Предыдущий выпуск' : 'Previous issue'}
                 {previousIssue.number ? ` №${previousIssue.number}` : ''}
               </span>
-              <span
-                lang={previousIssue.lang || lang}
-                className="mt-2 block font-serif text-lg leading-snug text-[#1C1A1B] transition-colors group-hover:text-[#7A2233]"
-              >
+              <span lang={previousIssue.lang || lang} className="flow-issue-pager__title">
                 {previousIssue.title}
               </span>
             </a>
@@ -176,19 +237,12 @@ export default function FlowIssueArticle({
           )}
 
           {nextIssue && (
-            <a
-              href={nextIssue.href}
-              rel="next"
-              className="group border-t border-[#DAD3CC] pt-4 text-left sm:text-right"
-            >
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#8A8380]">
+            <a href={nextIssue.href} rel="next" className="flow-issue-pager--next">
+              <span className="flow-issue-pager__label">
                 {lang === 'ru' ? 'Следующий выпуск' : 'Next issue'}
                 {nextIssue.number ? ` №${nextIssue.number}` : ''} →
               </span>
-              <span
-                lang={nextIssue.lang || lang}
-                className="mt-2 block font-serif text-lg leading-snug text-[#1C1A1B] transition-colors group-hover:text-[#7A2233]"
-              >
+              <span lang={nextIssue.lang || lang} className="flow-issue-pager__title">
                 {nextIssue.title}
               </span>
             </a>

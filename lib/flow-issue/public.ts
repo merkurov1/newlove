@@ -1,5 +1,5 @@
 import { getServerSupabaseClient } from '@/lib/serverAuth';
-import { buildIssueTitle } from './title';
+import { resolveIssueTitle } from './title';
 import type { IssueLang, IssuePayload } from './types';
 
 const SELECT =
@@ -128,7 +128,7 @@ export { findAdjacentFlowIssues } from './navigation';
 
 export function issuePageTitle(issue: PublicFlowIssue): string {
   if (issue.payload) {
-    const title = buildIssueTitle(issue.payload);
+    const title = resolveIssueTitle(issue.payload, issue.title);
     if (title) return title;
   }
 
