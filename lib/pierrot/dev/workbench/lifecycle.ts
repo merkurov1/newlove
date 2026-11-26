@@ -531,7 +531,47 @@ function latestSignalAt(...values: Array<string | null | undefined>): string | n
   return latestValue;
 }
 
-export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
+export type LifecycleSnapshotOptions = {
+  /**
+   * Maximum time the read-only snapshot may wait for the Codespaces API. The
+   * GitHub client's own timeout is 15s, which is too long for a 30s Admin GET
+   * that also needs its overview queries. A timed-out lookup degrades to a
+   * visible `codespaceError` instead of blocking the whole page.
+   */
+  codespaceTimeoutMs?: number;
+};
+
+export const CODESPACE_SNAPSHOT_TIMEOUT_MS = 2_500;
+
+function codespaceSnapshotTimeoutMs(override?: number): number {
+  const raw = override ?? Number(process.env.PIERROT_DEV_CODESPACE_SNAPSHOT_TIMEOUT_MS || '');
+  if (!Number.isFinite(raw) || raw <= 0) return CODESPACE_SNAPSHOT_TIMEOUT_MS;
+  return Math.min(Math.max(Math.trunc(raw), 100), 10_000);
+}
+
+/**
+ * Bound the only external call in a lifecycle snapshot. The lookup itself is
+ * read-only and idempotent, so abandoning the wait is safe: the next snapshot
+ * reads fresh state.
+ */
+async function resolveCodespaceBounded(timeoutMs: number): Promise<CodespaceInfo | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Codespace lookup timed out after ${timeoutMs}ms.`)),
+      timeoutMs
+    );
+  });
+  try {
+    return await Promise.race([resolveCodespace(getConfiguredCodespaceName()), expired]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+export async function getLifecycleSnapshot(
+  options: LifecycleSnapshotOptions = {}
+): Promise<DevLifecycleSnapshot> {
   const updatedAt = new Date().toISOString();
   const schemaReady = await isWorkbenchSchemaReady();
   const [
@@ -569,7 +609,9 @@ export async function getLifecycleSnapshot(): Promise<DevLifecycleSnapshot> {
   let codespace: CodespaceInfo | null = null;
   let codespaceError: string | null = null;
   try {
-    codespace = await resolveCodespace(getConfiguredCodespaceName());
+    codespace = await resolveCodespaceBounded(
+      codespaceSnapshotTimeoutMs(options.codespaceTimeoutMs)
+    );
   } catch (caught) {
     codespaceError = caught instanceof Error ? caught.message : 'Codespaces API is unavailable.';
   }

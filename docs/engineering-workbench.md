@@ -95,15 +95,20 @@ overwritten.
   queued task exists and the Codespace is stopped.
   Startup is idempotent and state-aware (`Stopped`, `Starting`, `Available`,
   `Stopping`, `ShuttingDown`, unsupported).
-- The Admin overview GET is safe: it may start a genuinely stopped Codespace
-  when queued work exists, but it never stops or restarts an Available one.
-  GitHub machine state and worker process state are shown separately
-  (`worker_missing`, `worker_offline`, `starting_worker`, `checking_provider`,
-  `blocked`, ...).
+- The Admin overview GET is read-only: it never starts or stops a Codespace,
+  dispatches a runner, reaps a lease or advances finalization. Repeated polls and
+  concurrent tabs therefore cannot duplicate side effects. Recovery is owned by
+  the scheduler tick, the worker lifecycle and the explicit Admin `recover`
+  action. The only external read (the Codespaces lookup inside the lifecycle
+  snapshot) is bounded to 2.5 seconds by default
+  (`PIERROT_DEV_CODESPACE_SNAPSHOT_TIMEOUT_MS`); a timeout is reported as
+  `codespaceError` instead of holding the page. GitHub machine state and worker
+  process state are shown separately (`worker_missing`, `worker_offline`,
+  `starting_worker`, `checking_provider`, `blocked`, ...).
 - If a stop is already in flight, the backend records a durable pending start
   (attempt count and next attempt time) and returns immediately. The request
   never waits for the Codespace boot. One short `after()` retry plus the next
-  Admin poll complete the start idempotently.
+  scheduled lifecycle pass complete the start idempotently.
 - Worker recovery (stop + start an Available machine) is a separate, explicit
   owner action. It requires queued work, no active attempt, no online worker
   (including a not-ready worker), no shutdown intent, a proven boot signal past
@@ -136,7 +141,7 @@ overwritten.
   intent, rechecks again, and only then asks GitHub to stop the Codespace.
 - A task submitted between the two checks cancels the stop. A task submitted
   after the stop request causes a pending start, which is retried by the
-  backend and by the next Admin overview poll.
+  backend and by the next scheduled recovery tick.
 - Shutdown is safe to repeat. Stop failures are recorded with a bounded retry
   delay; the worker keeps heartbeating instead of exiting.
 - The Codespace `GITHUB_TOKEN` in this environment only has
@@ -150,8 +155,9 @@ individual tasks. The backend runs a separate, idempotent finalization pass
 whenever execution is idle: no `in_progress` task and no `claimed`/`running`
 attempt, and the queue is not paused. A non-empty queue is **not** a blocker,
 because batch dependents intentionally stay `queued` until their prerequisite
-lands. It is triggered by the worker idle request and by the Admin overview
-poll; only one instance can advance it per 30-second window.
+lands. It is triggered by the worker idle request and by the explicit Admin
+`finalize_queue`/`recover` actions; only one instance can advance it per
+30-second window. The Admin overview GET never advances finalization itself.
 
 Stages:
 

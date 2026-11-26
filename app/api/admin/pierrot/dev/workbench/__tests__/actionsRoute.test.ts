@@ -83,6 +83,10 @@ jest.mock('@/lib/pierrot/dev/workbench/finalization', () => ({
   retryFinalization: jest.fn(async () => null),
 }));
 
+jest.mock('@/lib/pierrot/dev/workbench/recovery', () => ({
+  runWorkbenchRecovery: jest.fn(async () => ({ status: 'ok', steps: [], failures: [] })),
+}));
+
 jest.mock('@/lib/pierrot/dev/workbench/reconciliation', () => ({
   reconcileLegacyReviewRows: jest.fn(async () => ({
     apply: false,
@@ -113,12 +117,14 @@ import { approveTask, enqueueTask } from '@/lib/pierrot/dev/workbench/execution'
 import { dispatchTaskToActions } from '@/lib/pierrot/dev/workbench/actions';
 import { getBatchIdForTask } from '@/lib/pierrot/dev/workbench/store';
 import { reconcileLegacyReviewRows } from '@/lib/pierrot/dev/workbench/reconciliation';
+import { runWorkbenchRecovery } from '@/lib/pierrot/dev/workbench/recovery';
 
 const approve = approveTask as jest.Mock;
 const enqueue = enqueueTask as jest.Mock;
 const dispatch = dispatchTaskToActions as jest.Mock;
 const batchForTask = getBatchIdForTask as jest.Mock;
 const reconcile = reconcileLegacyReviewRows as jest.Mock;
+const recover = runWorkbenchRecovery as jest.Mock;
 
 function request(action: string, taskId = 'task-1') {
   return new Request('http://localhost/api/admin/pierrot/dev/workbench/actions', {
@@ -165,6 +171,25 @@ describe('POST workbench action queue', () => {
 
     expect(response.status).toBe(404);
     expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it('runs an explicit owner recovery through the existing bounded lifecycle', async () => {
+    const response = await POST(request('recover'));
+    const body = (await response.json()) as {
+      ok?: boolean;
+      recovery?: unknown;
+      overview?: unknown;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.recovery).toBeTruthy();
+    expect(body.overview).toBeTruthy();
+    expect(recover).toHaveBeenCalledWith({
+      source: 'admin:recover',
+      steps: ['reap', 'dispatch', 'finalization'],
+      budgetMs: 20_000,
+    });
   });
 
   it('runs legacy reconciliation as a dry run unless confirmation is explicit', async () => {
