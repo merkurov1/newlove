@@ -1,7 +1,15 @@
 import { DEFAULT_ISSUE_TEMPLATE } from './template';
 import { buildIssueHeader } from './header';
 import { issueEntries } from './title';
-import type { IssueEntry, IssuePayload, IssueLang } from './types';
+import { readEditorialComposition } from './composition';
+import type {
+  EditorialComposition,
+  EditorialLedgerEntry,
+  EditorialPartKind,
+  IssueEntry,
+  IssuePayload,
+  IssueLang,
+} from './types';
 
 /**
  * Рендер выпуска Flow. Сигнатура прежняя:
@@ -671,6 +679,224 @@ function materialOrder(payload: IssuePayload): MaterialKey[] {
   return [...new Set([...active, ...remainder, ...mandatory])];
 }
 
+const PART_LABELS: Record<IssueLang, Record<EditorialPartKind, string>> = {
+  ru: {
+    central: 'Главная линия',
+    thread: 'Тематическая линия',
+    context: 'Контекст',
+    episode: 'Отдельные сюжеты',
+    visual: 'Визуальная пауза',
+    sources: 'Источники и дополнительное чтение',
+    archive: 'Полный обзор выпуска',
+  },
+  en: {
+    central: 'Main line',
+    thread: 'Thematic line',
+    context: 'Context',
+    episode: 'Standalone stories',
+    visual: 'Visual pause',
+    sources: 'Sources and further reading',
+    archive: 'Full overview of the issue',
+  },
+};
+
+/**
+ * Resolve every material of the composition from the canonical snapshot.
+ * Translated/edited legacy arrays are layered on top so that an EN issue and
+ * the admin editor see the same copy as before.
+ */
+function compositionEntries(payload: IssuePayload): Map<string, IssueEntry> {
+  const map = new Map<string, IssueEntry>();
+
+  for (const entry of issueEntries(payload)) {
+    if (entry?.id) map.set(entry.id, entry);
+  }
+
+  const add = (entry: IssueEntry | null | undefined) => {
+    if (entry?.id) map.set(entry.id, entry);
+  };
+
+  add(payload.lead);
+  for (const entry of payload.latest || []) add(entry);
+  for (const entry of payload.links || []) add(entry);
+  for (const entry of payload.videos || []) add(entry);
+  for (const entry of payload.photos || []) add(entry);
+
+  return map;
+}
+
+function ledgerFallbackEntry(ledger: EditorialLedgerEntry): IssueEntry {
+  return {
+    id: ledger.id,
+    type: ledger.type,
+    title: ledger.title,
+    body: '',
+    url: `/flow/${ledger.id}`,
+    publishedAt: '',
+    createdAt: '',
+    metadata: {},
+    lang: 'other',
+    kind: 'other',
+    own: true,
+  };
+}
+
+function compositionEntryHtml(
+  entry: IssueEntry,
+  ledger: EditorialLedgerEntry | undefined,
+  lang: IssueLang,
+  full: boolean
+): string {
+  const t = L[lang];
+  const href = safeUrl(entry.url) || `${SITE}/flow/${entry.id}`;
+  const title = entryTitle(entry) || ledger?.title || entry.id;
+  const image = safeUrl(entry.image);
+  const body = String(entry.body || '');
+  const visibleBody = full ? body : body.slice(0, 900);
+  const description = String(entry.description || '');
+  const caption = String(entry.caption || '');
+  const typeLabel = t.types[entry.type] || entry.type;
+  const date = entry.publishedAt
+    ? `${dateLong(entry.publishedAt, lang)}${hhmm(entry.publishedAt, lang) ? `, ${hhmm(entry.publishedAt, lang)} UTC` : ''}`
+    : '';
+
+  return `<article class="item" data-item-id="${esc(entry.id)}">
+  <div class="item-meta"><span>${esc(typeLabel)}</span>${date ? `<time>${esc(date)}</time>` : ''}${ledger ? `<span>${esc(ledger.role)}</span>` : ''}</div>
+  <h3><a href="${esc(href)}">${esc(title)}</a></h3>
+  ${image ? `<figure class="item-image"><img src="${esc(image)}" alt="${esc(entry.type === 'photo' ? photoAlt(entry as PhotoItem) : caption || title)}" loading="lazy"></figure>` : ''}
+  ${visibleBody ? paragraphs(visibleBody, 'var(--serif)', 17) : ''}
+  ${description ? `<p class="item-dek">${esc(description)}</p>` : ''}
+  ${caption && entry.type !== 'photo' ? `<p class="meta">${esc(caption)}</p>` : ''}
+  ${entry.type === 'photo' && caption ? `<p class="meta">${esc(caption)}</p>` : ''}
+  ${safeUrl(entry.url) ? `<p class="meta"><a href="${esc(safeUrl(entry.url) as string)}">${esc(entry.url as string)}</a></p>` : ''}
+  <a class="item-open" href="${esc(href)}">${esc(t.readMore)}</a>
+</article>`;
+}
+
+function compositionPartHtml(
+  part: { id: string; kind: EditorialPartKind; title: string; annotation: string; entryIds: string[] },
+  entries: Map<string, IssueEntry>,
+  ledgerById: Map<string, EditorialLedgerEntry>,
+  lang: IssueLang,
+  renderIds: Set<string>,
+  centralLabel?: string
+): string {
+  const labels = PART_LABELS[lang];
+  const items: string[] = [];
+  const seen = new Set<string>();
+  const full = part.kind === 'central';
+  const kindLabel =
+    part.kind === 'central' && centralLabel ? centralLabel : labels[part.kind] || '';
+
+  for (const id of part.entryIds) {
+    if (seen.has(id) || renderIds.has(id)) continue;
+    seen.add(id);
+    renderIds.add(id);
+
+    const entry = entries.get(id) || (ledgerById.get(id) ? ledgerFallbackEntry(ledgerById.get(id) as EditorialLedgerEntry) : null);
+    if (!entry) continue;
+
+    items.push(compositionEntryHtml(entry, ledgerById.get(id), lang, full));
+  }
+
+  if (!items.length) return '';
+
+  return `<section id="${esc(part.id)}" class="c12 composition-part" data-part-kind="${esc(part.kind)}">
+  <p class="k">${esc(kindLabel)}</p>
+  <h2>${esc(part.title)}</h2>
+  ${part.annotation ? `<p class="by">${esc(part.annotation)}</p>` : ''}
+  <div class="issue-feed">${items.join('')}</div>
+</section>`;
+}
+
+/**
+ * Render the editorial composition and guarantee that every ledger ID that
+ * belongs to this edition has a visible, linked representation.
+ */
+function renderEditorialComposition(
+  payload: IssuePayload,
+  composition: EditorialComposition,
+  lang: IssueLang
+): { html: string; nav: { href: string; label: string }[] } {
+  const entries = compositionEntries(payload);
+  const ledgerById = new Map(composition.ledger.map((entry) => [entry.id, entry]));
+  const rendered = new Set<string>();
+  const sections: string[] = [];
+  const nav: { href: string; label: string }[] = [];
+  const uiLabels = issueLabels(payload);
+
+  for (const part of composition.parts) {
+    const html = compositionPartHtml(
+      part,
+      entries,
+      ledgerById,
+      lang,
+      rendered,
+      uiLabels.lead
+    );
+
+    if (!html) continue;
+
+    sections.push(html);
+    nav.push({
+      href: part.id,
+      label:
+        part.kind === 'central'
+          ? uiLabels.lead
+          : PART_LABELS[lang][part.kind] || part.title,
+    });
+  }
+
+  // Safety net: any ledger entry of this edition that was not rendered by a
+  // part is still shown, never silently dropped.
+  const missing = composition.ledger.filter(
+    (entry) => entry.role !== 'other_edition' && !rendered.has(entry.id)
+  );
+
+  if (missing.length) {
+    const part = {
+      id: 'archive-extra',
+      kind: 'archive' as const,
+      title: lang === 'ru' ? 'Полный обзор выпуска' : 'Full overview of the issue',
+      annotation:
+        lang === 'ru'
+          ? 'Материалы, которые не удалось распределить по линиям, сохраняются здесь с рабочими ссылками.'
+          : 'Materials that could not be placed in a line are kept here with working links.',
+      entryIds: missing.map((entry) => entry.id),
+    };
+
+    const html = compositionPartHtml(part, entries, ledgerById, lang, rendered);
+
+    if (html) {
+      sections.push(html);
+      nav.push({ href: part.id, label: PART_LABELS[lang].archive });
+    }
+  }
+
+  // A stale composition must not hide records from the canonical `items`
+  // snapshot either. Anything still unrendered is shown once more.
+  const leftover = [...entries.values()].filter(
+    (entry) => !rendered.has(entry.id)
+  );
+
+  if (leftover.length) {
+    const items = leftover
+      .map((entry) => {
+        rendered.add(entry.id);
+        return compositionEntryHtml(entry, ledgerById.get(entry.id), lang, false);
+      })
+      .join('');
+
+    sections.push(`<section id="archive-leftover" class="c12 composition-part" data-part-kind="archive">
+  <p class="k">${esc(PART_LABELS[lang].archive)}</p>
+  <div class="issue-feed">${items}</div>
+</section>`);
+    nav.push({ href: 'archive-leftover', label: PART_LABELS[lang].archive });
+  }
+
+  return { html: sections.join(''), nav };
+}
+
 function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
   const lang = payload.lang;
   const t = L[lang];
@@ -683,6 +909,10 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
   const published = publishedCount(payload, ext);
   const order = materialOrder(payload);
   const enabled = payload.template?.sections?.enabled || {};
+  const composition = readEditorialComposition(payload);
+  const compositionView = composition
+    ? renderEditorialComposition(payload, composition, lang)
+    : null;
 
   const leadHtml = sections.lead
     ? `<section id="lead" class="c8">
@@ -744,7 +974,11 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
     photos: frameHtml,
   };
 
-  const materialsHtml = order.map((key) => blocks[key]).join('');
+  // A versioned composition replaces the mechanical section feed on the web.
+  // Legacy payloads keep the exact same path as before.
+  const materialsHtml = compositionView
+    ? compositionView.html
+    : order.map((key) => blocks[key]).join('');
 
   const metricsHtml =
     enabled.metrics !== false
@@ -778,7 +1012,9 @@ function renderWeb(payload: IssuePayload, ext: Stats, o: Opts): string {
       : '';
 
   const nav = [
-    ...order.map((key) => ({ href: key, label: labels[key] })),
+    ...(compositionView
+      ? compositionView.nav
+      : order.map((key) => ({ href: key, label: labels[key] }))),
     ...(enabled.sources !== false && payload.sourceIndex.length
       ? [{ href: 'sources', label: labels.sources }]
       : []),

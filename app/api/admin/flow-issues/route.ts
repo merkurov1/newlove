@@ -5,6 +5,7 @@ import { buildIssuePayload, resolveIssueWindow } from '@/lib/flow-issue/build';
 import { renderIssue } from '@/lib/flow-issue/render';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
 import { getPayloadItemIds, samePayloadComposition } from '@/lib/flow-issue/draft';
+import { compositionReadiness } from '@/lib/flow-issue/composition';
 import { processNewsletterJob } from '@/lib/newsletter/processJob';
 import {
   fetchConfirmedActiveSubscribers,
@@ -36,31 +37,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /**
- * Explain degraded (heuristic-only) composition instead of leaving the admin
- * with an unexplained thin issue. Analysis is advisory: it never blocks the
- * response.
+ * Explain degraded (heuristic-only) composition and coverage problems before
+ * the admin publishes. Analysis quality is advisory; an incomplete ledger is
+ * a hard publication blocker handled by `compositionReadiness`.
  */
 function issueWarnings(payload: unknown): string[] {
+  const warnings: string[] = [];
+  const readiness = compositionReadiness(payload);
+
+  if (!readiness.ready && readiness.reason) {
+    warnings.push(readiness.reason);
+  }
+
+  if (isRecord(payload) && isRecord(payload.editorialComposition)) {
+    const composition = payload.editorialComposition;
+    const diagnostics = isRecord(composition.diagnostics) ? composition.diagnostics : null;
+
+    if (diagnostics) {
+      const source = Number(diagnostics.source_count) || 0;
+      const assigned = Number(diagnostics.assigned_count) || 0;
+      const unassigned = Number(diagnostics.unassigned_count) || 0;
+      const otherEdition = Number(diagnostics.other_edition_count) || 0;
+
+      if (diagnostics.column_source !== 'model') {
+        warnings.push(
+          `Колонка Пьеро собрана локальным детерминированным способом: ${source} материалов, ${assigned} учтено в композиции${otherEdition ? `, ${otherEdition} в другом языковом выпуске` : ''}.`
+        );
+      }
+
+      if (unassigned > 0) {
+        warnings.push(
+          `В полном обзоре не учтено материалов: ${unassigned}. Выпуск нельзя публиковать до устранения пропуска.`
+        );
+      }
+    }
+  }
+
   if (!isRecord(payload) || !isRecord(payload.analysis)) {
-    return [];
+    return warnings;
   }
 
   const heuristic = typeof payload.analysis.heuristic === 'number' ? payload.analysis.heuristic : 0;
   const model = typeof payload.analysis.model === 'number' ? payload.analysis.model : 0;
 
-  if (heuristic <= 0) return [];
+  if (heuristic <= 0) return warnings;
 
   const total = heuristic + model;
 
   if (model === 0) {
-    return [
-      `Выпуск собран без модельного анализа: для всех ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен). Проверьте состав перед публикацией.`,
-    ];
+    warnings.push(
+      `Выпуск собран без модельного анализа: для всех ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен). Проверьте состав перед публикацией.`
+    );
+  } else {
+    warnings.push(
+      `Для ${heuristic} из ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен): часть оценок приблизительна.`
+    );
   }
 
-  return [
-    `Для ${heuristic} из ${total} материалов использована локальная эвристика (AI отключён для записей или сервис недоступен): часть оценок приблизительна.`,
-  ];
+  return warnings;
 }
 
 async function getAdminSupabase() {
@@ -85,8 +119,14 @@ async function findExistingDraft(supabase: any, lang: IssueLang, payload: IssueP
 
   if (error) throw error;
 
-  const existing = (data || []).find((issue: any) =>
-    samePayloadComposition(issue.payload, payload)
+  const existing = (data || []).find(
+    (issue: any) =>
+      samePayloadComposition(issue.payload, payload) &&
+      // Drafts created before the editorial composition existed cannot be
+      // used to validate the new composition or its completeness. Rebuild
+      // them instead of returning an empty legacy preview.
+      isRecord(issue.payload) &&
+      isRecord(issue.payload.editorialComposition)
   );
 
   return existing || null;
@@ -175,15 +215,32 @@ export async function POST(request: Request) {
 
     const payload = await buildIssuePayload(supabase, lang, start, end);
 
+    // A versioned composition must cover every source ID before a draft can
+    // be created. Legacy payloads without a composition remain valid.
+    const readiness = compositionReadiness(payload);
+
+    if (!readiness.ready) {
+      return NextResponse.json(
+        {
+          error: readiness.reason || 'Неполное покрытие выпуска.',
+          diagnostics: readiness.diagnostics,
+          warnings: issueWarnings(payload),
+        },
+        { status: 409 }
+      );
+    }
+
     // An empty issue is almost always a data problem, not an editorial
-    // choice. Fail with an explanation instead of saving a draft with no
-    // material that the admin has to diagnose later.
+    // choice. The full `items` snapshot is the right denominator: legacy
+    // section arrays may legitimately be empty when the composition holds
+    // all material.
     const entryCount =
+      (Array.isArray(payload.items) ? payload.items.length : 0) ||
       (payload.lead ? 1 : 0) +
-      payload.latest.length +
-      payload.links.length +
-      payload.videos.length +
-      payload.photos.length;
+        payload.latest.length +
+        payload.links.length +
+        payload.videos.length +
+        payload.photos.length;
 
     if (entryCount === 0) {
       return NextResponse.json(
@@ -343,7 +400,9 @@ export async function PATCH(request: Request) {
 
     const { data: issue, error: fetchError } = await supabase
       .from('letters')
-      .select('id,title,slug,kind,lang,status,published,publishedAt,sent_at,html_email,text_email')
+      .select(
+        'id,title,slug,kind,lang,status,published,publishedAt,sent_at,html_email,text_email,payload'
+      )
       .eq('id', id)
       .eq('kind', 'issue')
       .maybeSingle();
@@ -352,6 +411,19 @@ export async function PATCH(request: Request) {
 
     if (!issue) {
       return NextResponse.json({ error: 'Выпуск не найден.' }, { status: 404 });
+    }
+
+    // Never publish or send an issue whose editorial ledger is incomplete.
+    const readiness = compositionReadiness((issue as any).payload);
+
+    if (!readiness.ready) {
+      return NextResponse.json(
+        {
+          error: readiness.reason || 'Неполное покрытие выпуска.',
+          diagnostics: readiness.diagnostics,
+        },
+        { status: 409 }
+      );
     }
 
     const now = new Date().toISOString();

@@ -96,6 +96,101 @@ export type IssueEntry = {
 export type IssueSectionKey =
   'lead' | 'latest' | 'links' | 'videos' | 'photos' | 'metrics' | 'sources' | 'subscribe';
 
+/**
+ * Editorial decision for one published record of the period.
+ *
+ * The ledger is the completeness contract: every published public record in
+ * the period must appear here exactly once. A role never removes an item from
+ * the issue; it only explains where the reader meets it.
+ */
+export type EditorialMaterialRole =
+  | 'centerpiece'
+  | 'thread'
+  | 'context'
+  | 'episode'
+  | 'visual'
+  | 'source'
+  | 'archive'
+  | 'unavailable'
+  | 'other_edition';
+
+export type EditorialPartKind =
+  'central' | 'thread' | 'context' | 'episode' | 'visual' | 'sources' | 'archive';
+
+export type EditorialLedgerEntry = {
+  id: string;
+  type: string;
+  role: EditorialMaterialRole;
+  /** Short, human-readable explanation of this decision. */
+  reason: string;
+  /** Index into `parts`, or null for material shown in another edition. */
+  partIndex: number | null;
+  aiAllowed: boolean;
+  /** True when the material belongs to the author's own stream. */
+  own: boolean;
+  /** Whether the decision used a model analysis or the local heuristic. */
+  analysis: 'model' | 'heuristic' | 'none';
+  /** Title used for diagnostics and for a neutral fallback in the renderer. */
+  title: string;
+};
+
+export type EditorialPart = {
+  /** Stable, URL-safe identifier used for the in-page anchor. */
+  id: string;
+  kind: EditorialPartKind;
+  title: string;
+  /** Transition/annotation explaining why these materials sit together. */
+  annotation: string;
+  entryIds: string[];
+};
+
+export type EditorialDiagnostics = {
+  source_count: number;
+  assigned_count: number;
+  unassigned_count: number;
+  duplicate_count: number;
+  other_edition_count: number;
+  per_type: Record<string, number>;
+  by_role: Record<string, number>;
+  own_count: number;
+  external_count: number;
+  ai_allowed_count: number;
+  model_analysis_count: number;
+  heuristic_analysis_count: number;
+  column_source: 'model' | 'fallback';
+  /** Human-readable explanations of degraded or fallback paths. */
+  fallback_reasons: string[];
+  complete: boolean;
+  issues: string[];
+};
+
+/**
+ * Versioned editorial composition of an issue. It is stored next to the
+ * legacy section arrays so old payloads and the newsletter keep working.
+ */
+export type EditorialComposition = {
+  /** Composition schema version, independent of `IssuePayload.schemaVersion`. */
+  version: number;
+  concept: {
+    /** Central theme, or a deliberately plural formulation for a mixed week. */
+    title: string;
+    /** Editorial headline of the issue, independent of stored record titles. */
+    headline: string;
+    /** What holds the issue together; grounded in the supplied analyses. */
+    thesis: string;
+  };
+  /** Meaningful sequence. Each listed ID appears in exactly one part. */
+  parts: EditorialPart[];
+  /** Every source record, exactly once, with its editorial decision. */
+  ledger: EditorialLedgerEntry[];
+  /** Pierrot's column, written for this composition rather than a sample. */
+  column: string[];
+  columnSource: 'model' | 'fallback';
+  summary: string;
+  generatedBy: 'model' | 'hybrid' | 'heuristic';
+  diagnostics: EditorialDiagnostics;
+};
+
 export type IssueTemplateSettings = {
   theme: {
     accent: string;
@@ -178,6 +273,14 @@ export type IssuePayload = {
 
   /** Two or three short paragraphs of Pierrot's author column. */
   pierrotIntro?: string[];
+
+  /**
+   * Versioned editorial composition of the whole period. Optional: payloads
+   * built before this field existed keep rendering through the legacy
+   * section arrays. When present, the web renderer shows this composition
+   * and uses `items` to resolve every entry.
+   */
+  editorialComposition?: EditorialComposition;
 
   lead: (IssueEntry & { annotation?: string }) | null;
   latest: IssueEntry[];

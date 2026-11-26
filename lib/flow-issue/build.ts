@@ -1,11 +1,14 @@
 import {
   classifyNewItems,
-  generateIssueNarrative,
+  generateEditorialColumn,
   heuristicLanguage,
   translateIssueEntries,
 } from './deepseek';
-import { buildFallbackNarrative, type IssueNarrative } from './narrative';
-import { candidateFromItem, isHeuristicAnalysis, selectIssueContent } from './editorial';
+import {
+  buildEditorialComposition,
+  reconcileEditorialComposition,
+} from './composition';
+import { buildCandidate, candidateFromItem, isHeuristicAnalysis, selectIssueContent } from './editorial';
 import { buildSourceIndex, getLinkPresentation } from './metadata';
 import { DEFAULT_ISSUE_TEMPLATE, normalizeIssueTemplate } from './template';
 import type {
@@ -491,16 +494,19 @@ export async function buildIssuePayload(
     (item) => safeDate(item.published_at) !== null
   );
 
-  const published = records.filter(itemIsSelectable);
-
-  // Analysis only enriches metadata; it does not rewrite Flow text.
-  const analyses = await classifyNewItems(supabase, published);
+  /**
+   * Every published record is analysed, even when it cannot be ranked (empty
+   * text, no transcript, unsupported type). Analysis is still only sent to a
+   * model for `ai_allowed === true` records; everything else uses the local
+   * heuristic. This gives the composition a decision for each source ID.
+   */
+  const analyses = await classifyNewItems(supabase, records);
 
   // Diagnostics: a fully heuristic run is a degraded composition, not a
   // failure, and the admin UI should be able to say so.
   const analysisSources = { model: 0, heuristic: 0 };
 
-  for (const item of published) {
+  for (const item of records) {
     const analysis = analyses.get(item.id);
 
     if (!analysis) continue;
@@ -509,8 +515,8 @@ export async function buildIssuePayload(
     else analysisSources.model++;
   }
 
-  const ids = published.map((item) => item.id);
-  let classifiedItems = published;
+  const ids = records.map((item) => item.id);
+  let classifiedItems = records;
 
   if (ids.length > 0) {
     const { data, error } = await supabase.from('items').select(SELECT_ITEMS).in('id', ids);
@@ -534,6 +540,14 @@ export async function buildIssuePayload(
     });
   }
 
+  // Presentation entries for every record of the period. `items` stays the
+  // canonical edition snapshot; the map is only used while composing.
+  const entryById = new Map<string, IssueEntry>();
+
+  for (const item of records) {
+    entryById.set(item.id, toFeedEntry(item, toEntry(item)));
+  }
+
   // Snapshot of every published record in the period. It powers the
   // "Published" metric and keeps the canonical source set available for
   // audits. It is deliberately not rendered as one long feed. Photos are the
@@ -545,18 +559,37 @@ export async function buildIssuePayload(
         (safeDate(second.published_at)?.getTime() || 0) -
         (safeDate(first.published_at)?.getTime() || 0)
     )
-    .map((item) => toFeedEntry(item, toEntry(item)));
+    .map((item) => entryById.get(item.id) || toFeedEntry(item, toEntry(item)));
 
   // Text, link and video records stay canonical for both language editions so
   // the existing translation pipeline keeps working. Photos are selected from
   // their declared items.lang edition only.
-  const candidates = classifiedItems
-    .filter((item) => itemBelongsToIssueLanguage(item, lang))
-    .map((item) => candidateFromItem(item, toEntry(item), end));
+  const editionItems = classifiedItems.filter((item) =>
+    itemBelongsToIssueLanguage(item, lang)
+  );
+
+  const selectableIds = new Set(records.filter(itemIsSelectable).map((item) => item.id));
+
+  const candidateFor = (item: FlowItem) => {
+    const entry = entryById.get(item.id) || toEntry(item);
+    const analysis = analyses.get(item.id);
+
+    // Prefer the analysis produced in this run. A failed cache write must not
+    // downgrade the composition to the local heuristic.
+    return analysis
+      ? buildCandidate(entry, analysis, end)
+      : candidateFromItem(item, toEntry(item), end);
+  };
+
+  const legacyCandidates = editionItems
+    .filter((item) => selectableIds.has(item.id))
+    .map(candidateFor);
+
+  const compositionCandidates = editionItems.map(candidateFor);
 
   const { config: template, version: templateVersion } = activeTemplate;
 
-  const selection = selectIssueContent(candidates, template.limits, end);
+  const selection = selectIssueContent(legacyCandidates, template.limits, end);
 
   const lead = selection.lead;
   const latest = selection.latest;
@@ -772,20 +805,6 @@ export async function buildIssuePayload(
     };
   }
 
-  const selectedEntries: IssueEntry[] = [];
-  const selectedIds = new Set<string>();
-  const addSelected = (entry: IssueEntry | null | undefined) => {
-    if (!entry || selectedIds.has(entry.id)) return;
-    selectedIds.add(entry.id);
-    selectedEntries.push(entry);
-  };
-
-  addSelected(payloadEntries.lead);
-  payloadEntries.latest.forEach(addSelected);
-  payloadEntries.links.forEach(addSelected);
-  payloadEntries.videos.forEach(addSelected);
-  payloadEntries.photos.forEach(addSelected);
-
   const stats = calculateMetrics(records, start, end);
   const activeDays = flowActiveDays(flowStartedAt, end);
 
@@ -805,24 +824,66 @@ export async function buildIssuePayload(
     timezone: 'UTC' as const,
   };
 
-  const fallbackNarrative = buildFallbackNarrative(selectedEntries, analyses, lang);
-  let narrative: IssueNarrative = fallbackNarrative;
+  /**
+   * Editorial composition of the whole period. It is built from every
+   * published record, not from the legacy selection, so no template limit or
+   * section rule can remove material from the issue.
+   */
+  let composition = buildEditorialComposition({
+    lang,
+    period,
+    records,
+    editionIds: new Set(
+      records.filter((item) => itemBelongsToIssueLanguage(item, lang)).map((item) => item.id)
+    ),
+    entries: entryById,
+    analyses,
+    candidates: new Map(
+      compositionCandidates.map((candidate) => [candidate.entry.id, candidate])
+    ),
+    leadId: selection.lead?.id || null,
+    windowEnd: end,
+  });
 
+  // Pierrot's column is written for the entire composition. The model input
+  // is chunked, ordered by the composition sequence and filtered to
+  // ai_allowed === true materials. If it fails, the deterministic local
+  // column produced by the composer remains.
   try {
-    const generated = await generateIssueNarrative({
-      items: selectedEntries,
+    const generated = await generateEditorialColumn({
+      composition,
+      entries: entryById,
       analyses,
       lang,
       period,
     });
 
-    if (generated) narrative = generated;
+    if (generated && generated.paragraphs.length >= 2) {
+      const generatedBy: 'model' | 'hybrid' =
+        composition.diagnostics.model_analysis_count > 0 ? 'model' : 'hybrid';
+
+      composition = {
+        ...composition,
+        summary: generated.summary,
+        column: generated.paragraphs,
+        columnSource: 'model',
+        generatedBy,
+        diagnostics: {
+          ...composition.diagnostics,
+          column_source: 'model',
+        },
+      };
+    }
   } catch (error) {
     console.warn(
-      '[flow-issue] narrative generation failed; using local narrative',
+      '[flow-issue] editorial column generation failed; using local column',
       error instanceof Error ? error.message : 'unknown_error'
     );
   }
+
+  // Final reconciliation runs after every transformation so the payload can
+  // never claim completeness while an ID is missing or duplicated.
+  composition = reconcileEditorialComposition(composition, records, entryById);
 
   return {
     schemaVersion: 2,
@@ -830,8 +891,9 @@ export async function buildIssuePayload(
     period,
     stats: displayStats,
     items: issueItems,
-    summary: narrative.summary,
-    pierrotIntro: narrative.paragraphs,
+    summary: composition.summary,
+    pierrotIntro: composition.column,
+    editorialComposition: composition,
     lead: payloadEntries.lead,
     latest: payloadEntries.latest,
     links: payloadEntries.links,

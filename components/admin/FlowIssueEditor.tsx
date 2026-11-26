@@ -29,6 +29,31 @@ export type EditableIssueData = {
   links: EditableIssueEntryData[];
   videos: EditableIssueEntryData[];
   photos: EditableIssueEntryData[];
+  composition?: {
+    concept: string;
+    parts: { title: string; kind: string; count: number }[];
+    ledger: {
+      id: string;
+      title: string;
+      type: string;
+      role: string;
+      reason: string;
+      partIndex: number | null;
+    }[];
+    complete: boolean;
+    diagnostics: {
+      source_count: number;
+      assigned_count: number;
+      unassigned_count: number;
+      duplicate_count: number;
+      other_edition_count: number;
+      ai_allowed_count: number;
+      model_analysis_count: number;
+      heuristic_analysis_count: number;
+      column_source: 'model' | 'fallback';
+      issues: string[];
+    } | null;
+  } | null;
 };
 
 type ArraySection = 'latest' | 'links' | 'videos' | 'photos';
@@ -360,6 +385,76 @@ export default function FlowIssueEditor({ issue }: { issue: EditableIssueData })
           <span>{issue.slug}</span>
         </div>
       </header>
+
+      {issue.composition && (
+        <section className="mt-6 border border-[#1C1A1B]/15 bg-[#FCFAF7] p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#EAE6E1] pb-3">
+            <h2 className="font-serif text-xl">Редакционная композиция</h2>
+            <span
+              className={`font-mono text-[10px] uppercase tracking-[0.12em] ${
+                issue.composition.complete ? 'text-[#356B4D]' : 'text-red-700'
+              }`}
+            >
+              {issue.composition.complete ? 'Покрытие полное' : 'Покрытие неполное'}
+            </span>
+          </div>
+
+          <p className="mt-3 text-sm leading-6 text-[#1C1A1B]/70">
+            {issue.composition.concept || 'Концепция не задана.'}
+          </p>
+
+          {issue.composition.diagnostics && (
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 font-mono text-[10px] uppercase tracking-[0.1em] text-[#89827B]">
+              <span>Источников: {issue.composition.diagnostics.source_count}</span>
+              <span>Учтено: {issue.composition.diagnostics.assigned_count}</span>
+              <span>Без места: {issue.composition.diagnostics.unassigned_count}</span>
+              <span>Дубликатов: {issue.composition.diagnostics.duplicate_count}</span>
+              <span>Другое издание: {issue.composition.diagnostics.other_edition_count}</span>
+              <span>
+                Колонка: {issue.composition.diagnostics.column_source === 'model' ? 'модель' : 'локальная'}
+              </span>
+            </div>
+          )}
+
+          {issue.composition.parts.length > 0 && (
+            <ol className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
+              {issue.composition.parts.map((part, index) => (
+                <li key={`${part.kind}-${index}`} className="border border-[#EAE6E1] bg-white px-3 py-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[#89827B]">
+                    {part.kind} · {part.count}
+                  </span>
+                  <p className="mt-1 leading-5">{part.title}</p>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {!issue.composition.complete && issue.composition.diagnostics?.issues.length ? (
+            <div role="alert" className="mt-4 border-l-2 border-red-700 bg-red-50 px-3 py-2 text-sm text-red-900">
+              {issue.composition.diagnostics.issues.slice(0, 5).map((problem) => (
+                <p key={problem}>{problem}</p>
+              ))}
+            </div>
+          ) : null}
+
+          <details className="mt-4">
+            <summary className="cursor-pointer font-mono text-xs text-[#89827B]">
+              Реестр материалов ({issue.composition.ledger.length})
+            </summary>
+            <ul className="mt-3 max-h-72 divide-y divide-[#EAE6E1] overflow-y-auto text-xs">
+              {issue.composition.ledger.map((entry) => (
+                <li key={entry.id} className="py-2">
+                  <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-[#990F3D]">
+                    {entry.role} · {entry.type}
+                  </span>
+                  <p className="mt-1 leading-5 text-[#1C1A1B]/80">{entry.title || entry.id}</p>
+                  <p className="mt-0.5 leading-5 text-[#89827B]">{entry.reason}</p>
+                </li>
+              ))}
+            </ul>
+          </details>
+        </section>
+      )}
 
       {showPreview && (
         <div className="mt-6 border border-[#1C1A1B]/15 bg-white">

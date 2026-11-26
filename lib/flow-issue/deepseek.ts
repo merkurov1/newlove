@@ -14,7 +14,13 @@ import {
   normalizeAnalysis,
 } from './analysis';
 import { normalizeNarrative, type IssueNarrative } from './narrative';
-import type { FlowItem, IssueAI, IssueEntry, IssueLang } from './types';
+import type {
+  EditorialComposition,
+  FlowItem,
+  IssueAI,
+  IssueEntry,
+  IssueLang,
+} from './types';
 
 const TranslationSchema = z.object({
   title: z.string(),
@@ -475,6 +481,311 @@ export async function generateIssueNarrative(input: {
     console.warn(
       '[flow-issue] AI narrative fallback',
       error instanceof Error ? error.message : 'narrative_failed'
+    );
+    return null;
+  }
+}
+
+/* ---------- editorial column over the whole composition ---------- */
+
+const ColumnSchema = z.object({
+  summary: z.string().trim().min(1).max(90),
+  paragraphs: z.array(z.string().trim().min(1).max(900)).min(2).max(5),
+});
+
+const COLUMN_SYSTEM_PROMPT = [
+  'You are Pierrot, the AI editor of Flow, a personal stream of notes, links, images and signals by Anton Merkurov.',
+  'Write the author column for an issue whose whole editorial composition is supplied below as a sequence of thematic chunks.',
+  'The column must interpret the issue as a whole: the central line, the thematic threads, the standalone episodes, the visual pauses and the complete overview.',
+  'Explain the connections and the significance of neighbouring materials. Do not list headlines, do not retell each item, and do not write a formal introduction.',
+  'Your editorial autonomy is limited to this column. Do not rewrite, impersonate or attribute new positions to Anton Merkurov, external authors or video makers.',
+  'Use only the supplied summaries, titles and analysis labels. Do not claim to have read links or watched videos.',
+  'Tone: laconic, precise, philosophical and technological. No marketing language, no grandiosity, no invented facts, no invented disagreements.',
+  'Return JSON only with exactly two keys: summary and paragraphs.',
+  "summary: a short phrase of two to six words that answers 'what is this issue about?'. It must fit on one line.",
+  'paragraphs: two or three substantial paragraphs, each 50–110 words. Write in the requested language only.',
+].join(' ');
+
+type ColumnMaterial = {
+  type: string;
+  title: string;
+  excerpt: string;
+  topic: string;
+  summary: string;
+  thesis: string;
+  partIndex: number;
+};
+
+function columnMaterials(
+  composition: EditorialComposition,
+  entries: Map<string, IssueEntry>,
+  analyses: Map<string, IssueAI>
+): ColumnMaterial[] {
+  const partByEntry = new Map<string, number>();
+  const orderedIds: string[] = [];
+  const seenIds = new Set<string>();
+
+  composition.parts.forEach((part, index) => {
+    for (const id of part.entryIds) {
+      partByEntry.set(id, index);
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+      orderedIds.push(id);
+    }
+  });
+
+  const ledgerById = new Map(composition.ledger.map((entry) => [entry.id, entry]));
+
+  for (const ledger of composition.ledger) {
+    if (seenIds.has(ledger.id)) continue;
+    seenIds.add(ledger.id);
+    orderedIds.push(ledger.id);
+  }
+
+  const seen = new Set<string>();
+  const materials: ColumnMaterial[] = [];
+
+  for (const id of orderedIds) {
+    const ledger = ledgerById.get(id);
+    if (!ledger || ledger.role === 'other_edition') continue;
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    const entry = entries.get(id);
+    if (!entry || entry.aiAllowed !== true) continue;
+
+    const analysis = analyses.get(id);
+    const excerpt = clean(
+      entry.body || entry.description || entry.caption || entry.alt || ''
+    );
+
+    // A material with no visible text still exists, but there is nothing to
+    // send. It is counted in the prompt without exposing its content.
+    if (!clean(entry.title) && !excerpt) continue;
+
+    materials.push({
+      type: entry.type,
+      title: clean(entry.title).slice(0, 220),
+      excerpt: excerpt.replace(/\s+/g, ' ').slice(0, 500),
+      topic: clean(analysis?.topic).slice(0, 120),
+      summary: clean(analysis?.summary).slice(0, 400),
+      thesis: clean(analysis?.thesis).slice(0, 400),
+      partIndex: partByEntry.get(id) ?? -1,
+    });
+  }
+
+  return materials;
+}
+
+function chunkMaterials(materials: ColumnMaterial[]): ColumnMaterial[][] {
+  if (!materials.length) return [];
+
+  const total = materials.reduce(
+    (size, material) => size + JSON.stringify(material).length,
+    0
+  );
+  // Bounded number of provider calls (at most ~12) while still passing every
+  // allowed material through a chunk. Large weeks get larger chunks instead
+  // of losing the tail of the corpus.
+  const target = Math.max(2_500, Math.ceil(total / 12));
+  const chunks: ColumnMaterial[][] = [];
+  let current: ColumnMaterial[] = [];
+  let size = 0;
+
+  for (const material of materials) {
+    const nextSize = JSON.stringify(material).length;
+
+    if (current.length && size + nextSize > target) {
+      chunks.push(current);
+      current = [];
+      size = 0;
+    }
+
+    current.push(material);
+    size += nextSize;
+  }
+
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
+async function requestJsonText(
+  system: string,
+  prompt: string,
+  temperature: number
+): Promise<string | null> {
+  if (isGeminiConfigured()) {
+    try {
+      const gemini = await generateGeminiText({
+        system,
+        prompt,
+        temperature,
+        maxOutputTokens: 900,
+        timeoutMs: TIMEOUT_MS,
+        responseMimeType: 'application/json',
+      });
+
+      return gemini.content;
+    } catch (error) {
+      console.warn(
+        '[flow-issue] Gemini column step unavailable; trying DeepSeek:',
+        error instanceof Error ? error.message : 'gemini_request_failed'
+      );
+    }
+  }
+
+  if (!hasDeepSeekConfiguration()) return null;
+
+  const raw = await withRetry(async () => {
+    const response = await client().chat.completions.create({
+      model: MODEL,
+      response_format: { type: 'json_object' },
+      temperature,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    return response.choices[0]?.message?.content;
+  });
+
+  return raw || null;
+}
+
+const ChunkSummarySchema = z.object({
+  summary: z.string().trim().min(1).max(1_500),
+});
+
+/**
+ * Synthesize the whole issue in chunks, then write Pierrot's column from all
+ * chunk summaries. This is deliberately not a "first 18 materials" sample:
+ * every AI-allowed record of the composition contributes to a chunk, and the
+ * final call sees the sequence of the whole issue.
+ *
+ * Privacy: materials with `aiAllowed !== true` are never included, not even
+ * as titles. They are only counted as inaccessible in the final prompt.
+ */
+export async function generateEditorialColumn(input: {
+  composition: EditorialComposition;
+  entries: Map<string, IssueEntry>;
+  analyses: Map<string, IssueAI>;
+  lang: IssueLang;
+  period: { start: string; end: string };
+}): Promise<{ summary: string; paragraphs: string[] } | null> {
+  if (!hasAIConfiguration()) return null;
+
+  const materials = columnMaterials(input.composition, input.entries, input.analyses);
+  if (!materials.length) return null;
+
+  const allowedCount = input.composition.ledger.filter(
+    (entry) => entry.role !== 'other_edition' && entry.aiAllowed === true
+  ).length;
+  const nonAllowedCount = input.composition.ledger.filter(
+    (entry) => entry.role !== 'other_edition' && !entry.aiAllowed
+  ).length;
+  const inaccessibleCount = Math.max(0, allowedCount - materials.length);
+  const chunks = chunkMaterials(materials);
+
+  const summaries: string[] = [];
+  let cursor = 0;
+  const concurrency = Math.min(4, chunks.length);
+
+  async function worker() {
+    while (cursor < chunks.length) {
+      const index = cursor++;
+      const chunk = chunks[index];
+
+      try {
+        const raw = await requestJsonText(
+          [
+            'You are a careful research assistant for a personal intellectual weekly.',
+            'Summarize the supplied materials as one sequence: name the themes, the recurring motifs, the development of thought, the contrasts and any standalone story.',
+            'Do not invent content for links or videos. Use only the supplied titles, excerpts and analysis labels.',
+            'Return JSON only with exactly one key: summary. The summary must be one paragraph of at most 900 characters.',
+          ].join(' '),
+          JSON.stringify({
+            language: input.lang === 'ru' ? 'Russian' : 'English',
+            partIndex: chunk[0]?.partIndex ?? 0,
+            materials: chunk.map((material) => ({
+              type: material.type,
+              title: material.title,
+              excerpt: material.excerpt,
+              topic: material.topic,
+              summary: material.summary,
+              thesis: material.thesis,
+            })),
+          }),
+          0.2
+        );
+
+        if (!raw) continue;
+
+        const parsed = ChunkSummarySchema.safeParse(JSON.parse(raw));
+        if (parsed.success) summaries[index] = parsed.data.summary;
+      } catch (error) {
+        console.warn(
+          '[flow-issue] column chunk failed',
+          error instanceof Error ? error.message : 'chunk_failed'
+        );
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: concurrency }, () => worker())
+  );
+
+  const availableSummaries = summaries.filter(
+    (value): value is string => Boolean(value)
+  );
+
+  if (!availableSummaries.length) return null;
+
+  const partCounts = input.composition.parts.map((part) => ({
+    kind: part.kind,
+    count: part.entryIds.length,
+  }));
+
+  let raw: string | null = null;
+
+  try {
+    raw = await requestJsonText(
+      COLUMN_SYSTEM_PROMPT,
+      JSON.stringify({
+        language: input.lang === 'ru' ? 'Russian' : 'English',
+        period: input.period,
+        totalMaterials: input.composition.diagnostics.source_count,
+        accessibleMaterials: materials.length,
+        inaccessibleMaterials: inaccessibleCount,
+        privacyExcludedMaterials: nonAllowedCount,
+        partCounts,
+        compositionSummaries: availableSummaries,
+      }),
+      0.35
+    );
+  } catch (error) {
+    console.warn(
+      '[flow-issue] editorial column provider failed; using local column',
+      error instanceof Error ? error.message : 'column_failed'
+    );
+    return null;
+  }
+
+  if (!raw) return null;
+
+  try {
+    const parsed = ColumnSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) return null;
+
+    return {
+      summary: parsed.data.summary.slice(0, 70),
+      paragraphs: parsed.data.paragraphs.slice(0, 3).map((paragraph) => paragraph.slice(0, 900)),
+    };
+  } catch (error) {
+    console.warn(
+      '[flow-issue] column parse failed',
+      error instanceof Error ? error.message : 'invalid_column'
     );
     return null;
   }
