@@ -6727,6 +6727,14 @@ a.pw-home-indicator:hover {
   font-size: 11px;
 }
 
+.pw-wb-criteria-block {
+  margin-top: 12px;
+}
+
+.pw-wb-criteria-hint {
+  margin: 4px 0 12px;
+}
+
 .pw-wb-criteria {
   margin: 8px 0 0;
   padding-left: 18px;

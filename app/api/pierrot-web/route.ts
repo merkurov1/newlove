@@ -4247,6 +4247,12 @@ export async function POST(req: Request) {
                 ownerLanguage === 'ru'
                   ? 'Исходная запись памяти сохранена и не отмечена выполненной.'
                   : 'The source memory record is preserved and was not marked completed.'
+              }${
+                task.acceptanceCriteria.length === 0
+                  ? ownerLanguage === 'ru'
+                    ? '\nКритерии приёмки не удалось вывести автоматически. Добавьте измеримый критерий в Task Studio до постановки в очередь.'
+                    : '\nAcceptance criteria could not be derived automatically. Add a measurable criterion in Task Studio before queueing.'
+                  : ''
               }${linkWarning}`,
               {
                 dev_task_status: task.status,
@@ -4300,6 +4306,12 @@ export async function POST(req: Request) {
               ownerLanguage === 'ru'
                 ? 'Задача не отмечена выполненной. Её можно открыть в Task Studio и скопировать prompt для OpenCode.'
                 : 'The task is not marked completed. Open it in Task Studio to copy the OpenCode prompt.'
+            }${
+              task.acceptanceCriteria.length === 0
+                ? ownerLanguage === 'ru'
+                  ? '\nКритерии приёмки не удалось вывести автоматически. Добавьте измеримый критерий в Task Studio до постановки в очередь.'
+                  : '\nAcceptance criteria could not be derived automatically. Add a measurable criterion in Task Studio before queueing.'
+                : ''
             }`,
             {
               dev_task_status: task.status,

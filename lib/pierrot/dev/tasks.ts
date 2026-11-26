@@ -2,6 +2,10 @@ import { assertServerOnly } from '@/lib/serverOnly';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
 import { resolveDevRepository } from './repositories';
 import { getPierrotProject } from '@/lib/pierrot/projects/store';
+import {
+  generateAcceptanceCriteria,
+  hasVerifiableAcceptanceCriteria,
+} from './acceptanceCriteria';
 import type {
   DevTask,
   DevTaskInput,
@@ -54,6 +58,11 @@ function list(value: unknown): string[] {
     .map((item) => item.trim().slice(0, MAX_ARRAY_ITEM))
     .filter(Boolean)
     .slice(0, MAX_ARRAY_ITEMS);
+}
+
+function appendContextNote(context: string, note: string): string {
+  if (context.includes(note)) return context;
+  return [context.trim(), note].filter(Boolean).join('\n\n').slice(0, MAX_TEXT);
 }
 
 function status(value: unknown, fallback: DevTaskStatus = 'draft'): DevTaskStatus {
@@ -178,7 +187,7 @@ export function validateDevTaskCompletion(
   ) {
     throw new Error('DEV_VERIFICATION_REQUIRED');
   }
-  if (task.acceptanceCriteria.length === 0) {
+  if (!hasVerifiableAcceptanceCriteria(task.acceptanceCriteria)) {
     throw new Error('DEV_ACCEPTANCE_CRITERIA_REQUIRED');
   }
   if (
@@ -252,7 +261,7 @@ export function buildTaskPrompt(task: DevTask): string {
 }
 
 export function createTaskInput(input: DevTaskInput): DevTaskInput {
-  return {
+  const normalized: DevTaskInput = {
     title: text(input.title, 'Инженерное задание').trim() || 'Инженерное задание',
     objective: text(input.objective),
     context: text(input.context),
@@ -277,6 +286,20 @@ export function createTaskInput(input: DevTaskInput): DevTaskInput {
     projectId: input.projectId || null,
     status: status(input.status),
   };
+
+  // A task created from the owner UI, chat, memory transfer or an automatic
+  // generator must arrive with verifiable criteria. Provided criteria win;
+  // otherwise derive them from the goal, components and expected behaviour.
+  const resolution = generateAcceptanceCriteria(normalized);
+  normalized.acceptanceCriteria = resolution.criteria;
+  if (resolution.derivation === 'unavailable') {
+    normalized.context = appendContextNote(
+      normalized.context || '',
+      `Acceptance criteria were not derived automatically: ${resolution.reason}`
+    );
+  }
+
+  return normalized;
 }
 
 function fullRow(input: DevTaskInput): Record<string, unknown> {
@@ -348,6 +371,14 @@ async function insertWithFallback(
 export async function createDevTask(userId: string, rawInput: DevTaskInput): Promise<DevTask> {
   const store = getServerSupabaseClient({ useServiceRole: true });
   const input = createTaskInput(rawInput);
+  // Criteria are generated above. If they could not be derived, keep the task
+  // out of the executable states instead of letting the queue gate fail later.
+  if (
+    !input.acceptanceCriteria?.length &&
+    ['ready', 'queued', 'in_progress'].includes(input.status || 'draft')
+  ) {
+    input.status = 'draft';
+  }
   if (input.projectId && !(await getPierrotProject(userId, input.projectId))) {
     throw new Error('PROJECT_NOT_FOUND');
   }
@@ -524,6 +555,14 @@ export async function updateDevTask(
   };
 
   const normalized = createTaskInput(mergedInput);
+  // An explicit request to make the task queueable must not bypass the queue
+  // gate. Keep it in draft when no verifiable criteria can be derived.
+  if (
+    !normalized.acceptanceCriteria?.length &&
+    (patch.status === 'ready' || patch.status === 'queued')
+  ) {
+    normalized.status = 'draft';
+  }
   if (normalized.status === 'verified') {
     validateDevTaskCompletion({
       verificationStatus: existing.verificationStatus,

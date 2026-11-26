@@ -26,6 +26,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { generateAcceptanceCriteria } from '@/lib/pierrot/dev/acceptanceCriteria';
 import type { DevTaskInput } from '@/lib/pierrot/dev/types';
 import type {
   DevAttempt,
@@ -542,6 +543,13 @@ function formFromInput(input: DevTaskInput): TaskFormState {
   };
 }
 
+function generatedCriteriaForTask(task: DevWorkbenchTask): string[] {
+  return generateAcceptanceCriteria({
+    title: task.title,
+    objective: task.objective,
+  }).criteria;
+}
+
 export default function DevWorkbench({
   initialOverview,
   onOpenChat,
@@ -917,6 +925,17 @@ export default function DevWorkbench({
   );
   const selectedTask = selectedTaskId ? taskById.get(selectedTaskId) || null : null;
 
+  const formCriteriaPreview = useMemo(
+    () =>
+      generateAcceptanceCriteria({
+        title: form.title,
+        objective: form.objective,
+        affectedFiles: lines(form.affectedFiles),
+        tests: lines(form.tests),
+      }),
+    [form.title, form.objective, form.affectedFiles, form.tests]
+  );
+
   const createTask = async () => {
     setBusy('create');
     setError(null);
@@ -940,7 +959,7 @@ export default function DevWorkbench({
       });
       if (!response.ok) throw new Error(await readError(response));
       const payload = (await response.json().catch(() => null)) as {
-        task?: { id?: string };
+        task?: { id?: string; acceptanceCriteria?: string[] };
       } | null;
       setForm(EMPTY_FORM);
       setHandoffContext(null);
@@ -951,7 +970,11 @@ export default function DevWorkbench({
       }
       setDetailsSection('tasks');
       setDrawer('details');
-      setNotice('Draft created. Add criteria, then use “Queue task”.');
+      setNotice(
+        payload?.task?.acceptanceCriteria?.length
+          ? 'Draft created with generated acceptance criteria. Review or edit them, then use “Queue task”.'
+          : 'Draft created, but criteria could not be generated. Add at least one measurable criterion before queueing.'
+      );
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Unable to create the task.');
     } finally {
@@ -959,13 +982,22 @@ export default function DevWorkbench({
     }
   };
 
-  const startEdit = (task: DevWorkbenchTask) => {
+  const startEdit = (
+    task: DevWorkbenchTask,
+    options: { generateCriteria?: boolean } = {}
+  ) => {
+    const criteria =
+      task.acceptanceCriteria.length > 0
+        ? task.acceptanceCriteria.join('\n')
+        : options.generateCriteria
+          ? generatedCriteriaForTask(task).join('\n')
+          : '';
     setSelectedTaskId(task.id);
     setEditId(task.id);
     setEditForm({
       title: task.title,
       objective: task.objective,
-      acceptanceCriteria: task.acceptanceCriteria.join('\n'),
+      acceptanceCriteria: criteria,
       tests: '',
       securityConstraints: '',
       affectedFiles: '',
@@ -1018,6 +1050,24 @@ export default function DevWorkbench({
   };
 
   const queueTask = (task: DevWorkbenchTask) => {
+    if (task.acceptanceCriteria.length === 0) {
+      // Never send the task to the server without the criteria the owner was
+      // meant to review. Prefill the editor with derived criteria instead.
+      startEdit(task, { generateCriteria: true });
+      setNotice(
+        'Before queueing, review the acceptance criteria. They were generated from the task goal; edit them if needed, then save.'
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        `Поставить задачу в очередь?\n\nAcceptance criteria:\n${task.acceptanceCriteria
+          .map((criterion) => `• ${criterion}`)
+          .join('\n')}`
+      )
+    ) {
+      return;
+    }
     if (task.status === 'ready') {
       void runAction('enqueue', { taskId: task.id });
     } else {
@@ -1797,13 +1847,35 @@ export default function DevWorkbench({
           </div>
         </dl>
         <p className="pw-wb-meta">Cost estimate: {moneyRange(selectedTask.costEstimate)}</p>
-        {selectedTask.acceptanceCriteria.length > 0 && (
-          <ul className="pw-wb-criteria">
-            {selectedTask.acceptanceCriteria.map((criterion) => (
-              <li key={criterion}>{criterion}</li>
-            ))}
-          </ul>
-        )}
+        <div className="pw-wb-criteria-block">
+          <p className="pw-wb-meta">Acceptance criteria — checked before queueing</p>
+          {selectedTask.acceptanceCriteria.length > 0 ? (
+            <ul className="pw-wb-criteria">
+              {selectedTask.acceptanceCriteria.map((criterion) => (
+                <li key={criterion}>{criterion}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="pw-wb-warning">
+              <ShieldAlert size={14} /> Критериев нет. Сгенерируйте их из цели или добавьте
+              вручную — задача не попадёт в очередь без проверяемых критериев.
+            </p>
+          )}
+          {['draft', 'ready', 'blocked'].includes(selectedTask.status) && (
+            <div className="pw-wb-actions">
+              <button
+                type="button"
+                className="pw-wb-button is-quiet"
+                onClick={() => startEdit(selectedTask, { generateCriteria: true })}
+              >
+                <Check size={14} />{' '}
+                {selectedTask.acceptanceCriteria.length > 0
+                  ? 'Edit criteria'
+                  : 'Generate criteria'}
+              </button>
+            </div>
+          )}
+        </div>
         {selectedTask.pullRequests.length > 0 && (
           <p className="pw-wb-meta">
             PR:{' '}
@@ -2053,8 +2125,39 @@ export default function DevWorkbench({
               rows={4}
               value={form.acceptanceCriteria}
               onChange={(event) => setForm({ ...form, acceptanceCriteria: event.target.value })}
+              placeholder="Можно оставить пустым — критерии будут выведены из цели и компонентов"
             />
           </label>
+          <div className="pw-wb-criteria-hint">
+            {formCriteriaPreview.criteria.length > 0 ? (
+              <>
+                <p className="pw-wb-meta">Будут сохранены такие критерии:</p>
+                <ul className="pw-wb-criteria">
+                  {formCriteriaPreview.criteria.map((criterion) => (
+                    <li key={criterion}>{criterion}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="pw-wb-warning">
+                <ShieldAlert size={14} /> По текущей цели нельзя вывести проверяемые
+                критерии. Добавьте измеримый результат вручную.
+              </p>
+            )}
+            <button
+              type="button"
+              className="pw-wb-button is-quiet"
+              disabled={formCriteriaPreview.criteria.length === 0}
+              onClick={() =>
+                setForm({
+                  ...form,
+                  acceptanceCriteria: formCriteriaPreview.criteria.join('\n'),
+                })
+              }
+            >
+              <Check size={14} /> Заполнить и отредактировать
+            </button>
+          </div>
           <label>
             Проверки — по одной на строку
             <textarea

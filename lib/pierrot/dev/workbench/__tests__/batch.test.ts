@@ -1,7 +1,13 @@
 /** @jest-environment node */
 
 jest.mock('@/lib/serverAuth', () => {
-  type TaskRow = { id: string; title: string; status: string };
+  type TaskRow = {
+    id: string;
+    title: string;
+    status: string;
+    objective?: string;
+    acceptance_criteria?: string[] | null;
+  };
   const state = {
     batchStatus: 'draft',
     items: [] as Array<{ task_id: string; position: number }>,
@@ -98,7 +104,16 @@ jest.mock('@/lib/serverAuth', () => {
               error: null,
             };
           }
-          return { data: state.tasks, error: null };
+          return {
+            data: state.tasks.map((task) => ({
+              ...task,
+              acceptance_criteria:
+                task.acceptance_criteria === undefined
+                  ? ['Temple renders and the batch check passes']
+                  : task.acceptance_criteria,
+            })),
+            error: null,
+          };
         }
         if (this.op === 'update') {
           const task = state.tasks.find((item) => item.id === this.filters.id);
@@ -127,7 +142,13 @@ const state = (
     __state: {
       batchStatus: string;
       items: Array<{ task_id: string; position: number }>;
-      tasks: Array<{ id: string; title: string; status: string }>;
+      tasks: Array<{
+        id: string;
+        title: string;
+        status: string;
+        objective?: string;
+        acceptance_criteria?: string[] | null;
+      }>;
       reset: () => void;
     };
   }
@@ -166,6 +187,33 @@ describe('batch start', () => {
 
     expect(result).toMatchObject({ ok: false, error: 'BATCH_NOT_READY' });
     expect(state.tasks[0].status).toBe('draft');
+    expect(state.batchStatus).toBe('draft');
+  });
+
+  it('keeps ready tasks with no verifiable criteria out of the queue', async () => {
+    state.batchStatus = 'draft';
+    state.items = [{ task_id: 'task-a', position: 0 }];
+    state.tasks = [
+      {
+        id: 'task-a',
+        title: 'A',
+        status: 'ready',
+        objective: 'Do the thing',
+        acceptance_criteria: ['done'],
+      },
+    ];
+
+    const result = await startBatch(USER_ID, BATCH_ID);
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: 'BATCH_ACCEPTANCE_CRITERIA_REQUIRED',
+      queued: 0,
+    });
+    expect(result.missingCriteria).toEqual([
+      expect.objectContaining({ id: 'task-a', title: 'A' }),
+    ]);
+    expect(state.tasks[0].status).toBe('ready');
     expect(state.batchStatus).toBe('draft');
   });
 

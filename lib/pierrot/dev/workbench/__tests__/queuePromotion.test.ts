@@ -2,7 +2,11 @@
 
 jest.mock('@/lib/serverAuth', () => {
   const state = {
-    ready: [] as Array<{ id: string; priority: number }>,
+    ready: [] as Array<{
+      id: string;
+      priority: number;
+      acceptance_criteria?: string[] | null;
+    }>,
     optOuts: new Set<string>(),
     updates: [] as Array<Record<string, unknown>>,
     updateMatches: true,
@@ -72,7 +76,16 @@ jest.mock('@/lib/serverAuth', () => {
           return { data: [], error: null };
         }
         if (this.op === 'select') {
-          return { data: state.ready, error: null };
+          return {
+            data: state.ready.map((task) => ({
+              ...task,
+              acceptance_criteria:
+                task.acceptance_criteria === undefined
+                  ? ['The approved task runs and reports its result']
+                  : task.acceptance_criteria,
+            })),
+            error: null,
+          };
         }
         if (this.op === 'update') {
           state.updates.push({ ...this.payload, id: this.filters.id });
@@ -112,7 +125,11 @@ import { promoteStandaloneReadyTasks } from '../store';
 const state = (
   serverAuth as unknown as {
     __state: {
-      ready: Array<{ id: string; priority: number }>;
+      ready: Array<{
+        id: string;
+        priority: number;
+        acceptance_criteria?: string[] | null;
+      }>;
       optOuts: Set<string>;
       updates: Array<Record<string, unknown>>;
       updateMatches: boolean;
@@ -133,6 +150,19 @@ describe('standalone ready-task promotion', () => {
     await expect(promoteStandaloneReadyTasks()).resolves.toBe(1);
     expect(state.updates).toHaveLength(1);
     expect(state.updates[0]).toMatchObject({ id: TASK_A, status: 'queued' });
+  });
+
+  it('does not auto-enqueue a ready task without verifiable criteria', async () => {
+    state.ready = [
+      {
+        id: TASK_A,
+        priority: 0,
+        acceptance_criteria: ['done'],
+      },
+    ];
+
+    await expect(promoteStandaloneReadyTasks()).resolves.toBe(0);
+    expect(state.updates).toHaveLength(0);
   });
 
   it('never resurrects a task the owner explicitly dequeued', async () => {

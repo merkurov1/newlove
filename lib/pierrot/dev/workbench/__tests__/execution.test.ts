@@ -58,10 +58,12 @@ jest.mock('../github', () => ({
 import * as store from '../store';
 import * as github from '../github';
 import {
+  approveTask,
   attemptExecutor,
   claimTaskForWorker,
   completeAttempt,
   describeClaimUnavailable,
+  enqueueTask,
   failAttempt,
   progressAttempt,
   releaseAttempt,
@@ -81,6 +83,9 @@ const attempt = {
 const task = {
   id: attempt.taskId,
   status: 'in_progress',
+  title: 'Queue safety',
+  objective: 'Keep incomplete tasks out of the execution queue',
+  acceptanceCriteria: ['Incomplete tasks cannot be queued'],
 };
 
 function asMock(value: unknown): jest.Mock {
@@ -578,6 +583,81 @@ describe('retry queueing', () => {
 
     expect(store.transitionTask).toHaveBeenCalledTimes(1);
     expect(store.clearTaskActionsDispatch).not.toHaveBeenCalled();
+  });
+});
+
+describe('acceptance criteria gate', () => {
+  const userId = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    asMock(store.appendEvent).mockResolvedValue(undefined);
+    asMock(store.setQueueOptOut).mockResolvedValue(undefined);
+    asMock(store.isExecutionRetrySchemaReady).mockResolvedValue(true);
+  });
+
+  it('derives and persists criteria for a legacy task before approval', async () => {
+    const legacy = {
+      ...task,
+      status: 'draft' as const,
+      acceptanceCriteria: [] as string[],
+    };
+    asMock(store.getTaskRow).mockResolvedValue(legacy);
+    asMock(store.patchTask).mockResolvedValue({
+      ...legacy,
+      acceptanceCriteria: ['Keep incomplete tasks out of the execution queue'],
+    });
+    asMock(store.transitionTask).mockResolvedValue({
+      ...legacy,
+      status: 'ready' as const,
+      acceptanceCriteria: ['Keep incomplete tasks out of the execution queue'],
+    });
+
+    await approveTask(userId, task.id);
+
+    expect(store.patchTask).toHaveBeenCalledWith(
+      task.id,
+      expect.objectContaining({
+        acceptance_criteria: expect.arrayContaining([
+          expect.stringContaining('execution queue'),
+        ]),
+      })
+    );
+    expect(store.transitionTask).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: task.id, to: 'ready' })
+    );
+  });
+
+  it('refuses to approve a vague task and leaves it out of the queue', async () => {
+    asMock(store.getTaskRow).mockResolvedValue({
+      ...task,
+      status: 'draft' as const,
+      title: 'Fix',
+      objective: 'Fix',
+      acceptanceCriteria: [],
+    });
+
+    await expect(approveTask(userId, task.id)).rejects.toMatchObject({
+      code: 'DEV_ACCEPTANCE_CRITERIA_REQUIRED',
+    });
+    expect(store.transitionTask).not.toHaveBeenCalled();
+    expect(store.nextQueuePosition).not.toHaveBeenCalled();
+  });
+
+  it('refuses to enqueue a ready task with non-verifiable criteria', async () => {
+    asMock(store.getTaskRow).mockResolvedValue({
+      ...task,
+      status: 'ready' as const,
+      title: 'Fix',
+      objective: 'Fix',
+      acceptanceCriteria: ['done'],
+    });
+
+    await expect(enqueueTask(userId, task.id)).rejects.toMatchObject({
+      code: 'DEV_ACCEPTANCE_CRITERIA_REQUIRED',
+    });
+    expect(store.transitionTask).not.toHaveBeenCalled();
+    expect(store.nextQueuePosition).not.toHaveBeenCalled();
   });
 });
 
