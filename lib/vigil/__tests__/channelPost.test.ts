@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import {
+  VIGIL_CHANNEL_DESTINATION,
   VIGIL_CHANNEL_LINK_LABEL,
   VIGIL_CHANNEL_MESSAGE,
   buildVigilChannelPost,
@@ -64,17 +65,27 @@ afterEach(() => {
 });
 
 describe('Vigil channel post', () => {
-  it('builds one short anonymous post with a direct Temple link', () => {
+  it('builds one short anonymous post that opens the Telegram bot', () => {
+    expect(VIGIL_CHANNEL_DESTINATION).toBe('https://t.me/Love_Temple_bot');
     expect(buildVigilChannelPost('https://www.merkurov.love/')).toBe(
-      `${VIGIL_CHANNEL_MESSAGE}\n\n<a href="https://www.merkurov.love/temple">${VIGIL_CHANNEL_LINK_LABEL}</a>`
+      `${VIGIL_CHANNEL_MESSAGE}\n\n<a href="https://t.me/Love_Temple_bot">${VIGIL_CHANNEL_LINK_LABEL}</a>`
     );
-    expect(getVigilChannelDestination()).toBe('https://www.merkurov.love/temple');
+    expect(getVigilChannelDestination()).toBe('https://t.me/Love_Temple_bot');
+
+    const destination = new URL(getVigilChannelDestination());
+    expect(destination.protocol).toBe('https:');
+    expect(destination.hostname).toBe('t.me');
+    expect(destination.pathname).toBe('/Love_Temple_bot');
   });
 
-  it('uses the public site URL when one is configured', () => {
-    expect(buildVigilChannelPost('https://staging.example.test')).toContain(
-      'href="https://staging.example.test/temple"'
-    );
+  it('always opens the bot instead of a site page, even when a site URL is configured', () => {
+    process.env.NEXT_PUBLIC_APP_URL = 'https://staging.example.test';
+
+    const post = buildVigilChannelPost('https://staging.example.test');
+
+    expect(post).toContain('href="https://t.me/Love_Temple_bot"');
+    expect(post).not.toContain('/temple');
+    expect(post).not.toContain('staging.example.test');
   });
 
   it('sends through the Temple bot to the Heart & Angel channel', async () => {
@@ -98,6 +109,7 @@ describe('Vigil channel post', () => {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
     });
+    expect(calls[0].body.text).toContain('href="https://t.me/Love_Temple_bot"');
     expect(calls[0].body.text).not.toContain('Anna');
     expect(calls[0].body.text).not.toContain('intention');
   });
