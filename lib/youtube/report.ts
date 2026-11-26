@@ -356,8 +356,8 @@ export function formatYouTubeReport(report: YouTubeReport): string {
     lines.push('');
     lines.push(
       ru
-        ? 'Подключите общий канал один раз в `/admin/pierrot/analytics` — после этого статистика будет доступна и в Pierrot, и в UNFRAMED.'
-        : 'Connect the shared channel once in `/admin/pierrot/analytics`; the same analytics will then be available in both Pierrot and UNFRAMED.'
+        ? 'Подключите общий канал один раз в `/admin/pierrot/youtube` — после этого статистика будет доступна и в Pierrot, и в UNFRAMED.'
+        : 'Connect the shared channel once in `/admin/pierrot/youtube`; the same analytics will then be available in both Pierrot and UNFRAMED.'
     );
   }
 

@@ -96,15 +96,18 @@ this repository's automated runner.
 
 ## UI
 
-`components/youtube/YouTubeChannelManager.tsx` is rendered in:
+The dedicated project workspace `/admin/pierrot/youtube` is the only YouTube
+management surface. It handles Google account connections, channel discovery,
+project bindings, channel analytics, the video catalog and the metadata editor.
 
-- `/admin/pierrot/analytics` (Pierrot context, optional `?project=unframed`);
-- `/admin/pierrot/youtube?project=pierrot|unframed` (shared channel page).
+`/admin/pierrot/analytics` shows read-only YouTube source health and analytics
+only. It does not render channel-management forms, OAuth management actions,
+uploads, playlists, comments or captions.
 
-It shows the selected channel, connected Google account, analytics/management
-permission state, a connect button, and controls for upload, metadata,
-thumbnail, playlists, comments and captions. Write controls surface the
-confirmation preview before anything is sent.
+`components/youtube/YouTubeChannelManager.tsx` is the legacy shared-channel
+manager. It is no longer mounted in analytics; any write UI belongs to the
+dedicated workspace. Write controls, when mounted, surface the confirmation
+preview before anything is sent.
 
 ## Known limitations
 

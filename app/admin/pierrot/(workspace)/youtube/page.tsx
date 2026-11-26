@@ -21,6 +21,20 @@ function one(params: SearchParams, key: string): string | undefined {
 }
 
 function noticeFrom(params: SearchParams): string | null {
+  const management = one(params, 'youtube_management');
+
+  if (management) {
+    if (management === 'success') {
+      return `Управление YouTube подключено отдельным incremental consent. Канал: ${
+        one(params, 'yt_channel') || 'канал проекта'
+      }. Аналитический grant не изменён.`;
+    }
+
+    return `Управление YouTube не подключено: ${
+      one(params, 'reason') || management
+    }. Аналитика продолжает работать с прежним grant.`;
+  }
+
   const status = one(params, 'youtube_channels');
 
   if (!status) return null;

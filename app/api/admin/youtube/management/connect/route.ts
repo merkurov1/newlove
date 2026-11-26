@@ -83,7 +83,9 @@ export async function GET(request: Request) {
   if (!probe.ok) {
     return NextResponse.redirect(
       new URL(
-        `/admin/pierrot/analytics?youtube_management=error&reason=${encodeURIComponent(
+        `/admin/pierrot/youtube?project=${encodeURIComponent(
+          project
+        )}&youtube_management=error&reason=${encodeURIComponent(
           probe.reason || 'oauth_preflight_failed'
         )}`,
         request.url

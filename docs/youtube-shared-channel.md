@@ -28,7 +28,9 @@ analytics copies.
 
 ## Connection and refresh
 
-1. Owner opens `/admin/pierrot/analytics` and connects Google.
+1. Owner connects the read-only Google analytics grant from
+   `/admin/pierrot/analytics` (GA4, Search Console and YouTube analytics).
+   Channel connections and project bindings live in `/admin/pierrot/youtube`.
 2. The callback runs the existing GA4/Search Console discovery and then
    `runYouTubeDiscovery`, which verifies both YouTube scopes and that the
    channel is visible.

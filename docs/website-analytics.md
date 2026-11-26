@@ -105,8 +105,11 @@ All tables have RLS enabled and grants revoked from `anon`/`authenticated`.
 
 ### UI
 
-- `/admin/pierrot/analytics` — connection management, status, data coverage,
-  manual sync, run history, configuration instructions.
+- `/admin/pierrot/analytics` — read-only source health, data coverage, GA4 and
+  Search Console read-only connection flows, manual sync, run history and
+  configuration instructions.
+- `/admin/pierrot/youtube` — the only YouTube channel connection, discovery,
+  project binding and management workspace.
 - DASH — compact website panel with GA4 sessions, Google clicks/impressions,
   confirmed subscriptions and a sessions sparkline.
 - Chat reports use the existing Markdown renderer and editorial typography.
