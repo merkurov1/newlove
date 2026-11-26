@@ -296,6 +296,52 @@ body.telegram-app.telegram-fullscreen-close .flow-post-page {
   font-family: var(--flow-mono);
 }
 
+/* One vertical rhythm owns the distance between the headline, the body, the
+ * media blocks and the link cards. Blocks no longer add their own outer
+ * margins, so `space-y`-style gaps cannot stack with `my-*` utilities. */
+.flow-item__hero {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(1.5rem, 0.9rem + 1.4vw, 2rem);
+}
+
+.flow-item__hero > * {
+  min-width: 0;
+}
+
+.flow-item__body > :first-child {
+  margin-top: 0;
+}
+
+.flow-item__body > :last-child {
+  margin-bottom: 0;
+}
+
+.flow-item__body a {
+  overflow-wrap: anywhere;
+}
+
+.flow-item__body li > p,
+.flow-item__body li > ul,
+.flow-item__body li > ol {
+  margin-bottom: 0;
+}
+
+.flow-item__body li > ul,
+.flow-item__body li > ol {
+  margin-top: 0.5rem;
+}
+
+.flow-item__body blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.flow-item__body blockquote p {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
 @media (max-width: 480px) {
   .flow-entry {
     padding-block: 1.9rem;
@@ -435,6 +481,14 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   font-size: calc(1.25rem * var(--flow-reader-font-scale));
 }
 
+/* Quoted paragraphs inherit the quote's scale and tone instead of being
+ * re-sized by the general body-copy rule. */
+.flow-post-page--reader .flow-item .flow-item__body blockquote p {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
 .flow-post-page--reader .flow-item :is(a, figcaption, time) {
   color: inherit;
 }
@@ -449,6 +503,22 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
 
 .flow-post-page--reader .flow-item code {
   background: color-mix(in srgb, var(--flow-reader-ink) 8%, transparent);
+  color: var(--flow-reader-ink);
+}
+
+/* Code blocks are already framed by `pre`; inline code styling must not paint
+ * a second, unreadable background over the dark block surface. */
+.flow-post-page--reader .flow-item .flow-item__body pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.flow-post-page--reader .flow-item .flow-item__body :is(th, td) {
+  border-color: var(--flow-reader-line);
+}
+
+.flow-post-page--reader .flow-item .flow-item__body th {
   color: var(--flow-reader-ink);
 }
 

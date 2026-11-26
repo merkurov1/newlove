@@ -163,7 +163,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
   const headingId = (line: number | undefined) => (line ? headingIds.get(line) : undefined);
 
   return (
-    <div className="min-w-0">
+    <div className="flow-item__body min-w-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -171,7 +171,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h2
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-5 mt-10 font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl"
+              className="mb-4 mt-10 break-words font-serif text-3xl font-light leading-tight text-stone-900 first:mt-0 sm:text-4xl"
             >
               {children}
             </h2>
@@ -180,7 +180,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h2
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-4 mt-8 font-serif text-2xl font-light leading-tight text-stone-900 sm:text-3xl"
+              className="mb-3.5 mt-9 break-words font-serif text-2xl font-light leading-tight text-stone-900 first:mt-0 sm:text-3xl"
             >
               {children}
             </h2>
@@ -189,22 +189,41 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             <h3
               id={headingId(node?.position?.start.line)}
               tabIndex={-1}
-              className="mb-3 mt-7 font-serif text-xl font-light leading-tight text-stone-900 sm:text-2xl"
+              className="mb-3 mt-8 break-words font-serif text-xl font-light leading-tight text-stone-900 first:mt-0 sm:text-2xl"
             >
               {children}
             </h3>
           ),
-          p: ({ children }) => (
-            <p className="mb-5 whitespace-pre-wrap font-serif text-[18px] font-normal leading-[1.75] text-stone-800 sm:text-[20px]">
+          h4: ({ children, node }) => (
+            <h4
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-2.5 mt-7 break-words font-serif text-lg font-medium leading-snug text-stone-900 first:mt-0 sm:text-xl"
+            >
               {children}
-            </p>
+            </h4>
           ),
+          p: ({ children, node }) => {
+            const onlyChild = node?.children?.length === 1 ? node.children[0] : null;
+
+            // A standalone image is already a <figure>; wrapping it in <p>
+            // would produce invalid HTML and a hydration mismatch.
+            if (onlyChild?.type === 'element' && onlyChild.tagName === 'img') {
+              return <>{children}</>;
+            }
+
+            return (
+              <p className="mb-5 whitespace-pre-wrap break-words font-serif text-[18px] font-normal leading-[1.75] text-stone-800 sm:text-[20px]">
+                {children}
+              </p>
+            );
+          },
           strong: ({ children }) => (
             <strong className="font-medium text-stone-950">{children}</strong>
           ),
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (
-            <blockquote className="my-7 border-l border-stone-400 pl-5 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
+            <blockquote className="my-8 border-l border-stone-400 pl-5 font-serif text-xl font-light leading-relaxed text-stone-600 sm:text-2xl">
               {children}
             </blockquote>
           ),
@@ -215,7 +234,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
               return (
                 <Link
                   href={href}
-                  className="underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+                  className="break-words underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
                 >
                   {children}
                 </Link>
@@ -227,7 +246,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
+                className="break-words underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
               >
                 {children}
               </a>
@@ -237,7 +256,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             const imageSrc = typeof src === 'string' ? src : '';
 
             return (
-              <figure className="my-7">
+              <figure className="my-8">
                 <a
                   href={imageSrc || undefined}
                   target="_blank"
@@ -254,11 +273,13 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
                     alt={alt ?? ''}
                     aspectRatio="4 / 3"
                     objectFit="contain"
+                    natural
                     sizes="(max-width: 768px) 100vw, 720px"
+                    style={{ maxHeight: '76vh' }}
                   />
                 </a>
                 {alt && (
-                  <figcaption className="mt-2 font-serif text-sm italic text-stone-500">
+                  <figcaption className="mt-2 break-words font-serif text-sm italic text-stone-500">
                     {alt}
                   </figcaption>
                 )}
@@ -266,18 +287,48 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             );
           },
           ul: ({ children }) => (
-            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 sm:text-[20px]">
+            <ul className="mb-6 list-disc space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
               {children}
             </ul>
           ),
           ol: ({ children }) => (
-            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 sm:text-[20px]">
+            <ol className="mb-6 list-decimal space-y-2 pl-6 font-serif text-[18px] font-normal leading-8 text-stone-800 marker:text-stone-400 sm:text-[20px]">
               {children}
             </ol>
           ),
           hr: () => <hr className="my-9 border-0 border-t border-stone-200" />,
-          code: ({ children }) => (
-            <code className="bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
+          pre: ({ children }) => (
+            <pre className="my-7 max-w-full overflow-x-auto rounded-2xl bg-stone-950 p-4 font-mono text-sm leading-relaxed text-stone-100">
+              {children}
+            </pre>
+          ),
+          code: ({ children, className }) => {
+            const isBlock = Boolean(className) || String(children).includes('\n');
+
+            if (isBlock) {
+              return <code className="font-mono text-[0.85em]">{children}</code>;
+            }
+
+            return (
+              <code className="break-words bg-stone-100 px-1 py-0.5 font-mono text-[0.85em]">
+                {children}
+              </code>
+            );
+          },
+          table: ({ children }) => (
+            <div className="my-7 max-w-full overflow-x-auto">
+              <table className="w-full border-collapse text-left font-serif text-[16px] leading-relaxed text-inherit">
+                {children}
+              </table>
+            </div>
+          ),
+          th: ({ children }) => (
+            <th className="border-b border-stone-300 px-3 py-2 font-medium text-stone-900">
+              {children}
+            </th>
+          ),
+          td: ({ children }) => (
+            <td className="border-b border-stone-200 px-3 py-2 align-top">{children}</td>
           ),
         }}
       >
@@ -293,9 +344,10 @@ function ImageFigure({
   className,
   imageClassName,
   aspectRatio,
-  objectFit = 'cover',
+  objectFit = 'contain',
   priority = false,
   natural = false,
+  maxHeight,
 }: {
   image: FlowImage;
   index: number;
@@ -305,6 +357,7 @@ function ImageFigure({
   objectFit?: 'cover' | 'contain';
   priority?: boolean;
   natural?: boolean;
+  maxHeight?: string;
 }) {
   const caption = image.caption ?? image.alt;
 
@@ -333,11 +386,11 @@ function ImageFigure({
           sizes="(max-width: 768px) 100vw, 720px"
           imageClassName={imageClassName}
           natural={natural}
-          style={natural ? { maxHeight: '76vh' } : undefined}
+          style={natural && maxHeight ? { maxHeight } : undefined}
         />
       </a>
       {caption && (
-        <figcaption className="mt-2 text-center font-serif text-xs italic text-stone-500">
+        <figcaption className="mt-2 break-words text-center font-serif text-xs italic text-stone-500">
           {caption}
         </figcaption>
       )}
@@ -349,30 +402,19 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
   if (images.length === 0) return null;
 
   if (images.length === 1) {
-    return (
-      <ImageFigure
-        image={images[0]}
-        index={0}
-        className="my-6"
-        aspectRatio="4 / 3"
-        objectFit="contain"
-        priority
-        natural
-      />
-    );
+    return <ImageFigure image={images[0]} index={0} priority natural maxHeight="76vh" />;
   }
 
   if (images.length === 2) {
     return (
-      <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start">
         {images.map((image, index) => (
           <ImageFigure
             key={`${image.url}-${index}`}
             image={image}
             index={index}
-            imageClassName="transition duration-300 hover:scale-[1.01]"
-            aspectRatio="4 / 3"
-            objectFit="cover"
+            natural
+            maxHeight="72vh"
           />
         ))}
       </div>
@@ -381,23 +423,17 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
 
   if (images.length === 3) {
     return (
-      <div className="my-6 space-y-3 sm:space-y-4">
-        <ImageFigure
-          image={images[0]}
-          index={0}
-          imageClassName="transition duration-300 hover:scale-[1.01]"
-          aspectRatio="16 / 10"
-          objectFit="cover"
-        />
-        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+      <div className="space-y-4">
+        <ImageFigure image={images[0]} index={0} priority natural maxHeight="70vh" />
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-start">
           {images.slice(1, 3).map((image, index) => (
             <ImageFigure
               key={`${image.url}-${index}`}
               image={image}
               index={index + 1}
-              imageClassName="transition duration-300 hover:scale-[1.01]"
-              aspectRatio="4 / 3"
-              objectFit="cover"
+              natural
+              maxHeight="60vh"
             />
           ))}
         </div>
@@ -405,16 +441,18 @@ function SmartGallery({ images }: { images: FlowImage[] }) {
     );
   }
 
+  // Longer sets keep their natural proportions in a compact two-column flow,
+  // so a portrait photograph is never forced into a square crop.
   return (
-    <div className="my-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+    <div className="columns-1 gap-4 sm:columns-2">
       {images.map((image, index) => (
         <ImageFigure
           key={`${image.url}-${index}`}
           image={image}
           index={index}
-          imageClassName="transition duration-300 hover:scale-[1.01]"
-          aspectRatio="1 / 1"
-          objectFit="cover"
+          className="mb-4 break-inside-avoid last:mb-0"
+          natural
+          maxHeight="60vh"
         />
       ))}
     </div>
@@ -425,7 +463,7 @@ function VideoBlock({ videos }: { videos: FlowVideo[] }) {
   if (videos.length === 0) return null;
 
   return (
-    <div className="my-6 space-y-4">
+    <div className="space-y-4">
       {videos.map((video, index) => (
         <figure key={`${video.url}-${index}`}>
           {video.embedUrl ? (
@@ -484,7 +522,7 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
   if (links.length === 0) return null;
 
   return (
-    <div className="my-6 divide-y divide-stone-200/70 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/40">
+    <div className="divide-y divide-stone-200/70 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/40">
       {links.map((link) => (
         <a
           key={link.url}
@@ -511,7 +549,7 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
             )}
 
             <div className="min-w-0 flex-1">
-              <span className="block font-mono text-[10px] uppercase tracking-wider text-stone-500">
+              <span className="block truncate font-mono text-[10px] uppercase tracking-wider text-stone-500">
                 {link.siteName || link.domain}
               </span>
 
@@ -551,12 +589,12 @@ function FlowHero({
   const imagesFirst = content.contentType === 'photo' && content.images.length > 0;
 
   return (
-    <div className="space-y-6">
+    <div className="flow-item__hero">
       {videosFirst && <VideoBlock videos={content.videos} />}
       {imagesFirst && <SmartGallery images={content.images} />}
 
       {content.showTitle && (
-        <h1 className="font-serif text-3xl font-light leading-[1.25] text-stone-900 sm:text-4xl lg:text-5xl">
+        <h1 className="break-words text-balance font-serif text-3xl font-light leading-[1.22] tracking-[-0.01em] text-stone-900 sm:text-4xl lg:text-[2.85rem]">
           {content.title}
         </h1>
       )}
@@ -661,7 +699,7 @@ export default async function FlowItemPage({ params }: PageProps) {
       />
 
       <div className="flow-post-page flow-post-page--reader min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
-        <article className="flow-item mx-auto max-w-3xl">
+        <article className="flow-item mx-auto max-w-[44rem]">
           <header className="flow-reader__bar">
             <Link href="/flow" className="flow-reader__back">
               ← Flow

@@ -242,7 +242,7 @@ export default function NewPostModal({
             )}
 
             {links.length > 0 && (
-              <div className="mt-5 space-y-5">
+              <div className="mt-5 space-y-4">
                 {links.map((link) => (
                   <div key={link.id} className="group relative">
                     <button
@@ -271,7 +271,13 @@ export default function NewPostModal({
             )}
 
             {images.length > 0 && (
-              <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div
+                className={
+                  images.length === 1
+                    ? "mt-5"
+                    : "mt-5 grid grid-cols-2 gap-3 sm:gap-4"
+                }
+              >
                 {images.map((image) => (
                   <div key={image.id} className="group relative">
                     <button
