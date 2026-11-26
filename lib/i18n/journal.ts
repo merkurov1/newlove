@@ -35,6 +35,7 @@ export type JournalCopy = {
     emptyBody: string;
     originalLanguage: string;
     leadLabel: string;
+    mainStory: string;
     periodLabel: string;
     materialsLabel: string;
     typesLabel: string;
@@ -111,20 +112,21 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       currentEdition: 'Current issue',
       otherEdition: 'Other language edition',
       issue: 'Issue',
-      read: 'Read the issue',
+      read: 'Read the full issue',
       emptyTitle: 'The first issue is coming soon.',
       emptyBody: 'The archive will open here as soon as the first issue is published.',
       originalLanguage: 'Original language',
       leadLabel: 'Editorial lead',
+      mainStory: 'Main story',
       periodLabel: 'Period',
       materialsLabel: 'Materials',
       typesLabel: 'By type',
     },
     inside: {
       title: 'Inside this issue',
-      selectedTitle: 'Selected from this issue',
-      selectedNote: 'One main story and four formats from the full issue.',
-      kicker: 'What is in the issue',
+      selectedTitle: "What's inside",
+      selectedNote: 'A selection, not the full issue: the main story and up to four formats.',
+      kicker: 'Editorial selection',
       empty: 'The materials of this issue are being prepared.',
       lead: 'Lead',
       leadAbove: 'The lead story is presented above.',
@@ -214,20 +216,21 @@ export const JOURNAL_COPY: Record<JournalLanguage, JournalCopy> = {
       currentEdition: 'Текущий выпуск',
       otherEdition: 'Версия на другом языке',
       issue: 'Выпуск',
-      read: 'Читать выпуск',
+      read: 'Читать полный выпуск',
       emptyTitle: 'Первый выпуск скоро появится.',
       emptyBody: 'Архив откроется здесь, как только выйдет первый выпуск.',
       originalLanguage: 'Язык оригинала',
       leadLabel: 'Редакционный анонс',
+      mainStory: 'Главный материал',
       periodLabel: 'Период',
       materialsLabel: 'Материалы',
       typesLabel: 'По типам',
     },
     inside: {
       title: 'В этом выпуске',
-      selectedTitle: 'Главное из выпуска',
-      selectedNote: 'Один главный материал и четыре формата из полного выпуска.',
-      kicker: 'Что внутри',
+      selectedTitle: 'Что внутри',
+      selectedNote: 'Это выборка, а не весь выпуск: главный материал и до четырёх форматов.',
+      kicker: 'Редакционная выборка',
       empty: 'Материалы этого выпуска готовятся к публикации.',
       lead: 'Главное',
       leadAbove: 'Главный материал — выше.',

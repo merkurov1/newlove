@@ -9,6 +9,8 @@ type Props = {
   materials: JournalMaterial[];
   lang: JournalLanguage;
   hasMain?: boolean;
+  issueHref?: string | null;
+  issueLabel?: string;
 };
 
 const kicker = 'font-mono text-[10px] uppercase tracking-[0.16em] text-[#6F6A60]';
@@ -298,7 +300,13 @@ function SelectedCard({
  * keeps a distinct visual treatment so the five entries never collapse into
  * one repeated card.
  */
-export default function IssueHighlights({ materials, lang, hasMain = false }: Props) {
+export default function IssueHighlights({
+  materials,
+  lang,
+  hasMain = false,
+  issueHref = null,
+  issueLabel,
+}: Props) {
   const copy = JOURNAL_COPY[lang];
   const count = materials.length + (hasMain ? 1 : 0);
 
@@ -308,21 +316,43 @@ export default function IssueHighlights({ materials, lang, hasMain = false }: Pr
       aria-labelledby="issue-contents-title"
       className={`border-b ${rule} pb-10 pt-8`}
     >
-      <header className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 border-t border-[#1D1B18] pb-3 pt-4">
-        <div className="min-w-0">
-          <p className={`${kicker} ${accent}`}>{copy.inside.kicker}</p>
-          <h2
-            id="issue-contents-title"
-            className="mt-1 font-serif text-[clamp(1.6rem,2.6vw,2.15rem)] font-normal leading-tight tracking-tight text-[#1D1B18]"
-          >
-            {copy.inside.selectedTitle}
-          </h2>
-        </div>
+      <header className="border-t border-[#1D1B18] pb-5 pt-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-5">
+          <div className="min-w-0 max-w-2xl">
+            <p className={`${kicker} ${accent}`}>{copy.inside.kicker}</p>
+            <h2
+              id="issue-contents-title"
+              className="mt-1 font-serif text-[clamp(1.6rem,2.6vw,2.15rem)] font-normal leading-tight tracking-tight text-[#1D1B18]"
+            >
+              {copy.inside.selectedTitle}
+            </h2>
+            <p className="mt-2 max-w-xl font-serif text-[15px] leading-relaxed text-[#5B5651]">
+              {copy.inside.selectedNote}
+            </p>
+          </div>
 
-        <p className="font-mono text-[10px] uppercase leading-5 tracking-[0.12em] text-[#6F6A60] md:text-right">
-          <span className="block">{itemCountLabel(count, lang)}</span>
-          <span className="block">{copy.inside.selectedNote}</span>
-        </p>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+            <p className="font-mono text-[10px] uppercase leading-5 tracking-[0.12em] text-[#6F6A60] md:text-right">
+              {itemCountLabel(count, lang)}
+            </p>
+
+            {issueHref && (
+              <Link
+                href={issueHref}
+                data-role="full-issue"
+                className="group inline-flex w-full items-center justify-between gap-6 bg-[#1D1B18] px-5 py-3.5 font-mono text-[11px] uppercase tracking-[0.18em] text-[#F5F2EB] transition-colors hover:bg-[#7A2233] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7A2233] sm:w-auto sm:justify-center"
+              >
+                <span>{issueLabel || copy.featured.read}</span>
+                <span
+                  aria-hidden="true"
+                  className="transition-transform group-hover:translate-x-0.5"
+                >
+                  →
+                </span>
+              </Link>
+            )}
+          </div>
+        </div>
       </header>
 
       {materials.length === 0 ? (
