@@ -431,6 +431,129 @@ test.describe('Flow reader — Telegram', () => {
     ).toBe(true);
   });
 
+  test('appearance panel keeps every control inside mobile, tablet and desktop viewports', async ({
+    page,
+  }) => {
+    await mockFlowApis(page);
+    await mockImages(page);
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.goto('/flow/reader-with-images');
+
+    const appearance = page.getByRole('button', { name: 'Appearance settings' });
+
+    await appearance.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Appearance' });
+
+    await expect(dialog).toBeVisible();
+    await page.waitForTimeout(250);
+
+    const readLayout = () =>
+      page.evaluate(() => {
+        const read = (selector: string) => {
+          const element = document.querySelector<HTMLElement>(selector);
+
+          if (!element) return null;
+
+          return {
+            scrollWidth: element.scrollWidth,
+            clientWidth: element.clientWidth,
+            rectWidth: element.getBoundingClientRect().width,
+          };
+        };
+
+        return {
+          viewportWidth: window.innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          bodyWidth: document.body.scrollWidth,
+          panel: read('.flow-reader-dialog__panel'),
+          settings: read('.flow-reader-settings'),
+          controls: [
+            '.flow-reader-settings__themes',
+            '.flow-reader-settings__stepper',
+            '.flow-reader-settings__range',
+          ].map((selector) => ({ selector, ...read(selector) })),
+        };
+      });
+
+    for (const width of [320, 390, 768, 820, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+
+      const layout = await readLayout();
+
+      expect(layout.documentWidth).toBeLessThanOrEqual(width + 1);
+      expect(layout.bodyWidth).toBeLessThanOrEqual(width + 1);
+      expect(layout.panel).not.toBeNull();
+      expect(layout.settings).not.toBeNull();
+      expect(layout.panel!.scrollWidth).toBeLessThanOrEqual(layout.panel!.clientWidth + 1);
+      expect(layout.settings!.scrollWidth).toBeLessThanOrEqual(layout.settings!.clientWidth + 1);
+
+      for (const control of layout.controls) {
+        expect(control).not.toBeNull();
+        expect(control!.scrollWidth).toBeLessThanOrEqual(control!.clientWidth + 1);
+        expect(control!.rectWidth).toBeLessThanOrEqual(width);
+      }
+
+      await expect(dialog.getByRole('button', { name: 'Light' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Increase text size' })).toBeVisible();
+      await expect(dialog.getByRole('slider', { name: 'Line spacing' })).toBeVisible();
+
+      const stepBox = await dialog
+        .getByRole('button', { name: 'Increase text size' })
+        .boundingBox();
+      const themeBox = await dialog.getByRole('button', { name: 'Light' }).boundingBox();
+
+      expect(stepBox).not.toBeNull();
+      expect(themeBox).not.toBeNull();
+      expect(stepBox!.width).toBeGreaterThanOrEqual(44);
+      expect(stepBox!.height).toBeGreaterThanOrEqual(44);
+      expect(themeBox!.height).toBeGreaterThanOrEqual(44);
+    }
+
+    // Browser text zoom and iOS Dynamic Type must not reintroduce overflow.
+    await page.setViewportSize({ width: 320, height: 900 });
+    await page.evaluate(() => {
+      document.documentElement.style.fontSize = '200%';
+    });
+
+    const zoomed = await readLayout();
+
+    expect(zoomed.documentWidth).toBeLessThanOrEqual(321);
+    expect(zoomed.panel!.scrollWidth).toBeLessThanOrEqual(zoomed.panel!.clientWidth + 1);
+    expect(zoomed.settings!.scrollWidth).toBeLessThanOrEqual(zoomed.settings!.clientWidth + 1);
+
+    for (const control of zoomed.controls) {
+      expect(control!.scrollWidth).toBeLessThanOrEqual(control!.clientWidth + 1);
+    }
+  });
+
+  test('reader controls drop redundant Flow and Elsewhere labels without losing actions', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockFlowApis(page);
+    await mockImages(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+    await expect(page.locator('.flow-reader__identity')).toHaveCount(0);
+    await expect(page.getByText('Elsewhere', { exact: true })).toHaveCount(0);
+
+    const sources = page.locator('.flow-reader__sources');
+
+    await expect(sources).toHaveAttribute('aria-label', 'This publication elsewhere');
+    expect(await sources.locator('a').count()).toBeGreaterThanOrEqual(3);
+    await expect(sources.getByRole('link', { name: /Bluesky/ })).toBeVisible();
+    await expect(sources.getByRole('link', { name: /Telegram/ })).toBeVisible();
+    await expect(sources.getByRole('link', { name: 'Journal ↗' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '← Flow' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Appearance settings' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Focus mode' })).toBeVisible();
+  });
+
   test('1280px desktop reading controls stay outside the text measure', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
     await mockFlowApis(page);

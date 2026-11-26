@@ -668,10 +668,6 @@ export default async function FlowItemPage({ params }: PageProps) {
             </Link>
 
             <div className="flow-reader__bar-end">
-              <span className="flow-reader__identity" aria-hidden="true">
-                Flow
-              </span>
-
               <FlowReaderShell slug={decodedSlug} title={metadata.title} headings={headings} />
             </div>
           </header>
@@ -711,8 +707,6 @@ export default async function FlowItemPage({ params }: PageProps) {
             </div>
 
             <div className="flow-reader__sources" aria-label="This publication elsewhere">
-              <span className="flow-reader__sources-label">Elsewhere</span>
-
               <a
                 href={bskyUrl || 'https://bsky.app/profile/merkurov.love'}
                 target="_blank"
