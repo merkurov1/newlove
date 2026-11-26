@@ -66,16 +66,17 @@ afterEach(() => {
 
 describe('Vigil channel post', () => {
   it('builds one short anonymous post that opens the Telegram bot', () => {
-    expect(VIGIL_CHANNEL_DESTINATION).toBe('https://t.me/Love_Temple_bot');
+    expect(VIGIL_CHANNEL_DESTINATION).toBe('https://t.me/Love_Temple_bot?profile');
     expect(buildVigilChannelPost('https://www.merkurov.love/')).toBe(
-      `${VIGIL_CHANNEL_MESSAGE}\n\n<a href="https://t.me/Love_Temple_bot">${VIGIL_CHANNEL_LINK_LABEL}</a>`
+      `${VIGIL_CHANNEL_MESSAGE}\n\n<a href="https://t.me/Love_Temple_bot?profile">${VIGIL_CHANNEL_LINK_LABEL}</a>`
     );
-    expect(getVigilChannelDestination()).toBe('https://t.me/Love_Temple_bot');
+    expect(getVigilChannelDestination()).toBe('https://t.me/Love_Temple_bot?profile');
 
     const destination = new URL(getVigilChannelDestination());
     expect(destination.protocol).toBe('https:');
     expect(destination.hostname).toBe('t.me');
     expect(destination.pathname).toBe('/Love_Temple_bot');
+    expect(destination.search).toBe('?profile');
   });
 
   it('always opens the bot instead of a site page, even when a site URL is configured', () => {
@@ -83,7 +84,8 @@ describe('Vigil channel post', () => {
 
     const post = buildVigilChannelPost('https://staging.example.test');
 
-    expect(post).toContain('href="https://t.me/Love_Temple_bot"');
+    expect(post).toContain('href="https://t.me/Love_Temple_bot?profile"');
+    expect(post).not.toContain('href="https://t.me/Love_Temple_bot"');
     expect(post).not.toContain('/temple');
     expect(post).not.toContain('staging.example.test');
   });
@@ -109,7 +111,8 @@ describe('Vigil channel post', () => {
       parse_mode: 'HTML',
       link_preview_options: { is_disabled: true },
     });
-    expect(calls[0].body.text).toContain('href="https://t.me/Love_Temple_bot"');
+    expect(calls[0].body.text).toContain('href="https://t.me/Love_Temple_bot?profile"');
+    expect(calls[0].body.text).not.toContain('href="https://t.me/Love_Temple_bot"');
     expect(calls[0].body.text).not.toContain('Anna');
     expect(calls[0].body.text).not.toContain('intention');
   });

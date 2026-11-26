@@ -7,7 +7,7 @@ const REQUEST_TIMEOUT_MS = 8_000;
 
 export const VIGIL_CHANNEL_MESSAGE = 'Зажгли ещё одно сердечко. ❤️';
 export const VIGIL_CHANNEL_LINK_LABEL = 'Открыть храм';
-export const VIGIL_CHANNEL_DESTINATION = 'https://t.me/Love_Temple_bot';
+export const VIGIL_CHANNEL_DESTINATION = 'https://t.me/Love_Temple_bot?profile';
 
 export type VigilChannelPostResult =
   | { ok: true; messageId: number; chatId: number }
