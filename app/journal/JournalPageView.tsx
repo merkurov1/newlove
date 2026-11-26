@@ -1,4 +1,3 @@
-import { headers } from 'next/headers';
 import { JsonLd } from '@/components/seo/JsonLd';
 import { PageEvent } from '@/components/analytics/PageEvent';
 import { breadcrumbJsonLd, collectionPageJsonLd, itemListJsonLd } from '@/lib/structuredData';
@@ -7,6 +6,7 @@ import SubscribeFormClient from '@/components/journal/SubscribeFormClient';
 import FrontPage, { type FrontIssue, type FlowEntry } from '@/components/journal/FrontPage';
 import { JOURNAL_COPY, journalIssueHref, type JournalLanguage } from '@/lib/i18n/journal';
 import { selectJournalEdition } from '@/lib/journal/archive';
+import { loadFlowItemsPage } from '@/lib/flow/items-cash';
 import {
   loadAllJournalIssues,
   loadJournalIssueDetail,
@@ -125,32 +125,17 @@ function normalizePayload(value: unknown): IssuePayload | null {
     : null;
 }
 
-// The Flow preview uses the same public API as /flow so visibility and
-// publication rules stay identical.
+// The Flow preview uses the same server-side loader as /api/flow so
+// publication, visibility and normalization rules stay identical without a
+// self-fetch (an internal HTTP request can receive an HTML error page instead
+// of JSON when the deployment cannot reach its own origin).
 async function loadFlow(): Promise<FlowEntry[]> {
   try {
-    const h = await headers();
-    const host = h.get('x-forwarded-host') || h.get('host');
-    if (!host) return [];
-
-    const proto =
-      h.get('x-forwarded-proto') ||
-      (host.startsWith('localhost') || host.startsWith('127.') ? 'http' : 'https');
-
     // Fetch enough of the shared stream so both language editions can get a
-    // real recent preview without asking the Flow API for a language filter
-    // that does not exist.
-    const response = await fetch(`${proto}://${host}/api/flow/items?limit=50&offset=0`, {
-      cache: 'no-store',
-    });
-
-    if (!response.ok) {
-      console.error('[Journal] Flow API status:', response.status);
-      return [];
-    }
-
-    const json = await response.json();
-    return (Array.isArray(json.items) ? json.items : []).map(toFlow);
+    // real recent preview. The public list is not filtered by language:
+    // `/journal` and `/ru/journal` present the same recent materials.
+    const result = await loadFlowItemsPage(50, 0);
+    return result.items.map(toFlow);
   } catch (error) {
     console.error('[Journal] Flow:', error);
     return [];

@@ -1,8 +1,7 @@
 import { NextResponse, after } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { requireAdminFromRequest } from '@/lib/serverAuth';
-import { getCachedFlowItems, invalidateFlowCache } from '@/lib/flow/items-cash';
-import { normalizeFlowItem, type FlowItemInput } from '@/lib/flow/content';
+import { loadFlowItemsPage, invalidateFlowCache } from '@/lib/flow/items-cash';
 import { createFlowItem } from '@/lib/flow/publish';
 
 export const runtime = 'nodejs';
@@ -40,47 +39,19 @@ export async function GET(req: Request) {
 
     const offset = Math.max(parseInt(offsetParam || '0', 10) || 0, 0);
 
-    const result = await getCachedFlowItems(limit, offset);
+    // The same shared server-side loader feeds the Journal page, so cached
+    // publication/visibility rules and normalization cannot drift between the
+    // HTML page and the public API.
+    const result = await loadFlowItemsPage(limit, offset);
 
-    // The database snapshot is cached; normalization is cheap and guarantees
-    // every client receives the same title/image/link decisions as the page,
-    // feeds and social cards.
-    const items = result.items.map((item) => {
-      const normalized = normalizeFlowItem(item as FlowItemInput);
-
-      return {
-        ...item,
-        title: normalized.title,
-        titleSource: normalized.titleSource,
-        contentType: normalized.contentType,
-        description: normalized.description,
-        bodyText: normalized.bodyText,
-        bodyExcerpt: normalized.bodyExcerpt,
-        bodyTruncated: normalized.bodyTruncated,
-        showTitle: normalized.showTitle,
-        titleIsRedundant: normalized.titleIsRedundant,
-        images: normalized.images,
-        videos: normalized.videos,
-        links: normalized.links,
-        canonicalUrl: normalized.canonicalUrl,
-        sourceName: normalized.sourceName,
-        imageAlt: normalized.imageAlt,
-        language: normalized.language,
-        version: normalized.version,
-      };
+    return NextResponse.json(result, {
+      status: 200,
+      headers: {
+        // Браузер не хранит ответ самостоятельно.
+        // Кэширование выполняется на стороне Next.js.
+        'Cache-Control': 'no-store',
+      },
     });
-
-    return NextResponse.json(
-      { ...result, items },
-      {
-        status: 200,
-        headers: {
-          // Браузер не хранит ответ самостоятельно.
-          // Кэширование выполняется на стороне Next.js.
-          'Cache-Control': 'no-store',
-        },
-      }
-    );
   } catch (error) {
     console.error('[api/flow/items] GET error:', error);
 
