@@ -43,6 +43,26 @@ describe('login return path', () => {
     ).toBeNull();
   });
 
+  it('preserves the Vigil path after authentication', () => {
+    expect(
+      resolveLoginReturnPath({
+        requested: '/vigil',
+        stored: '/art-engine',
+        fallback: '/art-engine',
+      })
+    ).toBe('/vigil');
+  });
+
+  it('never lets an external next replace a safe Vigil return path', () => {
+    expect(
+      resolveLoginReturnPath({
+        requested: 'https://evil.example',
+        stored: '/vigil',
+        fallback: '/art-engine',
+      })
+    ).toBe('/vigil');
+  });
+
   it('falls back safely when nothing valid is available', () => {
     expect(resolveLoginReturnPath({})).toBe('/art-engine');
   });
