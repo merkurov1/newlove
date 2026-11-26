@@ -2,12 +2,14 @@ import { assertServerOnly } from '@/lib/serverOnly';
 
 import {
   YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   YOUTUBE_FORCE_SSL_SCOPE,
   YOUTUBE_MANAGEMENT_CONSENT_SCOPES,
   YOUTUBE_MANAGEMENT_SCOPES,
   YOUTUBE_READONLY_SCOPE,
   YOUTUBE_UPLOAD_SCOPE,
   getAnalyticsTimezone,
+  getYouTubeChannelsRedirectUri,
   getYouTubeManagementRedirectUri,
 } from '@/lib/analytics/website/config';
 
@@ -20,6 +22,7 @@ assertServerOnly('lib/youtube/config');
  */
 export {
   YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   YOUTUBE_FORCE_SSL_SCOPE,
   YOUTUBE_MANAGEMENT_CONSENT_SCOPES,
   YOUTUBE_MANAGEMENT_SCOPES,
@@ -64,7 +67,10 @@ export function getYouTubeTimezone(): string {
 }
 
 export function getYouTubeCacheTtlSeconds(): number {
-  const value = Number(env('YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS'));
+  const raw = env('YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS');
+  if (!raw) return YOUTUBE_DEFAULT_CACHE_TTL_SECONDS;
+
+  const value = Number(raw);
   return Number.isFinite(value) && value >= 0
     ? Math.floor(value)
     : YOUTUBE_DEFAULT_CACHE_TTL_SECONDS;
@@ -74,7 +80,7 @@ export function isYouTubeConfigured(): boolean {
   return Boolean(getYouTubeChannelId() || getYouTubeDataApiKey());
 }
 
-export { getYouTubeManagementRedirectUri };
+export { getYouTubeChannelsRedirectUri, getYouTubeManagementRedirectUri };
 
 /** Capability-level scope requirements, kept beside the API operations. */
 export const YOUTUBE_MANAGEMENT_SCOPE_BY_CAPABILITY = {

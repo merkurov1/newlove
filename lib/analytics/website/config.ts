@@ -50,6 +50,19 @@ export const GOOGLE_IDENTITY_SCOPES = ['openid', 'email'] as const;
 export const YOUTUBE_MANAGEMENT_SCOPES = [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_FORCE_SSL_SCOPE] as const;
 
 /**
+ * Scopes for the multi-channel connection: identity to show the Google
+ * account, read-only YouTube + Analytics for reporting, and `youtube.upload`
+ * for `videos.update` (metadata edits only). No upload flow is implemented in
+ * this scope and `youtube.force-ssl` (comments/captions) is not requested.
+ */
+export const YOUTUBE_CHANNEL_CONNECTION_SCOPES = [
+  ...GOOGLE_IDENTITY_SCOPES,
+  YOUTUBE_READONLY_SCOPE,
+  YOUTUBE_ANALYTICS_READONLY_SCOPE,
+  YOUTUBE_UPLOAD_SCOPE,
+] as const;
+
+/**
  * A management grant keeps `youtube.readonly` so the selected channel can be
  * verified without granting Analytics. It deliberately excludes GA4, Search
  * Console and yt-analytics.readonly: analytics consent stays incremental.
@@ -129,6 +142,19 @@ export function getYouTubeManagementRedirectUri(): string {
     env('YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI') ||
     `${getSiteUrl()}/api/auth/youtube-management/callback`
   );
+}
+
+/**
+ * Dedicated callback for the multi-account / multi-channel connection flow.
+ * It must be registered in the same Google Cloud OAuth client. Keeping it
+ * separate means adding multi-channel support cannot change the redirect URI
+ * used by already-working analytics or management grants.
+ */
+export function getYouTubeChannelsRedirectUri(): string {
+  // By default the multi-channel flow reuses the already-registered
+  // management callback. A dedicated URI can be opted into explicitly without
+  // invalidating the existing analytics or management grants.
+  return env('YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI') || getYouTubeManagementRedirectUri();
 }
 
 export function getGooglePropertyOverride(): string | null {
