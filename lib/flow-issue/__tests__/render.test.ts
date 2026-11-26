@@ -410,4 +410,169 @@ describe('flow issue web layout', () => {
     expect(htmlEmail).toContain('Tomb in Siberia | New Scientist «| Поток - 13 ноября 2026 г.»');
     expect(textEmail).toContain('Tomb in Siberia | New Scientist «| Поток - 13 ноября 2026 г.»');
   });
+
+  const markdownBody = [
+    `## Heading with ${longUrl}`,
+    '',
+    `A long unbroken token: ${'a'.repeat(160)}`,
+    '',
+    'Inline `const veryLongIdentifierThatMustWrap = true;` code.',
+    '',
+    '```ts',
+    `const source = "${longUrl}";`,
+    '```',
+    '',
+    '| Source | URL |',
+    '| --- | --- |',
+    `| New Scientist | ${longUrl} |`,
+    '',
+    `> A blockquote with ${longUrl}`,
+    '',
+    `- First item ${longUrl}`,
+    `- Second item ${'b'.repeat(120)}`,
+    '',
+    '![Alt text](https://example.com/wide-image.png)',
+  ].join('\n');
+  const escapedLongUrl = longUrl.replace(/&/g, '&amp;');
+
+  it('renders rich Markdown in an item without losing code, tables, quotes, lists or images', () => {
+    const issue = payload();
+    issue.lead = { ...issue.lead!, body: markdownBody };
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Issue 25',
+      slug: 'issue-25',
+      number: 25,
+    });
+    const style = webStyle(htmlWeb);
+
+    expect(htmlWeb).toContain('<div class="md">');
+    expect(htmlWeb).toContain('<pre>');
+    expect(htmlWeb).toContain('<code');
+    expect(htmlWeb).toContain('<blockquote>');
+    expect(htmlWeb).toContain('<ul>');
+    expect(htmlWeb).toContain('<div class="md-table"><table>');
+    expect(htmlWeb).toContain('src="https://example.com/wide-image.png"');
+    expect(htmlWeb).toContain(escapedLongUrl);
+    expect(htmlWeb).toContain('a'.repeat(160));
+    expect(htmlWeb).toContain('b'.repeat(120));
+
+    // Markdown syntax is rendered, never leaked as literal text.
+    expect(htmlWeb).not.toContain('```');
+    expect(htmlWeb).not.toContain('| --- |');
+
+    // Wide content is scrollable inside its own panel, not clipped by the item.
+    expect(style).toContain('.flow-issue-root .md .md-table{');
+    expect(style).toContain('.flow-issue-root .md pre{');
+    expect(style).toContain('min-width:max-content');
+    expect(style).toContain('overflow-wrap:anywhere');
+    expect(style).not.toMatch(
+      /\.flow-issue-root \.md[^}]*overflow-x:\s*(?:clip|hidden)/
+    );
+  });
+
+  it('keeps the same Markdown overflow contract for English issues', () => {
+    const issue = payload();
+    issue.lang = 'en';
+    issue.lead = {
+      ...issue.lead!,
+      title: 'English lead',
+      body: markdownBody,
+    };
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Issue 25',
+      slug: 'issue-25',
+      number: 25,
+    });
+    const style = webStyle(htmlWeb);
+
+    expect(htmlWeb).toContain('<div class="md">');
+    expect(htmlWeb).toContain('<div class="md-table"><table>');
+    expect(htmlWeb).toContain('<pre>');
+    expect(htmlWeb).toContain('<blockquote>');
+    expect(htmlWeb).toContain('<ul>');
+    expect(style).toContain('.flow-issue-root .md .md-table{');
+    expect(style).toContain('overflow-wrap:anywhere');
+  });
+
+  it('renders Markdown inside the editorial composition path too', () => {
+    const issue = payload();
+    issue.lead = { ...issue.lead!, body: markdownBody };
+    issue.editorialComposition = {
+      version: 1,
+      concept: { title: 'Theme', headline: 'Headline', thesis: 'Thesis' },
+      parts: [
+        {
+          id: 'central',
+          kind: 'central',
+          title: 'Central part',
+          annotation: '',
+          entryIds: ['lead'],
+        },
+      ],
+      ledger: [
+        {
+          id: 'lead',
+          type: 'note',
+          role: 'centerpiece',
+          reason: 'Lead material',
+          partIndex: 0,
+          aiAllowed: true,
+          own: true,
+          analysis: 'heuristic',
+          title: 'Lead',
+        },
+      ],
+      column: [],
+      columnSource: 'fallback',
+      summary: 'Summary',
+      generatedBy: 'heuristic',
+      diagnostics: {
+        source_count: 1,
+        assigned_count: 1,
+        unassigned_count: 0,
+        duplicate_count: 0,
+        other_edition_count: 0,
+        per_type: {},
+        by_role: {},
+        own_count: 1,
+        external_count: 0,
+        ai_allowed_count: 1,
+        model_analysis_count: 0,
+        heuristic_analysis_count: 1,
+        column_source: 'fallback',
+        fallback_reasons: [],
+        complete: true,
+        issues: [],
+      },
+    };
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Issue 25',
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    expect(htmlWeb).toContain('data-part-kind="central"');
+    expect(htmlWeb).toContain('<div class="md">');
+    expect(htmlWeb).toContain('<div class="md-table"><table>');
+    expect(htmlWeb).toContain('<pre>');
+    expect(htmlWeb).toContain('<blockquote>');
+    expect(htmlWeb).toContain('<ul>');
+  });
+
+  it('keeps plain notes on the historical paragraph renderer and preserves line breaks', () => {
+    const issue = payload();
+    issue.lead = { ...issue.lead!, body: 'First line\nSecond line' };
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Issue 25',
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    expect(htmlWeb).toContain('First line<br>Second line');
+    expect(htmlWeb).not.toContain('<div class="md">');
+  });
 });
