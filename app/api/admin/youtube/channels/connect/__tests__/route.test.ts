@@ -80,7 +80,25 @@ describe('GET /api/admin/youtube/channels/connect', () => {
     expect(url.searchParams.get('scope')).toContain('yt-analytics.readonly');
     expect(url.searchParams.get('scope')).toContain('youtube.upload');
     expect(url.searchParams.get('scope')).not.toContain('youtube.force-ssl');
-    expect(response.headers.get('set-cookie')).toContain('pierrot_youtube_channels_oauth');
+    const cookie = response.headers.get('set-cookie') || '';
+    expect(cookie).toContain('pierrot_youtube_channels_oauth');
+    expect(cookie).toContain('Path=/api/auth');
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie.toLowerCase()).toContain('samesite=lax');
+    expect(cookie).toContain('Max-Age=600');
+  });
+
+  it('honours an explicit login_hint and can suppress the account chooser', async () => {
+    const response = await GET(
+      new Request(
+        'https://www.merkurov.love/api/admin/youtube/channels/connect?project=unframed&login_hint=unframed%40example.com&select_account=false'
+      )
+    );
+    const url = new URL(response.headers.get('location') || '');
+
+    expect(url.searchParams.get('login_hint')).toBe('unframed@example.com');
+    expect(url.searchParams.get('prompt')).toBe('consent');
+    expect(url.searchParams.get('prompt')).not.toContain('select_account');
   });
 
   it('supports an explicitly configured dedicated redirect URI', async () => {

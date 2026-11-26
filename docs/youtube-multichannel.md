@@ -1,7 +1,10 @@
 # YouTube multi-channel integration
 
 Status: code and additive migration prepared. No production migration or real
-metadata write is performed by this change.
+metadata write is performed by this change. See
+`docs/youtube-multichannel-audit.md` for the continuation audit (source of
+truth, schema compatibility, production trace checklist and the fixes made on
+2026-11-26).
 
 ## What already existed (audit)
 
@@ -72,8 +75,13 @@ read-only fallback for historical analytics. Rollback:
 
 Refresh tokens are opened only inside `lib/youtube/channels.ts`. Access tokens
 are cached in-process until shortly before expiry. Rotated refresh tokens are
-re-sealed and stored. Disconnect revokes the Google grant (best effort), clears
-the sealed token, marks channels disconnected and deactivates bindings.
+re-sealed and stored; when Google omits a new token the existing sealed token is
+kept. Decryption honours the stored key version and supports
+`ANALYTICS_TOKEN_ENCRYPTION_KEY_PREVIOUS` during key rotation. A connection with
+zero discovered channels can retry discovery from the connection id without a
+second consent. Disconnect revokes the Google grant (best effort), clears the
+sealed token, marks only that connection's channels disconnected and
+deactivates only bindings to those channels.
 
 ### Analytics
 

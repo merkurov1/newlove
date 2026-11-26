@@ -21,6 +21,7 @@ import {
   YOUTUBE_ANALYTICS_READONLY_SCOPE,
   YOUTUBE_READONLY_SCOPE,
   YOUTUBE_UPLOAD_SCOPE,
+  missingYouTubeScopes,
 } from '@/lib/youtube/config';
 
 export const runtime = 'nodejs';
@@ -122,7 +123,7 @@ export async function handleYouTubeChannelsCallback(request: Request) {
   }
 
   const grantedScopes = (tokens.scope || '').split(' ').filter(Boolean);
-  const missingScopes = REQUIRED_SCOPES.filter((scope) => !grantedScopes.includes(scope));
+  const missingScopes = missingYouTubeScopes(grantedScopes, REQUIRED_SCOPES);
 
   if (missingScopes.length > 0) {
     return redirect(

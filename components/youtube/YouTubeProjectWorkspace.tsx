@@ -716,6 +716,9 @@ export default function YouTubeProjectWorkspace({
                 <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
                 {connection.scopes.length} scopes
                 {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                {connection.lastErrorMessage ? (
+                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
+                ) : null}
                 <div className="pw-analytics-card-actions">
                   <button
                     type="button"
@@ -727,6 +730,16 @@ export default function YouTubeProjectWorkspace({
                   >
                     Обновить каналы
                   </button>
+                  {connection.status !== 'connected' && status?.config?.connectUrl ? (
+                    <a
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      href={`${status.config.connectUrl}&login_hint=${encodeURIComponent(
+                        connection.googleAccountEmail
+                      )}&select_account=true`}
+                    >
+                      Переподключить этот аккаунт
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     className="pw-analytics-button pw-analytics-button--quiet"

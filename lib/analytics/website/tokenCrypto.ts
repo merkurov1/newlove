@@ -29,25 +29,66 @@ export function analyticsEncryptionKeySource(): 'dedicated' | 'derived' {
     : 'derived';
 }
 
-function getKey(): Buffer {
+function dedicatedKey(): Buffer | null {
   const dedicated = (process.env.ANALYTICS_TOKEN_ENCRYPTION_KEY || '').trim();
+  return dedicated ? crypto.createHash('sha256').update(dedicated, 'utf8').digest() : null;
+}
 
-  if (dedicated) {
-    return crypto.createHash('sha256').update(dedicated, 'utf8').digest();
-  }
-
+function derivedKey(): Buffer | null {
   const serviceRole = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  return serviceRole
+    ? crypto
+        .createHash('sha256')
+        .update(`pierrot-website-analytics:${serviceRole}`, 'utf8')
+        .digest()
+    : null;
+}
 
-  if (!serviceRole) {
+function previousKey(): Buffer | null {
+  const previous = (process.env.ANALYTICS_TOKEN_ENCRYPTION_KEY_PREVIOUS || '').trim();
+  return previous ? crypto.createHash('sha256').update(previous, 'utf8').digest() : null;
+}
+
+function getKey(): Buffer {
+  const key = dedicatedKey() ?? derivedKey();
+
+  if (!key) {
     throw new Error(
       'Analytics token encryption is unavailable: set ANALYTICS_TOKEN_ENCRYPTION_KEY.'
     );
   }
 
-  return crypto
-    .createHash('sha256')
-    .update(`pierrot-website-analytics:${serviceRole}`, 'utf8')
-    .digest();
+  return key;
+}
+
+/**
+ * Candidate keys for opening an existing token. The stored `key_version` lets
+ * the integration keep working while moving from the derived key to a
+ * dedicated secret (or from one dedicated secret to the next) without forcing
+ * every owner to re-consent at once.
+ */
+function openKeyCandidates(keyVersion?: string | null): Buffer[] {
+  const candidates: Buffer[] = [getKey()];
+  const previous = previousKey();
+  if (previous) candidates.push(previous);
+
+  if (!keyVersion) {
+    // Legacy rows may predate key versioning; accept either known key source.
+    const derived = derivedKey();
+    if (derived) candidates.push(derived);
+    const dedicated = dedicatedKey();
+    if (dedicated) candidates.push(dedicated);
+  } else if (keyVersion === KEY_VERSION_DERIVED) {
+    const derived = derivedKey();
+    if (derived) candidates.push(derived);
+  } else if (keyVersion === KEY_VERSION_DEDICATED) {
+    const dedicated = dedicatedKey();
+    if (dedicated) candidates.push(dedicated);
+  }
+
+  return candidates.filter(
+    (key, index) => candidates.findIndex((candidate) => candidate.equals(key)) === index
+  );
 }
 
 export function sealSecret(plaintext: string): SealedSecret {
@@ -74,26 +115,39 @@ export function openSecret(sealed: {
   ciphertext?: string | null;
   iv?: string | null;
   tag?: string | null;
+  keyVersion?: string | null;
 }): string | null {
   if (!sealed.ciphertext || !sealed.iv || !sealed.tag) return null;
 
+  let candidates: Buffer[];
   try {
-    const key = getKey();
-    const decipher = crypto.createDecipheriv(
-      'aes-256-gcm',
-      key,
-      Buffer.from(sealed.iv, 'base64')
-    );
-    decipher.setAuthTag(Buffer.from(sealed.tag, 'base64'));
-    const plaintext = Buffer.concat([
-      decipher.update(Buffer.from(sealed.ciphertext, 'base64')),
-      decipher.final(),
-    ]);
-
-    return plaintext.toString('utf8');
+    candidates = openKeyCandidates(sealed.keyVersion);
   } catch {
+    // Missing key configuration is reported as an unreadable token, matching
+    // the previous behavior of returning null instead of throwing.
     return null;
   }
+
+  for (const key of candidates) {
+    try {
+      const decipher = crypto.createDecipheriv(
+        'aes-256-gcm',
+        key,
+        Buffer.from(sealed.iv, 'base64')
+      );
+      decipher.setAuthTag(Buffer.from(sealed.tag, 'base64'));
+      const plaintext = Buffer.concat([
+        decipher.update(Buffer.from(sealed.ciphertext, 'base64')),
+        decipher.final(),
+      ]);
+
+      return plaintext.toString('utf8');
+    } catch {
+      // Try the next candidate key; a failed auth tag must never surface.
+    }
+  }
+
+  return null;
 }
 
 export function signState(payload: Record<string, unknown>, secret: string): string {

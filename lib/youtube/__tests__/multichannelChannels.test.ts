@@ -2,7 +2,7 @@
 
 jest.mock('@/lib/analytics/website/providers/oauth', () => ({
   refreshGoogleAccessToken: jest.fn(),
-  revokeGoogleToken: jest.fn(async () => undefined),
+  revokeGoogleToken: jest.fn(async () => true),
 }));
 
 jest.mock('@/lib/analytics/website/tokenCrypto', () => ({
@@ -19,6 +19,7 @@ import {
   clearChannelTokenCache,
   disconnectOAuthConnection,
   loadChannelAccessToken,
+  loadConnectionAccessToken,
 } from '../channels';
 
 const oauth = require('@/lib/analytics/website/providers/oauth') as {
@@ -232,6 +233,115 @@ describe('multi-channel token lifecycle', () => {
         expect.objectContaining({
           table: 'youtube_oauth_connections',
           payload: expect.objectContaining({ status: 'needs_reauthorization' }),
+        }),
+      ])
+    );
+  });
+
+  it('retries a connection with zero discovered channels without a new consent', async () => {
+    const fake = fakeStore({ connection: connectionRow() });
+    oauth.refreshGoogleAccessToken.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: null,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      scope: null,
+      tokenType: 'Bearer',
+    });
+
+    const result = await loadConnectionAccessToken(fake.store, {
+      ownerId: 'owner-1',
+      connectionId: 'connection-1',
+    });
+
+    expect(result.accessToken).toBe('access-token');
+    expect(result.connection.googleAccountEmail).toBe('mercurio@example.com');
+    expect(JSON.stringify(result)).not.toContain('refresh-secret');
+    expect(fake.updates).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          payload: expect.objectContaining({ token_ciphertext: expect.anything() }),
+        }),
+      ])
+    );
+  });
+
+  it('keeps the stored refresh token when Google omits it on refresh', async () => {
+    const fake = fakeStore({ channel: channelRow(), connection: connectionRow() });
+    oauth.refreshGoogleAccessToken.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: null,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      scope: null,
+      tokenType: 'Bearer',
+    });
+
+    await loadChannelAccessToken(fake.store, {
+      ownerId: 'owner-1',
+      channelRecordId: 'channel-record-1',
+    });
+
+    const tokenWrites = fake.updates.filter(
+      (entry) =>
+        entry.table === 'youtube_oauth_connections' &&
+        Object.prototype.hasOwnProperty.call(entry.payload, 'token_ciphertext')
+    );
+    expect(tokenWrites).toHaveLength(0);
+  });
+
+  it('allows a transient error connection to retry and clears the error state', async () => {
+    const fake = fakeStore({
+      channel: channelRow(),
+      connection: connectionRow({ status: 'error', last_error_code: 'refresh_failed' }),
+    });
+    oauth.refreshGoogleAccessToken.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: null,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      scope: null,
+      tokenType: 'Bearer',
+    });
+
+    await loadChannelAccessToken(fake.store, {
+      ownerId: 'owner-1',
+      channelRecordId: 'channel-record-1',
+    });
+
+    expect(fake.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'youtube_oauth_connections',
+          payload: expect.objectContaining({ status: 'connected', last_error_code: null }),
+        }),
+      ])
+    );
+  });
+
+  it('does not expose another owner connection through the connection refresh path', async () => {
+    const fake = fakeStore({ connection: connectionRow() });
+
+    await expect(
+      loadConnectionAccessToken(fake.store, {
+        ownerId: 'someone-else',
+        connectionId: 'connection-1',
+      })
+    ).rejects.toMatchObject({ code: 'not_connected' });
+  });
+
+  it('reports a failed Google revocation without breaking local cleanup', async () => {
+    const fake = fakeStore({ connection: connectionRow() });
+    oauth.revokeGoogleToken.mockResolvedValueOnce(false);
+
+    const result = await disconnectOAuthConnection(fake.store, {
+      ownerId: 'owner-1',
+      connectionId: 'connection-1',
+    });
+
+    expect(result.revoked).toBe(false);
+    expect(fake.updates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          table: 'youtube_oauth_connections',
+          payload: expect.objectContaining({ status: 'revoked', token_ciphertext: null }),
         }),
       ])
     );
