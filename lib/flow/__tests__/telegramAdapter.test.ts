@@ -137,7 +137,7 @@ describe('Telegram publisher', () => {
     expect(calls.every((call) => call.url.includes('/sendMessage'))).toBe(true);
     expect(calls[0].body.text.length).toBeLessThanOrEqual(4096);
     expect(calls[0].body.text).toContain('Длинный текст');
-    expect(calls[0].body.text).toContain('>Flow</a>');
+    expect(calls[0].body.text).toContain('>[ Flow ]</a>');
     expect(calls[0].body.text).not.toContain('КОНЕЦ');
   });
 
@@ -296,7 +296,7 @@ describe('Telegram publisher', () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toContain('/sendPhoto');
     expect(calls[0].body.caption).toContain('Короткая подпись.');
-    expect(calls[0].body.caption).toContain('>Flow</a>');
+    expect(calls[0].body.caption).toContain('>[ Flow ]</a>');
     expect(calls[0].body.show_caption_above_media).toBe(true);
   });
 
@@ -322,7 +322,7 @@ describe('Telegram publisher', () => {
     expect(calls[0].url).toContain('/sendPhoto');
     expect(calls[0].body.caption.length).toBeLessThanOrEqual(1024);
     expect(calls[0].body.caption).toContain('Длинная статья');
-    expect(calls[0].body.caption).toContain('>Flow</a>');
+    expect(calls[0].body.caption).toContain('>[ Flow ]</a>');
     expect(calls[0].body.caption).not.toContain('ФИНАЛ');
   });
 

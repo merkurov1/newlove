@@ -227,7 +227,7 @@ describe('Telegram composition — compact link row', () => {
     });
 
     expect(result.fullHtml).toContain(
-      `Публикация. <a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+      `Публикация. <a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">[ Flow ]</a>`
     );
     expect(result.fullHtml).not.toContain('Читать в Flow');
     expect(result.fullHtml).not.toMatch(/Публикация\.\s*\n+\s*<a /);
@@ -236,12 +236,30 @@ describe('Telegram composition — compact link row', () => {
   it('formats the compatibility helper and legacy text formatter compactly', async () => {
     const expected =
       `Текст. <a href="${SOURCE_URL}">Источник</a> | ` +
-      `<a href="${FLOW_URL}">Flow</a>`;
+      `<a href="${FLOW_URL}">[ Flow ]</a>`;
 
     expect(ensureTelegramLinks('Текст.', FLOW_URL, SOURCE_URL, 'ru')).toBe(expected);
     await expect(
       formatTelegramMessage(null, 'Текст.', FLOW_URL, 'ru', SOURCE_URL)
     ).resolves.toBe(expected);
+  });
+
+  it('keeps the Flow label literal, spaced and on the same line as the body', () => {
+    expect(ensureTelegramLinks('Текст.\n', FLOW_URL, null, 'ru')).toBe(
+      `Текст. <a href="${FLOW_URL}">[ Flow ]</a>`
+    );
+
+    const result = composition({
+      body_md: 'Публикация без точки',
+      source_url: null,
+      metadata: {},
+    });
+    expect(result.fullHtml).toContain(
+      `Публикация без точки <a href="${FLOW_URL}">[ Flow ]</a>`
+    );
+    expect(result.fullHtml).not.toMatch(
+      new RegExp(`\\n\\s*<a href="${FLOW_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`)
+    );
   });
 
   it('keeps multiple links in one inline row separated by the exact separator', () => {
@@ -265,7 +283,7 @@ describe('Telegram composition — compact link row', () => {
 
     expect(result.fullHtml).toContain(
       `Текст поста. <a href="${SECOND_URL}">Second article</a> | ` +
-        `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+        `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">[ Flow ]</a>`
     );
     expect(result.fullHtml.match(/ \| /g)).toHaveLength(2);
     expect(result.fullHtml).not.toMatch(/\|\s*\n/);
@@ -285,7 +303,7 @@ describe('Telegram composition — compact link row', () => {
     );
     expect(result.fullHtml).toContain('<b>Заголовок</b>');
     expect(result.fullHtml).toContain(
-      `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">Flow</a>`
+      `<a href="${SOURCE_URL}">Источник</a> | <a href="${FLOW_URL}">[ Flow ]</a>`
     );
   });
 
@@ -305,7 +323,7 @@ describe('Telegram composition — compact link row', () => {
     });
 
     expect(result.fullHtml).toContain(
-      `Видео. <a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">Flow</a>`
+      `Видео. <a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">[ Flow ]</a>`
     );
     expect(hrefCount(result.fullHtml, VIDEO_URL)).toBe(1);
     expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
@@ -322,7 +340,7 @@ describe('Telegram composition — compact link row', () => {
 
     expect(result.mediaCaption).toContain(
       `Короткий текст статьи. <a href="${SOURCE_URL}">Источник</a> | ` +
-        `<a href="${FLOW_URL}">Flow</a>`
+        `<a href="${FLOW_URL}">[ Flow ]</a>`
     );
     expect(result.messageParts[0].kind).toBe('media');
   });
@@ -345,7 +363,7 @@ describe('Telegram composition — compact link row', () => {
 
     expect(hrefCount(result.fullHtml, VIDEO_URL)).toBe(1);
     expect(result.fullHtml).toContain(
-      `<a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">Flow</a>`
+      `<a href="${VIDEO_URL}">Видео</a> | <a href="${FLOW_URL}">[ Flow ]</a>`
     );
   });
 
@@ -538,6 +556,12 @@ describe('Telegram composition — long-form preview', () => {
     expect(result.fullHtml).toContain('Первый абзац начинается');
     expect(result.fullHtml).toContain('…');
     expect(result.fullHtml).not.toContain('ФИНАЛ');
+    expect(result.fullHtml).toContain(
+      `… <a href="${FLOW_URL}">[ Flow ]</a>`
+    );
+    expect(result.fullHtml).not.toMatch(
+      new RegExp(`\\n\\s*<a href="${FLOW_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}">`)
+    );
     expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
     expect(result.textOnlyParts[0].length).toBeLessThanOrEqual(
       TELEGRAM_SAFE_CAPTION_LIMIT
@@ -684,7 +708,7 @@ describe('Telegram composition — long-form preview', () => {
     expect(en.fullHtml).toContain('English title');
     expect(en.fullHtml).toContain('English paragraph');
     expect(en.fullHtml).not.toContain('THE END');
-    expect(en.fullHtml).toContain('>Flow</a>');
+    expect(en.fullHtml).toContain('>[ Flow ]</a>');
     expect(en.validation.ok).toBe(true);
   });
 
@@ -756,9 +780,9 @@ describe('Telegram composition — validation', () => {
   it('uses the localized Flow and source labels', () => {
     const ru = composition({ source_url: SOURCE_URL, lang: 'ru' });
     const en = composition({ source_url: SOURCE_URL, lang: 'en' });
-    expect(ru.fullHtml).toContain('>Flow</a>');
+    expect(ru.fullHtml).toContain('>[ Flow ]</a>');
     expect(ru.fullHtml).toContain('Источник');
-    expect(en.fullHtml).toContain('>Flow</a>');
+    expect(en.fullHtml).toContain('>[ Flow ]</a>');
     expect(en.fullHtml).toContain('Source');
     expect(ru.fullHtml).not.toContain('Читать в Flow');
     expect(en.fullHtml).not.toContain('Read on Flow');
