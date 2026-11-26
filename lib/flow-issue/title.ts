@@ -88,11 +88,13 @@ export function issueEntrySource(entry: IssueEntry | null | undefined): string {
 /**
  * Title contract (control example):
  *   RU: `Tomb in Siberia reveals humans were using cannabis 2800 years ago |
- *        New Scientist «| Поток - 13 ноября 2026 г.»`
- *   EN: `<main item title> | <source> «| Flow - 13 November 2026»`
+ *        New Scientist | Поток - 13 ноября 2026 г.`
+ *   EN: `<main item title> | <source> | Flow - 13 November 2026`
  *
  * The issue signature always closes the title, so a long source name can
- * never truncate the publication and date.
+ * never truncate the publication and date. New titles use a bare separator
+ * instead of wrapping the signature in «…». Stored legacy titles are handled
+ * by `resolveIssueTitle` and must not be rewritten retroactively.
  */
 export function buildIssueTitle(
   payload: IssuePayload,
@@ -111,10 +113,34 @@ export function buildIssueTitle(
 
   const brand = payload.lang === 'ru' ? 'Поток' : 'Flow';
   const formattedDate = formatIssueDate(date, payload.lang);
-  const signature = formattedDate ? `«| ${brand} - ${formattedDate}»` : `«| ${brand}»`;
+  const signature = formattedDate ? `| ${brand} - ${formattedDate}` : `| ${brand}`;
 
   const base = [mainTitle, source].filter(Boolean).join(' | ');
   const maxBaseLength = Math.max(0, 500 - signature.length - 1);
 
   return `${base.slice(0, maxBaseLength).trimEnd()} ${signature}`;
+}
+
+const LEGACY_QUOTED_SIGNATURE = /«\s*\|?\s*(?:Поток|Flow)\s*[-–—]\s*[^»]*»\s*$/u;
+
+/** True when a stored title still uses the old «| brand - date» signature. */
+export function hasLegacyQuotedIssueSignature(title: string | null | undefined): boolean {
+  return typeof title === 'string' && LEGACY_QUOTED_SIGNATURE.test(title.trim());
+}
+
+/**
+ * Resolve the public title from a stored record and its payload.
+ *
+ * Published legacy issues keep the title they were stored with, including the
+ * old quoted signature. Newly built payloads receive the current unquoted
+ * signature. This keeps the quote change forward-only without rewriting data.
+ */
+export function resolveIssueTitle(payload: IssuePayload, storedTitle?: string | null): string {
+  const stored = clean(storedTitle);
+
+  if (stored && hasLegacyQuotedIssueSignature(stored)) {
+    return stored;
+  }
+
+  return buildIssueTitle(payload) || stored;
 }

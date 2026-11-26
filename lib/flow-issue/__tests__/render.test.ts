@@ -1,6 +1,23 @@
-import { renderIssue } from '../render';
+import { renderIssue, renderIssueWeb } from '../render';
 import { DEFAULT_ISSUE_TEMPLATE } from '../template';
 import type { IssueEntry, IssuePayload } from '../types';
+
+function webStyle(html: string): string {
+  return html.match(/<style>([\s\S]*?)<\/style>/)?.[1] ?? '';
+}
+
+function cssRules(css: string): string[] {
+  return [...css.matchAll(/([^{}]+)\{/g)]
+    .map((match) => match[1].trim())
+    .filter((prelude) => prelude && !prelude.startsWith('@'));
+}
+
+function themeTemplate(overrides: Partial<IssuePayload['template']['theme']> = {}) {
+  return {
+    ...DEFAULT_ISSUE_TEMPLATE,
+    theme: { ...DEFAULT_ISSUE_TEMPLATE.theme, ...overrides },
+  };
+}
 
 const longUrl =
   'https://www.newscientist.com/article/2597653-tomb-in-siberia-reveals-humans-were-using-cannabis-2800-years-ago/?utm_id=97758_v0_s00_e0_tv1&fbclid=IwY2xjawVdZgJleHRuA2FlbQIxMABwZG9mBWJyaWQRMXo0YVE4MVl2TEh6Wmc0M09zcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEfBpcULeX4jZhTmMywzX9THWyo_MYc2Y_eVKvzTF8d0Y1a-n6k6vAz1lc-BNA_aem_-FrvSY9ZMkgNhETkxdYSVg';
@@ -221,5 +238,176 @@ describe('flow issue web layout', () => {
     // by its real title, date and link only.
     expect(htmlWeb).not.toContain('transcript of');
     expect(htmlWeb).toContain('https://www.youtube.com/watch?v=abc123');
+  });
+
+  it('scopes every web rule under .flow-issue-root', () => {
+    const { htmlWeb } = renderIssue(payload(), {
+      title: 'Issue 24',
+      slug: 'issue-24',
+      number: 24,
+    });
+    const style = webStyle(htmlWeb);
+
+    expect(style.length).toBeGreaterThan(0);
+
+    const unscoped = cssRules(style)
+      .flatMap((rule) => rule.split(','))
+      .map((selector) => selector.trim())
+      .filter(Boolean)
+      .filter((selector) => !selector.startsWith('.flow-issue-root'));
+
+    expect(unscoped).toEqual([]);
+  });
+
+  it('does not mask layout overflow on the page or the root', () => {
+    const { htmlWeb } = renderIssue(payload(), {
+      title: 'Issue 24',
+      slug: 'issue-24',
+      number: 24,
+    });
+    const style = webStyle(htmlWeb);
+
+    expect(style).not.toMatch(/\.flow-issue-root\s*\{[^}]*overflow-x:\s*(?:clip|hidden)/);
+    expect(style).toContain('overflow-wrap:anywhere');
+    expect(style).toContain('word-break:break-word');
+  });
+
+  it('keeps natural image proportions instead of cropping editorial media', () => {
+    const issue = payload();
+    issue.photos = [
+      {
+        ...entry({ id: 'photo-1', type: 'photo', title: 'Portrait', body: '' }),
+        image: 'https://example.com/portrait.jpg',
+        alt: 'Portrait',
+        caption: 'A portrait frame',
+      },
+    ];
+    issue.links = [
+      {
+        ...entry({
+          id: 'link-1',
+          type: 'link',
+          title: 'A link',
+          body: '',
+          url: 'https://example.com/story',
+        }),
+        description: 'A link description',
+        siteName: 'Example',
+        author: '',
+        image: 'https://example.com/link.jpg',
+        originalDate: null,
+        ageDays: null,
+      },
+    ];
+
+    const { htmlWeb } = renderIssue(issue, {
+      title: 'Issue 24',
+      slug: 'issue-24',
+      number: 24,
+    });
+    const style = webStyle(htmlWeb);
+
+    expect(style).toContain('object-fit:contain');
+    expect(style).not.toContain('object-fit:cover');
+    expect(style).toContain('height:auto');
+    expect(htmlWeb).toContain('https://example.com/portrait.jpg');
+  });
+
+  it('maps legacy template colours to Daylight Glass while keeping custom fonts', () => {
+    const issue = payload();
+    issue.template = themeTemplate({
+      paper: '#FFFFFF',
+      ink: '#111111',
+      muted: '#52525B',
+      rule: '#D4D4D8',
+      accent: '#111111',
+      maxWidth: 760,
+      serifFont: 'Georgia',
+      sansFont: 'Inter',
+    });
+
+    const style = webStyle(
+      renderIssueWeb(issue, { title: 'Issue 24', slug: 'issue-24', number: 24 })
+    );
+
+    expect(style).toContain('--bg:#F7F3EC');
+    expect(style).toContain('--ink:#201E1A');
+    expect(style).toContain('--soft:#6B6257');
+    expect(style).toContain('--line:#DDD4C5');
+    expect(style).toContain('--claret:#7A2233');
+    expect(style).toContain('--serif:var(--font-serif');
+    expect(style).toContain('--sans:var(--font-sans');
+  });
+
+  it('preserves genuinely custom theme colours and fonts', () => {
+    const issue = payload();
+    issue.template = themeTemplate({
+      paper: '#F2EBDD',
+      ink: '#2A2420',
+      muted: '#73695C',
+      rule: '#C9BCA8',
+      accent: '#7A2233',
+      maxWidth: 900,
+      serifFont: 'Literata, Georgia, serif',
+      sansFont: 'Public Sans, Arial, sans-serif',
+    });
+
+    const style = webStyle(
+      renderIssueWeb(issue, { title: 'Issue 24', slug: 'issue-24', number: 24 })
+    );
+
+    expect(style).toContain('--bg:#F2EBDD');
+    expect(style).toContain('--ink:#2A2420');
+    expect(style).toContain('--serif:Literata, Georgia, serif');
+    expect(style).toContain('--sans:Public Sans, Arial, sans-serif');
+    expect(style).toContain('max-width:1440px');
+  });
+
+  it('keeps responsive gallery breakpoints for mobile, tablet and desktop', () => {
+    const style = webStyle(
+      renderIssueWeb(payload(), { title: 'Issue 24', slug: 'issue-24', number: 24 })
+    );
+
+    expect(style).toContain('@media(min-width:640px)');
+    expect(style).toContain('@media(min-width:900px)');
+    expect(style).toContain('@media(min-width:960px)');
+    expect(style).toContain('@media(min-width:1024px)');
+    expect(style).toContain('grid-template-columns:repeat(12,minmax(0,1fr))');
+    expect(style).toContain('grid-template-columns:minmax(0,1fr)');
+  });
+
+  it('does not change the email or text renderer when the web theme changes', () => {
+    const issue = payload();
+    issue.template = themeTemplate({
+      paper: '#FFFFFF',
+      ink: '#111111',
+      muted: '#52525B',
+      rule: '#D4D4D8',
+      accent: '#111111',
+    });
+
+    const { htmlEmail, textEmail } = renderIssue(issue, {
+      title: 'Issue 24',
+      slug: 'issue-24',
+      number: 24,
+    });
+
+    expect(htmlEmail).toContain('background:#FAF8F5');
+    expect(htmlEmail).not.toContain('--glass');
+    expect(htmlEmail).not.toContain('grid-template-columns');
+    expect(textEmail).not.toContain('<style');
+  });
+
+  it('uses the new web title while keeping the existing email signature form', () => {
+    const title = 'Tomb in Siberia | New Scientist | Поток - 13 ноября 2026 г.';
+    const { htmlWeb, htmlEmail, textEmail } = renderIssue(payload(), {
+      title,
+      slug: 'issue-25',
+      number: 25,
+    });
+
+    expect(htmlWeb).toContain(`<h1>${title}</h1>`);
+    expect(htmlEmail).toContain('Tomb in Siberia | New Scientist «| Поток - 13 ноября 2026 г.»');
+    expect(textEmail).toContain('Tomb in Siberia | New Scientist «| Поток - 13 ноября 2026 г.»');
   });
 });

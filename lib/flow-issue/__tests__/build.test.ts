@@ -170,12 +170,8 @@ describe('buildIssuePayload', () => {
     expect(ru.items.map((entry) => entry.id).sort()).toEqual(['newer-supporting', 'older-strong']);
     expect(en.items).toHaveLength(2);
 
-    expect(buildIssueTitle(ru)).toBe(
-      'An older strong argument «| Поток - 28 октября 2026 г.»'
-    );
-    expect(buildIssueTitle(en)).toBe(
-      'An older strong argument «| Flow - 28 October 2026»'
-    );
+    expect(buildIssueTitle(ru)).toBe('An older strong argument | Поток - 28 октября 2026 г.');
+    expect(buildIssueTitle(en)).toBe('An older strong argument | Flow - 28 October 2026');
     expect(ru.summary.length).toBeGreaterThan(0);
     expect(ru.pierrotIntro.length).toBeGreaterThanOrEqual(2);
 
@@ -184,7 +180,8 @@ describe('buildIssuePayload', () => {
     const withoutLead = { ...ru, lead: null };
     const fallbackTitle = buildIssueTitle(withoutLead);
     expect(fallbackTitle).toContain(ru.items[0].title);
-    expect(fallbackTitle).toContain('«| Поток - ');
+    expect(fallbackTitle).toContain('| Поток - ');
+    expect(fallbackTitle).not.toContain('«');
   });
 
   it('keeps the full published count separate from the editorial selection', async () => {
