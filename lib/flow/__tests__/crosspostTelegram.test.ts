@@ -29,7 +29,7 @@ function telegramResponse(messageId = 10): Response {
 }
 
 function flowLink(_lang: 'ru' | 'en' = 'ru'): string {
-  return `<a href="${FLOW_URL}">Flow</a>`;
+  return `<a href="${FLOW_URL}">[ Flow ]</a>`;
 }
 
 function sourceLink(lang: 'ru' | 'en' = 'ru'): string {
@@ -135,7 +135,7 @@ describe('Telegram crosspost composition and links', () => {
     expect(calls[0].text).toContain(
       `<b><a href="${SOURCE_URL}">A Source Article</a></b>`
     );
-    expect(calls[0].text).toContain('>Flow</a>');
+    expect(calls[0].text).toContain('>[ Flow ]</a>');
     expect(calls[0].text).not.toContain('>Source</a>');
   });
 
@@ -202,7 +202,7 @@ describe('Telegram crosspost composition and links', () => {
 
     const calls = telegramCalls('sendMessage');
     expect(calls[0].text).toContain(
-      '<a href="https://www.merkurov.love/flow/exact-slug">Flow</a>'
+      '<a href="https://www.merkurov.love/flow/exact-slug">[ Flow ]</a>'
     );
   });
 });

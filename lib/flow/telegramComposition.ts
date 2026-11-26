@@ -120,8 +120,10 @@ export function telegramLanguage(lang: string | null | undefined): TelegramLangu
 
 export function telegramFlowLabel(_lang?: string | null): string {
   // The destination name is enough in a compact link row. Avoid phrases such
-  // as "Читать в Flow" / "Read on Flow" that only add vertical weight.
-  return 'Flow';
+  // as "Читать в Flow" / "Read on Flow" that only add vertical weight. Keep
+  // the brackets and their inner spaces stable: Telegram readers use this as
+  // the canonical marker of the original Flow publication.
+  return '[ Flow ]';
 }
 
 /** Separator between links in the compact row (Telegram-safe plain text). */
@@ -1188,9 +1190,12 @@ function buildTelegramPreview(input: {
     }
   }
 
-  const html = [titleHtml, excerpt ? escapeHtml(excerpt) : '', linkHtml]
-    .filter(Boolean)
-    .join('\n\n');
+  const excerptHtml = excerpt ? escapeHtml(excerpt) : '';
+  const html = excerptHtml
+    ? `${titleHtml ? `${titleHtml}\n\n` : ''}${excerptHtml} ${linkHtml}`
+    : titleHtml
+      ? `${titleHtml} ${linkHtml}`
+      : linkHtml;
 
   return {
     html,
