@@ -15,6 +15,10 @@ import {
  */
 export const VIGIL_SUPPORTER_WINDOW_MS = VIGIL_COOLDOWN_MS;
 export const VIGIL_CROWD_MAX_INTENSITY = 1;
+/** Supporter count that saturates the crowd glow; larger crowds are clamped. */
+export const VIGIL_CROWD_MAX_SUPPORTERS = 10;
+/** Lowest crowd contribution, reached by a single supporter. */
+export const VIGIL_CROWD_MIN_INTENSITY = 0.25;
 
 export type VigilPublicState = VigilMetrics & {
   supporterCount: number;
@@ -37,9 +41,11 @@ export function normalizeSupporterCount(value: unknown): number {
 /**
  * Maps the live supporter count to a bounded 0..1 crowd contribution.
  *
- * Zero supporters adds no crowd glow. The logarithmic curve makes small, real
- * increases visible (1 → ~0.36) without letting a large crowd blow out the
- * heart; 100 supporters reaches full intensity and larger counts are clamped.
+ * Zero supporters adds no crowd glow. The logarithmic curve spans the
+ * meaningful 1..10 supporter range: one supporter already produces the
+ * minimum visible glow, every additional supporter is distinguishable, and
+ * ten supporters reach full intensity. Larger counts are clamped so a big
+ * crowd can never blow out the heart.
  *
  * This is only one input to the shared flame calculation in
  * `lib/vigil/flame.ts`; it never decides whether the flame is lit.
@@ -49,12 +55,15 @@ export function vigilCrowdIntensity(count: unknown): number {
 
   if (supporters === 0) return 0;
 
-  const normalized =
-    Math.log10(supporters + 1) / Math.log10(101);
+  // Normalize log10(1..10) onto 0..1; counts above the maximum clamp to 1.
+  const normalized = Math.min(
+    1,
+    Math.log10(supporters) / Math.log10(VIGIL_CROWD_MAX_SUPPORTERS)
+  );
 
-  return Math.min(
-    VIGIL_CROWD_MAX_INTENSITY,
-    Math.max(0.25, 0.25 + normalized * 0.75)
+  return (
+    VIGIL_CROWD_MIN_INTENSITY +
+    (VIGIL_CROWD_MAX_INTENSITY - VIGIL_CROWD_MIN_INTENSITY) * normalized
   );
 }
 

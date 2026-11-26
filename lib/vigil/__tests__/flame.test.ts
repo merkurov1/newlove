@@ -12,6 +12,7 @@ import {
   type VigilFlameSnapshot,
 } from '@/lib/vigil/flame';
 import { VIGIL_COOLDOWN_MS } from '@/lib/vigil/cooldown';
+import { VIGIL_CROWD_MAX_SUPPORTERS } from '@/lib/vigil/supporters';
 
 const NOW = new Date('2026-11-24T12:00:00.000Z').getTime();
 const HOUR = 60 * 60 * 1000;
@@ -219,16 +220,57 @@ describe('Vigil shared flame visuals', () => {
   it('adds a bounded crowd contribution as supporters increase', () => {
     const zero = resolveVigilFlame(litSnapshot(0, 0), NOW);
     const one = resolveVigilFlame(litSnapshot(0, 1), NOW);
-    const many = resolveVigilFlame(litSnapshot(0, 24), NOW);
-    const max = resolveVigilFlame(litSnapshot(0, 100), NOW);
+    const five = resolveVigilFlame(litSnapshot(0, 5), NOW);
+    const max = resolveVigilFlame(
+      litSnapshot(0, VIGIL_CROWD_MAX_SUPPORTERS),
+      NOW
+    );
     const clamped = resolveVigilFlame(litSnapshot(0, 1_000_000), NOW);
 
     expect(one.crowdIntensity).toBeGreaterThan(0);
     expect(one.intensity).toBeGreaterThan(zero.intensity);
-    expect(many.intensity).toBeGreaterThan(one.intensity);
-    expect(max.intensity).toBeGreaterThan(many.intensity);
+    expect(five.intensity).toBeGreaterThan(one.intensity);
+    expect(max.intensity).toBeGreaterThan(five.intensity);
+    expect(max.intensity).toBe(1);
     expect(clamped.intensity).toBe(max.intensity);
-    expect(max.intensity).toBeLessThanOrEqual(1);
+    expect(clamped.intensity).toBeLessThanOrEqual(1);
+  });
+
+  it('increases intensity monotonically for every integer count 1..10', () => {
+    const views = Array.from(
+      { length: VIGIL_CROWD_MAX_SUPPORTERS },
+      (_, index) => resolveVigilFlame(litSnapshot(0, index + 1), NOW)
+    );
+
+    for (let index = 1; index < views.length; index += 1) {
+      expect(views[index].crowdIntensity).toBeGreaterThan(
+        views[index - 1].crowdIntensity
+      );
+      expect(views[index].intensity).toBeGreaterThan(
+        views[index - 1].intensity
+      );
+    }
+
+    expect(views[views.length - 1].intensity).toBe(1);
+  });
+
+  it('makes the 1-to-10 supporter range visibly distinct in artwork', () => {
+    const one = resolveVigilFlame(litSnapshot(0, 1), NOW);
+    const five = resolveVigilFlame(litSnapshot(0, 5), NOW);
+    const ten = resolveVigilFlame(litSnapshot(0, 10), NOW);
+
+    expect(one.brightness).toBeLessThan(five.brightness);
+    expect(five.brightness).toBeLessThan(ten.brightness);
+    expect(one.saturate).toBeLessThan(five.saturate);
+    expect(five.saturate).toBeLessThan(ten.saturate);
+    expect(one.glowOpacity).toBeLessThan(five.glowOpacity);
+    expect(five.glowOpacity).toBeLessThan(ten.glowOpacity);
+    expect(one.glowBlurPx).toBeLessThan(five.glowBlurPx);
+    expect(five.glowBlurPx).toBeLessThan(ten.glowBlurPx);
+    expect(one.grayscale).toBeGreaterThan(five.grayscale);
+    expect(five.grayscale).toBeGreaterThan(ten.grayscale);
+
+    expect(ten.brightness).toBeLessThanOrEqual(1.3);
   });
 
   it('ignores malformed supporter counts without inventing support', () => {
