@@ -1,4 +1,8 @@
 import { VIGIL_COOLDOWN_MS } from '@/lib/vigil/cooldown';
+import {
+  parseVigilMetrics,
+  type VigilMetrics,
+} from '@/lib/vigil/analytics';
 
 /**
  * The public Vigil state is derived only from server-owned rows:
@@ -6,12 +10,13 @@ import { VIGIL_COOLDOWN_MS } from '@/lib/vigil/cooldown';
  *   rolling 24h window;
  * - `vigil_hearts.last_lit_at` describes the shared flame.
  *
- * The browser never supplies the count. It only renders the server response.
+ * Aggregate lifetime metrics are appended from the private claim table, never
+ * from a client count or a display name. The browser only renders the response.
  */
 export const VIGIL_SUPPORTER_WINDOW_MS = VIGIL_COOLDOWN_MS;
 export const VIGIL_CROWD_MAX_INTENSITY = 1;
 
-export type VigilPublicState = {
+export type VigilPublicState = VigilMetrics & {
   supporterCount: number;
   lastLitAt: string | null;
   /** Server-computed shared expiry: lastLitAt + 24h, ISO epoch. */
@@ -97,5 +102,6 @@ export function parseVigilPublicState(
     flameLit: payload.flameLit,
     windowStartedAt: payload.windowStartedAt,
     updatedAt: payload.updatedAt,
+    ...parseVigilMetrics(payload),
   };
 }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import VigilExperience from '../VigilExperience';
 import { resolveVigilFlame } from '@/lib/vigil/flame';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
@@ -157,6 +157,14 @@ function snapshot(overrides: Record<string, unknown> = {}) {
 
   return {
     supporterCount: 5,
+    lifetimeTotal: 250,
+    uniqueParticipants: 80,
+    returningParticipants: 20,
+    repeatRate: 0.25,
+    telegramParticipants: 50,
+    supabaseParticipants: 30,
+    analyticsSince: '2026-11-16T09:00:00.000Z',
+    analyticsAvailable: true,
     lastLitAt,
     flameExpiresAt: new Date(
       Date.parse(lastLitAt) + 24 * HOUR
@@ -309,6 +317,52 @@ describe('/vigil shared flame surface', () => {
 
     expect(heartImage).not.toBeNull();
     expect(heartImage).toHaveAttribute('src', TEMPLE_HOME_ASSETS.heart);
+  });
+
+  it('confirms a successful spark and shows the separate lifetime total', async () => {
+    identityModule.default.mockReturnValue(
+      identity({ displayName: 'Anna', source: 'supabase' })
+    );
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'POST') {
+            return jsonResponse({
+              ok: true,
+              record: { id: 1 },
+              cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+            });
+          }
+
+          return jsonResponse({
+            authenticated: true,
+            canSpark: true,
+            remainingMs: 0,
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toHaveTextContent(
+        /added to the shared heart/i
+      );
+    });
+
+    expect(screen.getByTestId('vigil-lifetime-total')).toHaveTextContent('250');
+    expect(screen.getByTestId('vigil-lifetime-total')).toHaveAttribute(
+      'data-lifetime-total',
+      '250'
+    );
   });
 
   it('renders the same intensity as the shared calculation for the same server state', async () => {

@@ -101,6 +101,14 @@ function vigilSnapshot(
 
   return {
     supporterCount: 12,
+    lifetimeTotal: 137,
+    uniqueParticipants: 96,
+    returningParticipants: 21,
+    repeatRate: 0.2188,
+    telegramParticipants: 60,
+    supabaseParticipants: 36,
+    analyticsSince: '2026-11-16T00:00:00.000Z',
+    analyticsAvailable: true,
     lastLitAt,
     flameExpiresAt: new Date(
       Date.parse(lastLitAt) + 24 * 60 * 60 * 1000
@@ -515,9 +523,7 @@ describe('Temple home composition', () => {
     const heart = screen.getByRole('link', { name: /Light the Vigil heart/ });
 
     expect(heart).toHaveAttribute('data-heart-auth', 'authenticated');
-    expect(
-      screen.getByText(/Hold to send a spark · Tap to enter the Vigil/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Tap to send a spark/)).toBeInTheDocument();
 
     fireEvent.pointerDown(heart, { button: 0 });
 
@@ -542,6 +548,123 @@ describe('Temple home composition', () => {
     ).not.toBeInTheDocument();
 
     jest.useRealTimers();
+  });
+
+  it('lights the shared heart with a single authenticated tap without leaving the home', async () => {
+    identityModule.default.mockReturnValue(
+      templeIdentity({
+        displayName: 'Anna',
+        source: 'supabase',
+        status: 'verified',
+      })
+    );
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim')) {
+          if (init?.method === 'GET') {
+            return jsonResponse({
+              authenticated: true,
+              canSpark: true,
+              remainingMs: 0,
+            });
+          }
+
+          return jsonResponse({
+            ok: true,
+            record: { id: 1 },
+            cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+          });
+        }
+
+        return defaultFetchMock(input);
+      }
+    );
+
+    render(<TempleClient />);
+
+    const heart = screen.getByRole('link', { name: /Light the Vigil heart/ });
+
+    fireEvent.click(heart);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('temple-heart-spark-status')).toHaveTextContent(
+        /added to the shared heart/i
+      );
+    });
+
+    const claimPosts = fetchMock.mock.calls.filter(
+      ([input, init]) =>
+        String(input).includes('/api/vigil/claim') &&
+        (init as RequestInit | undefined)?.method === 'POST'
+    );
+
+    expect(claimPosts).toHaveLength(1);
+    expect(heart).toHaveAttribute('href', '/vigil');
+    expect(heart).toHaveAttribute('data-spark-status', 'sent');
+  });
+
+  it('reports the shared cooldown without posting when a returning identity taps again', async () => {
+    identityModule.default.mockReturnValue(
+      templeIdentity({
+        displayName: 'Anna',
+        source: 'supabase',
+        status: 'verified',
+      })
+    );
+
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes('/api/vigil/claim')) {
+        return jsonResponse({
+          authenticated: true,
+          canSpark: false,
+          remainingMs: 2 * 60 * 60 * 1000,
+          remainingLabel: '2h',
+          lastSparkAt: new Date().toISOString(),
+        });
+      }
+
+      return defaultFetchMock(input);
+    });
+
+    render(<TempleClient />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Spark returns in 2h/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('link', { name: /Light the Vigil heart/ }));
+
+    expect(
+      fetchMock.mock.calls.some(
+        ([input, init]) =>
+          String(input).includes('/api/vigil/claim') &&
+          (init as RequestInit | undefined)?.method === 'POST'
+      )
+    ).toBe(false);
+    expect(
+      screen.getByTestId('temple-heart-spark-status')
+    ).toHaveTextContent(/next spark returns in 2h/i);
+  });
+
+  it('shows the lifetime spark total separately from 24h supporters', () => {
+    render(<TempleClient />);
+
+    expect(screen.getByTestId('temple-lifetime-total')).toHaveTextContent(
+      '137 sparks offered'
+    );
+    expect(screen.getByTestId('temple-lifetime-total')).toHaveAttribute(
+      'data-lifetime-total',
+      '137'
+    );
+    expect(screen.getByText(/12 supporters/)).toHaveAttribute(
+      'data-supporter-count',
+      '12'
+    );
   });
 
   it('shows no success when the server rejects the held spark', async () => {

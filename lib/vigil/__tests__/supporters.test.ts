@@ -46,6 +46,14 @@ describe('Vigil public state payload', () => {
     flameLit: true,
     windowStartedAt: '2026-11-23T12:00:00.000Z',
     updatedAt: '2026-11-24T12:00:01.000Z',
+    lifetimeTotal: 42,
+    uniqueParticipants: 20,
+    returningParticipants: 5,
+    repeatRate: 0.25,
+    telegramParticipants: 12,
+    supabaseParticipants: 8,
+    analyticsSince: '2026-11-16T00:00:00.000Z',
+    analyticsAvailable: true,
   };
 
   it('accepts only a complete server snapshot', () => {
@@ -58,6 +66,26 @@ describe('Vigil public state payload', () => {
         flameLit: false,
       })
     ).toMatchObject({ lastLitAt: null, flameExpiresAt: null, flameLit: false });
+  });
+
+  it('keeps legacy payloads working without inventing analytics', () => {
+    const legacy = {
+      supporterCount: 7,
+      lastLitAt: null,
+      flameExpiresAt: null,
+      flameLit: false,
+      windowStartedAt: '2026-11-23T12:00:00.000Z',
+      updatedAt: '2026-11-24T12:00:01.000Z',
+    };
+
+    expect(parseVigilPublicState(legacy)).toMatchObject({
+      supporterCount: 7,
+      lifetimeTotal: null,
+      uniqueParticipants: 0,
+      returningParticipants: 0,
+      repeatRate: null,
+      analyticsAvailable: false,
+    });
   });
 
   it('rejects missing, negative or fabricated counts', () => {

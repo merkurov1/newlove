@@ -42,6 +42,11 @@ import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
+import { formatVigilLifetimeLabel } from '@/lib/vigil/analytics';
+import {
+  VIGIL_COOLDOWN_MS,
+  formatVigilCooldown,
+} from '@/lib/vigil/cooldown';
 import { resolveVigilFlame } from '@/lib/vigil/flame';
 import { useVigilSupporters } from '@/hooks/useVigilSupporters';
 import useTempleIdentity from '@/hooks/useTempleIdentity';
@@ -343,6 +348,8 @@ export default function TempleClient({
 
   const {
     supporterCount,
+    lifetimeTotal,
+    analyticsAvailable,
     lastLitAt,
     flameExpiresAt,
     flameLit: serverFlameLit,
@@ -361,6 +368,7 @@ export default function TempleClient({
   const holdTimerRef = useRef<number | null>(null);
   const lastHoldAtRef = useRef(0);
   const sendingRef = useRef(false);
+  const [cooldownEndsAt, setCooldownEndsAt] = useState<number | null>(null);
 
   const posts = useMemo<TemplePost[]>(() => {
     const traces = templeFeed?.data ?? [];
@@ -468,6 +476,64 @@ export default function TempleClient({
     trackTributeSupportView('temple_home');
   }, []);
 
+  // The home heart and /vigil share one server-side cooldown. Read this
+  // identity's remaining window so a returning visitor sees the same state on
+  // both surfaces instead of discovering it through a rejected tap.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Defer the reset so signing out does not schedule a synchronous state
+      // update inside the effect body.
+      const reset = window.setTimeout(() => setCooldownEndsAt(null), 0);
+
+      return () => window.clearTimeout(reset);
+    }
+
+    let cancelled = false;
+
+    const loadCooldown = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const response = await fetch('/api/vigil/claim', {
+          method: 'GET',
+          credentials: 'same-origin',
+          cache: 'no-store',
+          headers: session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : undefined,
+        });
+
+        if (!response.ok) return;
+
+        const payload = (await response.json().catch(() => null)) as
+          | { authenticated?: boolean; remainingMs?: number }
+          | null;
+
+        if (cancelled || payload?.authenticated !== true) return;
+
+        const remaining =
+          typeof payload.remainingMs === 'number' ? payload.remainingMs : 0;
+
+        setCooldownEndsAt(
+          remaining > 0
+            ? Date.now() + Math.min(remaining, VIGIL_COOLDOWN_MS)
+            : null
+        );
+      } catch {
+        // A status read never blocks the ritual; the claim route still owns
+        // the authoritative cooldown decision.
+      }
+    };
+
+    void loadCooldown();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
   useEffect(() => {
     if (pathname !== '/temple') return;
 
@@ -519,13 +585,27 @@ export default function TempleClient({
         supporterCount === 1 ? 'supporter' : 'supporters'
       }`
     : 'Vigil supporters';
+  const lifetimeLabel =
+    analyticsAvailable && typeof lifetimeTotal === 'number'
+      ? formatVigilLifetimeLabel(lifetimeTotal)
+      : '';
   const vigilStateProblem =
     vigilStatus === 'stale' || vigilStatus === 'error'
       ? vigilError || 'The count is catching up'
       : null;
 
+  const cooldownRemainingMs = cooldownEndsAt
+    ? Math.max(0, Math.min(VIGIL_COOLDOWN_MS, cooldownEndsAt - vigilNow))
+    : 0;
+  const isOnCooldown = isAuthenticated && cooldownRemainingMs > 0;
+  const cooldownLabel = isOnCooldown
+    ? formatVigilCooldown(cooldownRemainingMs)
+    : '';
+
   const heartInstruction = isAuthenticated
-    ? 'Hold to send a spark · Tap to enter the Vigil'
+    ? isOnCooldown
+      ? `Spark returns in ${cooldownLabel}`
+      : 'Tap to send a spark'
     : 'Tap or hold the heart · Enter the Vigil';
 
   /**
@@ -593,6 +673,16 @@ export default function TempleClient({
   const sendHeartSpark = useCallback(async () => {
     if (!isAuthenticated || sendingRef.current) return;
 
+    if (isOnCooldown) {
+      setSparkStatus('cooldown');
+      setSparkMessage(
+        cooldownLabel
+          ? `Your next spark returns in ${cooldownLabel}.`
+          : 'Your next spark is still resting.'
+      );
+      return;
+    }
+
     sendingRef.current = true;
     setSparkStatus('sending');
     setSparkMessage('Sending your spark…');
@@ -640,9 +730,11 @@ export default function TempleClient({
       }
 
       // Only a confirmed server response may change the success state or
-      // trigger the refreshed statistics/flame.
+      // trigger the refreshed statistics/flame. The cooldown starts on the
+      // server; mirroring it here prevents a second same-session tap.
       setSparkStatus('sent');
-      setSparkMessage('Spark received · the shared heart is lit');
+      setSparkMessage('Spark received · added to the shared heart');
+      setCooldownEndsAt(Date.now() + VIGIL_COOLDOWN_MS);
 
       await Promise.allSettled([
         refreshSupporters(),
@@ -658,7 +750,13 @@ export default function TempleClient({
     } finally {
       sendingRef.current = false;
     }
-  }, [isAuthenticated, refreshFeed, refreshSupporters]);
+  }, [
+    cooldownLabel,
+    isAuthenticated,
+    isOnCooldown,
+    refreshFeed,
+    refreshSupporters,
+  ]);
 
   const startHeartHold = useCallback(() => {
     if (!isAuthenticated || sendingRef.current) return;
@@ -679,12 +777,21 @@ export default function TempleClient({
 
   const handleHeartClick = useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
+      // A guest keeps the existing route into the ritual. A verified visitor
+      // lights the shared heart with one tap and stays on the Temple home.
+      if (!isAuthenticated) return;
+
+      event.preventDefault();
+
+      // The long-press path already consumed this gesture.
       if (Date.now() - lastHoldAtRef.current < 1200) {
-        event.preventDefault();
         lastHoldAtRef.current = 0;
+        return;
       }
+
+      void sendHeartSpark();
     },
-    []
+    [isAuthenticated, sendHeartSpark]
   );
 
   const handleHeartKeyDown = useCallback(
@@ -709,13 +816,14 @@ export default function TempleClient({
 
       clearHeartHold();
 
-      // A short Enter remains a normal navigation to the Vigil; a hold has
-      // already sent the spark. Space is only a hold gesture.
-      if (!didHold && event.key === 'Enter') {
-        router.push('/vigil');
+      // A hold has already sent the spark. A short Enter or Space sends it
+      // now, matching the single-tap mouse/touch gesture. Use the Temple
+      // navigation to open the full ritual.
+      if (!didHold) {
+        void sendHeartSpark();
       }
     },
-    [clearHeartHold, isAuthenticated, router]
+    [clearHeartHold, isAuthenticated, sendHeartSpark]
   );
 
   useEffect(() => {
@@ -863,7 +971,9 @@ export default function TempleClient({
                 onContextMenu={(event) => {
                   if (isAuthenticated) event.preventDefault();
                 }}
-                aria-label={`Light the Vigil heart. ${supporterLabel} in the last 24 hours. ${vigilLabel}. ${heartInstruction}.`}
+                aria-label={`Light the Vigil heart. ${
+                  lifetimeLabel ? `${lifetimeLabel}. ` : ''
+                }${supporterLabel} in the last 24 hours. ${vigilLabel}. ${heartInstruction}.`}
                 data-heart-auth={isAuthenticated ? 'authenticated' : 'anonymous'}
                 data-spark-status={sparkStatus}
                 className={styles.heartLink}
@@ -928,6 +1038,18 @@ export default function TempleClient({
                 </span>
 
                 <span className={styles.vigilMeta}>
+                  {lifetimeLabel && (
+                    <>
+                      <span
+                        className={styles.vigilCount}
+                        data-testid="temple-lifetime-total"
+                        data-lifetime-total={String(lifetimeTotal)}
+                      >
+                        {lifetimeLabel}
+                      </span>
+                      <span aria-hidden="true">·</span>
+                    </>
+                  )}
                   <span
                     className={styles.vigilCount}
                     data-supporter-count={
