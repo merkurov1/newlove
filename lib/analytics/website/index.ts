@@ -7,3 +7,4 @@ export * from './tools';
 export { loadAnalyticsDataset } from './dataset';
 export { runAnalyticsSync } from './sync';
 export { loadWebsiteDashboard } from './dashboard';
+export * from './dashboardContract';

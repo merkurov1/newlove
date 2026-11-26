@@ -144,6 +144,7 @@ export function buildSearchBrandSplit(
   const totalImpressions = rows.reduce((sum, row) => sum + finite(row.impressions), 0);
 
   return {
+    available: rows.length > 0 || previousRows.length > 0,
     brandTerms: normalizedTerms,
     brand: summarizeSearchSegment({
       key: 'brand',

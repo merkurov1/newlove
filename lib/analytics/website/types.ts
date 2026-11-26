@@ -96,11 +96,15 @@ export type SearchSegmentSummary = {
 };
 
 export type SearchBrandSplit = {
+  /** False when the stored payload has no brand split; zeroes must not be shown. */
+  available?: boolean;
   brandTerms: string[];
   brand: SearchSegmentSummary;
   nonBrand: SearchSegmentSummary;
   /** Brand is derived from query text; Google exposes no brand dimension. */
   heuristic: string;
+  /** Present when an older or partial payload had no brand split. */
+  unavailableReason?: string;
 };
 
 export type SearchAnomaly = {
@@ -337,6 +341,8 @@ export type InternalSnapshot = {
       en: number | null;
     };
     signals: {
+      /** False when a stored payload predates newsletter signals; values stay null. */
+      available?: boolean;
       deliveryFailures: number | null;
       suspectedAutomated: number | null;
       rateLimited: number | null;
@@ -350,6 +356,8 @@ export type InternalSnapshot = {
         minCount: number;
         windowHours: number;
       } | null;
+      /** Present when an older or partial payload had no signals object. */
+      unavailableReason?: string;
     };
     jobs: {
       total: number | null;
