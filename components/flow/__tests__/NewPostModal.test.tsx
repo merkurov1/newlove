@@ -271,6 +271,103 @@ describe('Flow link preview', () => {
       expect(result.current.links[0].url).toBe('https://example.com/article');
     });
 
+    it.each([
+      { label: 'English edition', lang: 'en' as const, image: 'https://cdn.example.com/en-photo.jpg' },
+      { label: 'Russian edition', lang: 'ru' as const, image: 'https://cdn.example.com/ru-photo.jpg' },
+    ])('sends the $label language for a photo post', async ({ lang, image }) => {
+      let savedPayload: Record<string, any> | null = null;
+      const fetchMock = jest.fn(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+
+          if (url === '/api/flow/items' && init?.method === 'POST') {
+            savedPayload = JSON.parse(String(init.body));
+
+            return apiResponse({ success: true, item: { id: 'photo-item' } });
+          }
+
+          return apiResponse({});
+        }
+      );
+      global.fetch = fetchMock as typeof fetch;
+
+      const { result } = renderHook(() =>
+        useNewPostModal({ open: true, onClose: jest.fn(), lang })
+      );
+
+      await act(async () => {
+        await result.current.parseLink(image);
+      });
+
+      await waitFor(() => {
+        expect(result.current.canPost).toBe(true);
+      });
+
+      await act(async () => {
+        await result.current.finish();
+      });
+
+      await waitFor(() => {
+        expect(savedPayload).not.toBeNull();
+      });
+
+      expect(savedPayload?.type).toBe('photo');
+      expect(savedPayload?.lang).toBe(lang);
+      expect(savedPayload?.metadata.images).toEqual([image]);
+    });
+
+    it('does not send a language when editing an existing item', async () => {
+      let savedPayload: Record<string, any> | null = null;
+      const fetchMock = jest.fn(
+        async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+
+          if (url === '/api/flow/items/item-1' && init?.method === 'PATCH') {
+            savedPayload = JSON.parse(String(init.body));
+
+            return apiResponse({ success: true, item: { id: 'item-1' } });
+          }
+
+          return apiResponse({
+            item: {
+              id: 'item-1',
+              title: 'Existing photo',
+              body_md: '',
+              lang: 'en',
+              type: 'photo',
+              metadata: { images: ['https://cdn.example.com/existing.jpg'] },
+            },
+          });
+        }
+      );
+      global.fetch = fetchMock as typeof fetch;
+
+      const { result } = renderHook(() =>
+        useNewPostModal({
+          open: true,
+          onClose: jest.fn(),
+          itemId: 'item-1',
+          lang: 'ru',
+        })
+      );
+
+      await waitFor(() => {
+        expect(result.current.item?.id).toBe('item-1');
+      });
+
+      await act(async () => {
+        await result.current.finish();
+      });
+
+      await waitFor(() => {
+        expect(savedPayload).not.toBeNull();
+      });
+
+      // Editing must never rewrite the stored language to the composer
+      // context, so the PATCH simply omits `lang`.
+      expect(savedPayload).not.toHaveProperty('lang');
+    });
+
     it('restores and re-serializes legacy metadata.links without duplication', async () => {
       let savedPayload: Record<string, any> | null = null;
       const fetchMock = jest.fn(

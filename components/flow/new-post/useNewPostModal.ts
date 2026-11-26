@@ -14,12 +14,14 @@ import {
   normalizePastedUrl,
   urlDedupeKey,
 } from "./utils";
+import { resolveFlowComposerLanguage } from "@/lib/flow/language";
 
 interface UseNewPostModalParams {
   open: boolean;
   onClose: () => void;
   onCreated?: (item?: any, crosspost?: unknown) => void;
   itemId?: string | null;
+  lang?: string | null;
 }
 
 function makeId(prefix: string): string {
@@ -32,11 +34,22 @@ async function readResponse(res: Response): Promise<any> {
   return res.json().catch(() => ({}));
 }
 
+function readStoredLanguageChoice(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return window.localStorage.getItem("merkurov.language-choice");
+  } catch {
+    return null;
+  }
+}
+
 export function useNewPostModal({
   open,
   onClose,
   onCreated,
   itemId,
+  lang,
 }: UseNewPostModalParams) {
   const [item, setItem] = useState<any>(null);
   const [title, setTitle] = useState("");
@@ -838,6 +851,24 @@ export function useNewPostModal({
           : title.trim() || null
         : linkPreviews[0]?.title || youtubeMetadata?.title || null;
 
+      // A new post carries the language of the edition that opened the
+      // composer. Photos have no body text to detect from, so this context is
+      // the only reliable signal for them. Edits deliberately omit `lang` so
+      // opening an older publication never changes its stored language.
+      const composerLanguage = resolveFlowComposerLanguage({
+        explicit: lang,
+        text: bodyMd,
+        pathname:
+          typeof window !== "undefined"
+            ? window.location.pathname
+            : null,
+        storedChoice: readStoredLanguageChoice(),
+        browserLanguage:
+          typeof navigator !== "undefined"
+            ? navigator.language
+            : null,
+      });
+
       const payload = {
         title: postTitle,
         body_md: bodyMd,
@@ -845,6 +876,7 @@ export function useNewPostModal({
         type: determinedType,
         status: "published",
         visibility: "public",
+        ...(isEditing ? {} : { lang: composerLanguage }),
         metadata,
       };
 
@@ -921,6 +953,7 @@ export function useNewPostModal({
     title,
     isEditing,
     itemId,
+    lang,
     onCreated,
     onClose,
   ]);

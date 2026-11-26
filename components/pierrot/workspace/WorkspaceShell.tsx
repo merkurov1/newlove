@@ -131,6 +131,7 @@ export default function WorkspaceShell({
 
       <NewPostModal
         open={composerOpen}
+        lang="ru"
         onClose={() => setComposerOpen(false)}
         onCreated={() => {
           setComposerOpen(false);

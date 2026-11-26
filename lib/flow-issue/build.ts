@@ -127,6 +127,22 @@ function inferKind(item: FlowItem): IssueKind {
   return 'other';
 }
 
+/**
+ * Photos belong to the issue edition declared by `items.lang`. Text, links and
+ * videos keep the existing canonical behaviour and may still be translated
+ * into the other edition. Legacy photos without an explicit EN/RU language
+ * remain available to both editions so old issues do not lose material.
+ */
+function itemBelongsToIssueLanguage(item: FlowItem, lang: IssueLang): boolean {
+  if (item.type !== 'photo') return true;
+
+  const declared = typeof item.lang === 'string' ? item.lang.trim().toLowerCase() : '';
+
+  if (declared !== 'ru' && declared !== 'en') return true;
+
+  return declared === lang;
+}
+
 function toEntry(item: FlowItem): IssueEntry {
   const metadata = item.metadata || {};
   const url = itemUrl(item);
@@ -520,8 +536,10 @@ export async function buildIssuePayload(
 
   // Snapshot of every published record in the period. It powers the
   // "Published" metric and keeps the canonical source set available for
-  // audits. It is deliberately not rendered as one long feed.
+  // audits. It is deliberately not rendered as one long feed. Photos are the
+  // exception: each edition shows only the photos declared for its language.
   const issueItems = [...records]
+    .filter((item) => itemBelongsToIssueLanguage(item, lang))
     .sort(
       (first, second) =>
         (safeDate(second.published_at)?.getTime() || 0) -
@@ -529,9 +547,12 @@ export async function buildIssuePayload(
     )
     .map((item) => toFeedEntry(item, toEntry(item)));
 
-  // Crucial: do not filter records by language here.
-  // Both language versions must be built from this same canonical set.
-  const candidates = classifiedItems.map((item) => candidateFromItem(item, toEntry(item), end));
+  // Text, link and video records stay canonical for both language editions so
+  // the existing translation pipeline keeps working. Photos are selected from
+  // their declared items.lang edition only.
+  const candidates = classifiedItems
+    .filter((item) => itemBelongsToIssueLanguage(item, lang))
+    .map((item) => candidateFromItem(item, toEntry(item), end));
 
   const { config: template, version: templateVersion } = activeTemplate;
 

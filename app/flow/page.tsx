@@ -995,6 +995,7 @@ export default function FlowPage() {
         <NewPostModal
           open
           itemId={editingId}
+          lang="ru"
           onClose={() => setEditingId(null)}
           onCreated={handleEditCreated}
         />
@@ -1003,6 +1004,7 @@ export default function FlowPage() {
       {composerOpen && (
         <NewPostModal
           open
+          lang="ru"
           onClose={() => setComposerOpen(false)}
           onCreated={handleEditCreated}
         />

@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 import NewPostModal from '@/components/flow/NewPostModal';
 import PublishReceipt from '@/components/flow/PublishReceipt';
+import { languageFromSitePath } from '@/lib/flow/language';
 
 export default function ComposerTrigger() {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname() || '';
+  const pageLanguage = languageFromSitePath(pathname);
 
   function handleCreated() {
     window.dispatchEvent(new CustomEvent('flow:updated'));
@@ -50,7 +54,12 @@ export default function ComposerTrigger() {
       </button>
 
       {open && (
-        <NewPostModal open={open} onClose={() => setOpen(false)} onCreated={handleCreated} />
+        <NewPostModal
+          open={open}
+          lang={pageLanguage}
+          onClose={() => setOpen(false)}
+          onCreated={handleCreated}
+        />
       )}
 
       <PublishReceipt />

@@ -62,6 +62,7 @@ export default function NewPostModal({
   onClose,
   onCreated,
   itemId,
+  lang,
 }: NewPostModalProps) {
   const {
     item,
@@ -99,6 +100,7 @@ export default function NewPostModal({
     onClose,
     onCreated,
     itemId,
+    lang,
   });
 
   useEffect(() => {
