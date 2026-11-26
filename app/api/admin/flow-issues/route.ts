@@ -6,7 +6,11 @@ import { renderIssue } from '@/lib/flow-issue/render';
 import { buildIssueTitle } from '@/lib/flow-issue/title';
 import { getPayloadItemIds, samePayloadComposition } from '@/lib/flow-issue/draft';
 import { processNewsletterJob } from '@/lib/newsletter/processJob';
-import { filterSubscribersByLang, isSubscriberMatchingLang } from '@/lib/newsletter/language';
+import {
+  fetchConfirmedActiveSubscribers,
+  fetchNewsletterRecipients,
+  summarizeNewsletterAudience,
+} from '@/lib/newsletter/recipients';
 import type { IssueLang, IssuePayload } from '@/lib/flow-issue/types';
 
 export const dynamic = 'force-dynamic';
@@ -104,31 +108,19 @@ export async function GET(request: Request) {
 
     if (error) throw error;
 
-    const { data: activeSubs, error: subscribersError } = await supabase
-      .from('subscribers')
-      .select('id,locale')
-      .eq('isActive', true);
+    const { subscribers: confirmedSubscribers, error: subscribersError } =
+      await fetchConfirmedActiveSubscribers(supabase);
 
     if (subscribersError) throw subscribersError;
 
-    const activeList = activeSubs || [];
-
-    const activeSubscribersTotal = activeList.length;
-
-    const activeSubscribersEn = activeList.filter((subscriber) =>
-      isSubscriberMatchingLang(subscriber.locale, 'en')
-    ).length;
-
-    const activeSubscribersRu = activeList.filter((subscriber) =>
-      isSubscriberMatchingLang(subscriber.locale, 'ru')
-    ).length;
+    const audience = summarizeNewsletterAudience(confirmedSubscribers);
 
     return NextResponse.json({
       ok: true,
       issues: issues || [],
-      activeSubscribers: activeSubscribersTotal,
-      activeSubscribersRu,
-      activeSubscribersEn,
+      activeSubscribers: audience.total,
+      activeSubscribersRu: audience.ru,
+      activeSubscribersEn: audience.en,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка загрузки выпусков';
@@ -463,14 +455,10 @@ export async function PATCH(request: Request) {
       });
     }
 
-    const { data: activeSubs, error: subscribersError } = await supabase
-      .from('subscribers')
-      .select('id,locale')
-      .eq('isActive', true);
+    const { recipients: matchingSubs, error: subscribersError } =
+      await fetchNewsletterRecipients(supabase, issue.lang);
 
     if (subscribersError) throw subscribersError;
-
-    const matchingSubs = filterSubscribersByLang(activeSubs || [], issue.lang);
 
     if (!matchingSubs.length) {
       const langLabel = issue.lang === 'en' ? 'англоязычных' : 'русскоязычных';

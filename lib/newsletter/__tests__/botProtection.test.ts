@@ -31,9 +31,41 @@ describe('newsletter bot protection', () => {
     expect(honeypotWasFilled('', 'spam')).toBe(true);
   });
 
-  it('skips Turnstile when no secret is configured', async () => {
+  it('skips Turnstile outside production when no secret is configured', async () => {
     const result = await verifyTurnstileToken({ token: '', secretKey: '' });
     expect(result).toEqual({ ok: true, skipped: true });
+  });
+
+  it('fails closed in production when the secret is missing', async () => {
+    const result = await verifyTurnstileToken({
+      token: 'token',
+      secretKey: '',
+      requireConfigured: true,
+    });
+
+    expect(result).toEqual({ ok: false, reason: 'not_configured' });
+  });
+
+  it('treats NODE_ENV=production as a fail-closed runtime', async () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    const originalSecret = process.env.TURNSTILE_SECRET_KEY;
+    const originalVercelEnv = process.env.VERCEL_ENV;
+
+    try {
+      process.env.NODE_ENV = 'production';
+      delete process.env.TURNSTILE_SECRET_KEY;
+      delete process.env.VERCEL_ENV;
+
+      const result = await verifyTurnstileToken({ token: 'token' });
+
+      expect(result).toEqual({ ok: false, reason: 'not_configured' });
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv;
+      if (originalSecret === undefined) delete process.env.TURNSTILE_SECRET_KEY;
+      else process.env.TURNSTILE_SECRET_KEY = originalSecret;
+      if (originalVercelEnv === undefined) delete process.env.VERCEL_ENV;
+      else process.env.VERCEL_ENV = originalVercelEnv;
+    }
   });
 
   it('rejects a missing token', async () => {

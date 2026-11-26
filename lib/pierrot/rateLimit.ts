@@ -37,6 +37,16 @@ function bucketKey(input: PierrotRateLimitInput): string {
     .slice(0, 64);
 }
 
+let durableFailureLogged = false;
+
+function logDurableFallback(): void {
+  if (durableFailureLogged) return;
+  durableFailureLogged = true;
+  console.warn(
+    '[rate-limit] durable Supabase limiter unavailable; using the instance-local fallback'
+  );
+}
+
 function rateLimitedResponse(retryAfter: number, maxRequests: number): NextResponse {
   return NextResponse.json(
     {
@@ -94,6 +104,8 @@ export async function checkPierrotRateLimit(
     } catch {
       // Fall back to the instance-local limiter.
     }
+
+    logDurableFallback();
   }
 
   return checkRateLimit(input.identifier, {

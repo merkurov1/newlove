@@ -2,7 +2,10 @@ import { createId } from "@paralleldrive/cuid2";
 import { getServerSupabaseClient } from "@/lib/serverAuth";
 import { sendNewsletterToSubscriber } from "@/lib/newsletter/sendNewsletterToSubscriber";
 import { renderNewsletterEmail } from "@/emails/NewsletterEmail";
-import { filterSubscribersByLang } from "@/lib/newsletter/language";
+import {
+  excludeProcessedSubscribers,
+  fetchNewsletterRecipients,
+} from "@/lib/newsletter/recipients";
 
 const BATCH_SIZE = 10;
 const BATCH_DELAY_MS = 1500;
@@ -22,7 +25,11 @@ interface NewsletterLog {
 export async function processNewsletterJob(
   jobId: string,
   supabase: ReturnType<typeof getServerSupabaseClient>,
+  options: { emailDelayMs?: number; batchDelayMs?: number } = {},
 ) {
+  const emailDelayMs = Math.max(0, options.emailDelayMs ?? EMAIL_DELAY_MS);
+  const batchDelayMs = Math.max(0, options.batchDelayMs ?? BATCH_DELAY_MS);
+
   try {
     const { data: job, error: jobError } = await supabase
       .from("newsletter_jobs")
@@ -49,7 +56,7 @@ export async function processNewsletterJob(
         started_at: new Date().toISOString(),
       })
       .eq("id", job.id)
-      .in("status", ["pending", "processing"])
+      .eq("status", "pending")
       .select("id")
       .maybeSingle();
 
@@ -92,10 +99,10 @@ export async function processNewsletterJob(
       };
     }
 
-    const { data: allSubscribers, error: subsError } = await supabase
-      .from("subscribers")
-      .select("id,email,locale")
-      .eq("isActive", true);
+    const { recipients, error: subsError } = await fetchNewsletterRecipients(
+      supabase,
+      letter.lang,
+    );
 
     if (subsError) {
       await supabase
@@ -117,10 +124,39 @@ export async function processNewsletterJob(
       };
     }
 
-    const subscribers = filterSubscribersByLang(
-      allSubscribers || [],
-      letter.lang,
+    // Retries must never resend to an address already logged for this job.
+    const { data: processedLogs, error: processedLogsError } = await supabase
+      .from("newsletter_logs")
+      .select("subscriber_id")
+      .eq("job_id", job.id)
+      .in("status", ["sent", "skipped", "failed"]);
+
+    if (processedLogsError) {
+      await supabase
+        .from("newsletter_jobs")
+        .update({
+          status: "pending",
+          error_message: "Could not verify already processed recipients",
+        })
+        .eq("id", job.id);
+
+      return {
+        ok: false,
+        error: "Не удалось проверить журнал отправки",
+        sentCount: 0,
+        failedCount: 0,
+        skippedCount: 0,
+        totalSubscribers: 0,
+      };
+    }
+
+    const processedIds = new Set(
+      (Array.isArray(processedLogs) ? processedLogs : []).map((row) =>
+        String((row as { subscriber_id?: unknown }).subscriber_id ?? ""),
+      ),
     );
+
+    const subscribers = excludeProcessedSubscribers(recipients, processedIds);
 
     if (!subscribers || subscribers.length === 0) {
       const langLabel = letter.lang === "en" ? "англоязычных" : "русскоязычных";
@@ -274,7 +310,7 @@ export async function processNewsletterJob(
           });
         }
 
-        await new Promise((resolve) => setTimeout(resolve, EMAIL_DELAY_MS));
+        await new Promise((resolve) => setTimeout(resolve, emailDelayMs));
       }
 
       if (logs.length) {
@@ -290,7 +326,7 @@ export async function processNewsletterJob(
         .eq("id", job.id);
 
       if (i + BATCH_SIZE < subscribers.length) {
-        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
+        await new Promise((resolve) => setTimeout(resolve, batchDelayMs));
       }
     }
 

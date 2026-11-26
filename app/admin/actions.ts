@@ -25,6 +25,7 @@ import {
 } from '@/lib/newsletter/botProtection';
 import { registerNewsletterSubscriber } from '@/lib/newsletter/signup';
 import { recordSubscriptionEvent } from '@/lib/newsletter/subscriptionEvents';
+import { fetchNewsletterRecipients } from '@/lib/newsletter/recipients';
 
 // Local helper to produce tag slugs for revalidation paths
 const slugifyTag = (s: string) =>
@@ -567,19 +568,49 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
         .eq('email', userData.email)
         .maybeSingle();
 
+      const now = new Date().toISOString();
+      let subscriberId: string | number;
+
+      // This is an explicit act by the signed-in account owner, not a public
+      // signup. It is recorded as a manually attested confirmation so the row
+      // is never treated as a pending double opt-in record.
       if (existingSub) {
-        await supabase
+        subscriberId = existingSub.id;
+        const { error: updateError } = await supabase
           .from('subscribers')
-          .update({ userId: user.id, isActive: true })
+          .update({
+            userId: user.id,
+            isActive: true,
+            confirmedAt: existingSub.confirmedAt || now,
+            unsubscribedAt: null,
+          })
           .eq('id', existingSub.id);
+
+        if (updateError) {
+          return { status: 'error', message: 'Не удалось изменить подписку.' };
+        }
       } else {
-        await supabase.from('subscribers').insert({
-          id: createId(),
+        subscriberId = createId();
+        const { error: insertError } = await supabase.from('subscribers').insert({
+          id: subscriberId,
           email: userData.email,
           userId: user.id,
           isActive: true,
+          confirmedAt: now,
+          unsubscribedAt: null,
         });
+
+        if (insertError) {
+          return { status: 'error', message: 'Не удалось изменить подписку.' };
+        }
       }
+
+      await recordSubscriptionEvent(supabase, {
+        eventName: 'subscription_confirmed',
+        eventKey: `manual_enable:user:${subscriberId}:${createId()}`,
+        subscriberId,
+        payload: { source: 'account_self_service' },
+      });
 
       await supabase.from('users').update({ is_subscribed: true }).eq('id', user.id);
 
@@ -601,7 +632,7 @@ export async function toggleUserSubscription(prevState: any, formData: any) {
 }
 
 export async function adminToggleUserSubscription(userId: any, subscribe: any) {
-  await verifyAdmin();
+  const { user: adminUser } = await verifyAdmin();
   const supabase = getServerSupabaseClient({ useServiceRole: true });
 
   try {
@@ -638,19 +669,50 @@ export async function adminToggleUserSubscription(userId: any, subscribe: any) {
         .eq('email', email)
         .maybeSingle();
 
+      const now = new Date().toISOString();
+      let subscriberId: string | number;
+
+      // Deliberate admin operation. The admin explicitly attests the
+      // subscription, so confirmedAt is set at the same time. This path is
+      // documented separately from the public double-opt-in signup and never
+      // creates a row that is active but unconfirmed.
       if (existingSub) {
-        await supabase
+        subscriberId = existingSub.id;
+        const { error: updateError } = await supabase
           .from('subscribers')
-          .update({ userId, isActive: true })
+          .update({
+            userId,
+            isActive: true,
+            confirmedAt: existingSub.confirmedAt || now,
+            unsubscribedAt: null,
+          })
           .eq('id', existingSub.id);
+
+        if (updateError) {
+          return { status: 'error', message: 'Не удалось изменить подписку.' };
+        }
       } else {
-        await supabase.from('subscribers').insert({
-          id: createId(),
+        subscriberId = createId();
+        const { error: insertError } = await supabase.from('subscribers').insert({
+          id: subscriberId,
           email: email,
           userId,
           isActive: true,
+          confirmedAt: now,
+          unsubscribedAt: null,
         });
+
+        if (insertError) {
+          return { status: 'error', message: 'Не удалось изменить подписку.' };
+        }
       }
+
+      await recordSubscriptionEvent(supabase, {
+        eventName: 'subscription_confirmed',
+        eventKey: `manual_enable:admin:${subscriberId}:${createId()}`,
+        subscriberId,
+        payload: { source: 'admin_manual', admin_user_id: adminUser?.id || null },
+      });
     } else {
       await supabase.from('subscribers').update({ isActive: false }).eq('userId', userId);
     }
@@ -747,13 +809,17 @@ export async function subscribeToNewsletter(prevState: any, formData: any) {
     return {
       status: 'error',
       message:
-        turnstile.reason === 'provider_unavailable' || turnstile.reason === 'invalid_response'
+        turnstile.reason === 'not_configured'
           ? locale === 'ru'
-            ? 'Проверка недоступна. Попробуйте позже.'
-            : 'Verification is unavailable. Please try again later.'
-          : locale === 'ru'
-            ? 'Проверка не пройдена. Обновите страницу и попробуйте снова.'
-            : 'Verification failed. Refresh the page and try again.',
+            ? 'Подписка временно недоступна: защита от спама не настроена. Сообщите администратору сайта.'
+            : 'Subscription is temporarily unavailable because bot protection is not configured. Please contact the site administrator.'
+          : turnstile.reason === 'provider_unavailable' || turnstile.reason === 'invalid_response'
+            ? locale === 'ru'
+              ? 'Проверка недоступна. Попробуйте позже.'
+              : 'Verification is unavailable. Please try again later.'
+            : locale === 'ru'
+              ? 'Проверка не пройдена. Обновите страницу и попробуйте снова.'
+              : 'Verification failed. Refresh the page and try again.',
     };
   }
 
@@ -1104,27 +1170,16 @@ export async function sendLetter(prevState: any, formData: any) {
   const SEND_LIMIT = parseInt(process.env.NEWSLETTER_SEND_LIMIT || '100');
 
   try {
-    const { data: allSubs, error: subsErr } = await supabase
-      .from('subscribers')
-      .select('id,email,locale')
-      .eq('isActive', true)
-      .limit(SEND_LIMIT);
+    const { recipients: subs, error: subsErr } = await fetchNewsletterRecipients(
+      supabase,
+      letter.lang,
+      { limit: SEND_LIMIT }
+    );
 
-    if (subsErr || !allSubs || allSubs.length === 0) {
+    if (subsErr || !subs || subs.length === 0) {
       return {
         status: 'error',
-        message: 'There are no active subscribers to receive this letter.',
-      };
-    }
-
-    const { filterSubscribersByLang } = await import('@/lib/newsletter/language');
-    const subs = filterSubscribersByLang(allSubs, letter.lang);
-
-    if (!subs || subs.length === 0) {
-      const langLabel = letter.lang === 'en' ? 'English' : 'Russian';
-      return {
-        status: 'error',
-        message: `There are no active ${langLabel} subscribers to receive this letter.`,
+        message: 'There are no confirmed active subscribers to receive this letter.',
       };
     }
 

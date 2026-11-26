@@ -126,6 +126,16 @@ export async function POST(req: NextRequest) {
       reason: `turnstile_${turnstile.reason}`,
     });
 
+    if (turnstile.reason === 'not_configured') {
+      return NextResponse.json(
+        {
+          error:
+            'Subscription is temporarily unavailable because bot protection is not configured. Please contact the site administrator.',
+        },
+        { status: 503 }
+      );
+    }
+
     if (turnstile.reason === 'provider_unavailable' || turnstile.reason === 'invalid_response') {
       return NextResponse.json(
         { error: 'Bot verification is temporarily unavailable. Please try again.' },

@@ -670,6 +670,26 @@ export default async function AnalyticsPage({ searchParams }: { searchParams?: S
                 </dd>
               </div>
               <div>
+                <dt>Доля подтверждений</dt>
+                <dd>
+                  {dashboard?.dataset.internal.newsletter.signals.confirmationRate == null
+                    ? '—'
+                    : `${Math.round(
+                        dashboard.dataset.internal.newsletter.signals.confirmationRate * 100
+                      )}%`}
+                </dd>
+              </div>
+              <div>
+                <dt>Всплеск регистраций</dt>
+                <dd>
+                  {dashboard?.dataset.internal.newsletter.signals.signupSpike?.detected
+                    ? `да — ${formatNumber(
+                        dashboard.dataset.internal.newsletter.signals.signupSpike.latestHourCount
+                      )} за час`
+                    : 'нет'}
+                </dd>
+              </div>
+              <div>
                 <dt>Писем за 30 дней</dt>
                 <dd>{formatNumber(dashboard?.dataset.internal.newsletter.jobs.emailsSent)}</dd>
               </div>
