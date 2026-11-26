@@ -1,29 +1,30 @@
 # Journal editorial front page — verification report
 
 Date: 2026-11-26
-Task: `e421edb9-3c76-4a14-b3f9-6a6a601cce9e`
+Task: `58530381-168a-493a-a1f7-4c24a4b7a022`
 Routes: `/journal` (EN), `/ru/journal` (RU)
 
 ## 1. What changed
 
-The Journal front page now presents a compact editorial selection instead of
-reproducing the full issue:
+The current-issue block now reads as one explicit hierarchy — main material,
+then the “What’s inside” selection, then the full issue:
 
-- one main material in the issue cover;
-- at most four additional materials, one per format `post`, `photo`, `video`
-  and `link`, selected only from the current issue payload;
-- the main material is excluded from the selection by id, URL or normalized
-  title, so it is never repeated;
-- formats that have no real published material are skipped; no placeholder
-  cards are created;
-- each format has its own visual treatment (text post, bordered link card,
-  video still with play mark, portrait photo), so five entries never collapse
-  into five identical cards;
-- the main headline is normalized for display: duplicated author bylines,
-  trailing site names, Flow signature and service suffixes are removed without
-  rewriting the story;
-- the cover links to the complete issue, where every publication and the
-  existing issue structure remain intact;
+- the cover is labelled `Main story` / `Главный материал` and keeps the
+  headline, editorial summary, lead preview and the separate `Open material`
+  action for the lead publication;
+- the full-issue action no longer sits inside the cover metadata row;
+- it is now a solid, high-contrast button in the “What’s inside” block, labelled
+  `Read the full issue` / `Читать полный выпуск`, and points to the complete
+  issue route (`/en/flow-issues/...` for EN, `/flow-issues/...` for RU);
+- the selection heading is now literally `What’s inside` / `Что внутри`, with
+  the note that it is a selection, not the full issue;
+- the selection still contains at most four additional materials, one per
+  format `post`, `photo`, `video` and `link`, and never repeats the main story;
+- the main material link and the full-issue button have deliberately different
+  treatments: a small underlined text action versus a filled primary button;
+- on 390 px the button spans the block width and stays above the selection
+  cards, so it is not buried in metadata;
+- RU and EN use the same order, labels and destination rules;
 - Flow, the archive and subscription remain separate sections; Flow is still
   its own chronological stream.
 
@@ -57,6 +58,10 @@ For every combination the automated run checked:
 - the main material is not repeated in the selection;
 - direct links to the full issue, the lead material and every selected
   material;
+- exactly one full-issue button, located inside `#contents` rather than the
+  cover metadata, with the localized label and the correct issue route;
+- at 390 px the full-issue button is in view at the start of the selection and
+  is at least 40 px tall;
 - no horizontal overflow at document or section level;
 - no broken images in the selected media cards;
 - the masthead/cover type stays bounded and the compact selection begins in
@@ -85,12 +90,14 @@ for:
 | Command                                                                                                                | Result                                                                    |
 | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | `pnpm typecheck`                                                                                                       | exit 0                                                                    |
-| `pnpm test --runInBand`                                                                                                | 1 suite skipped, 579 suites passed; 10 skipped, 4209 tests passed         |
-| `pnpm build` (placeholder Supabase env, no production access)                                                          | exit 0; 101 static pages generated                                        |
-| `pnpm exec jest lib/journal/__tests__ components/journal/__tests__ lib/i18n/__tests__/journal.test.ts --runInBand`     | 9 suites, 79 tests passed                                                 |
+| `pnpm exec jest components/journal/__tests__ lib/journal/__tests__ lib/i18n/__tests__/journal.test.ts --runInBand`     | 9 suites, 82 tests passed                                                 |
 | `pnpm exec playwright test tests/journal-redesign.spec.ts --config=tests/pierrot.playwright.config.ts --reporter=list` | 9 tests passed                                                            |
 | `pnpm exec eslint <touched files>`                                                                                     | exit 0, warnings only (`<img>` policy already used by the issue renderer) |
-| `pnpm exec prettier --check <touched files>`                                                                           | passed after apply                                                        |
+| `pnpm exec prettier --write <touched files>`                                                                           | passed after apply                                                        |
+
+The full repository test suite and production build were not rerun for this
+focused presentation change; the changed area is covered by the focused Jest
+and Playwright runs above.
 
 ## 4. Fixture note and limitations
 

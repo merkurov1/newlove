@@ -142,12 +142,6 @@ function IssueCover({
             <time dateTime={issue.periodStart || issue.publishedAt || undefined}>{when}</time>
           </>
         )}
-        <Link
-          href={journalIssueHref(issue.lang, issue.slug)}
-          className="ml-auto inline-flex items-baseline gap-1 border-b border-[#1D1B18] pb-0.5 text-[#1D1B18] transition-colors hover:border-[#7A2233] hover:text-[#7A2233]"
-        >
-          {copy.featured.read} →
-        </Link>
       </div>
 
       <div
@@ -157,7 +151,8 @@ function IssueCover({
             : ''
         }`}
       >
-        <div className="min-w-0">
+        <div className="min-w-0" data-role="main-material">
+          <p className={`${kicker} ${accent} mb-2`}>{copy.featured.mainStory}</p>
           <h2
             id="current-issue-title"
             lang={titleLang}
@@ -355,7 +350,13 @@ export default function FrontPage({
         </section>
 
         {contentsVisible && (
-          <IssueHighlights materials={supporting} lang={lang} hasMain={Boolean(main)} />
+          <IssueHighlights
+            materials={supporting}
+            lang={lang}
+            hasMain={Boolean(main)}
+            issueHref={featured?.slug ? journalIssueHref(featured.lang, featured.slug) : null}
+            issueLabel={copy.featured.read}
+          />
         )}
 
         <section id="stream" className={`border-b ${rule} py-8`}>

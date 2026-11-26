@@ -46,6 +46,9 @@ describe('Journal bilingual configuration', () => {
       expect(copy.meta.description.trim()).not.toBe('');
       expect(copy.nav.ariaLabel.trim()).not.toBe('');
       expect(copy.featured.read.trim()).not.toBe('');
+      expect(copy.featured.mainStory.trim()).not.toBe('');
+      expect(copy.inside.selectedTitle.trim()).not.toBe('');
+      expect(copy.inside.selectedNote.trim()).not.toBe('');
       expect(copy.inside.leadAbove.trim()).not.toBe('');
       expect(copy.flow.types.note.trim()).not.toBe('');
       expect(copy.archive.title.trim()).not.toBe('');
@@ -53,6 +56,15 @@ describe('Journal bilingual configuration', () => {
       expect(copy.languages.en.trim()).not.toBe('');
       expect(copy.languages.ru.trim()).not.toBe('');
     }
+  });
+
+  it('names the full-issue action and the inside selection unambiguously in both languages', () => {
+    expect(JOURNAL_COPY.en.featured.read).toBe('Read the full issue');
+    expect(JOURNAL_COPY.ru.featured.read).toBe('Читать полный выпуск');
+    expect(JOURNAL_COPY.en.inside.selectedTitle).toBe("What's inside");
+    expect(JOURNAL_COPY.ru.inside.selectedTitle).toBe('Что внутри');
+    expect(JOURNAL_COPY.en.inside.selectedNote).toContain('not the full issue');
+    expect(JOURNAL_COPY.ru.inside.selectedNote).toContain('а не весь выпуск');
   });
 
   it('routes each issue to its real language archive', () => {

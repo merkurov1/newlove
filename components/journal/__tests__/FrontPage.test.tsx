@@ -244,7 +244,7 @@ describe('Journal FrontPage editorial composition', () => {
   it('renders one main material and exactly four selected materials, one per format', () => {
     const { container } = renderPage('en');
 
-    expect(screen.getByRole('heading', { name: 'Selected from this issue' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: "What's inside" })).toBeInTheDocument();
     expect(selectedIds(container)).toEqual(['post-1', 'photo-1', 'video-1', 'link-1']);
     expect(container.querySelectorAll('#contents [data-material-format]')).toHaveLength(4);
     expect(
@@ -275,15 +275,36 @@ describe('Journal FrontPage editorial composition', () => {
   it('links to the full issue, the lead material and every selected material', () => {
     const { container } = renderPage('en');
 
-    expect(screen.getByRole('link', { name: /Read the issue/ })).toHaveAttribute(
-      'href',
-      '/en/flow-issues/issue-en'
-    );
+    const fullIssue = screen.getByRole('link', { name: /Read the full issue/ });
+    expect(fullIssue).toHaveAttribute('href', '/en/flow-issues/issue-en');
+    expect(fullIssue.closest('#contents')).not.toBeNull();
     expect(container.querySelector('a[href="/unframed/spectral-tiger"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow/post-1"]')).not.toBeNull();
     expect(container.querySelector('a[href="https://www.artnews.com/story"]')).not.toBeNull();
     expect(container.querySelector('a[href="https://www.youtube.com/watch?v=abc"]')).not.toBeNull();
     expect(container.querySelector('a[href="/flow/photo-1"]')).not.toBeNull();
+  });
+
+  it('separates the main-material action from the full-issue action', () => {
+    const { container } = renderPage('en');
+
+    const mainAction = screen.getByRole('link', { name: /Open material/ });
+    const fullIssue = screen.getByRole('link', { name: /Read the full issue/ });
+
+    expect(mainAction.closest('[data-role="main-material"]')).not.toBeNull();
+    expect(fullIssue).toHaveAttribute('data-role', 'full-issue');
+    expect(fullIssue.className).toContain('bg-[#1D1B18]');
+    expect(mainAction.className).not.toContain('bg-[#1D1B18]');
+    expect(container.querySelector('#issues [data-role="full-issue"]')).toBeNull();
+  });
+
+  it('labels the main story and keeps the inside selection explicitly partial', () => {
+    renderPage('en');
+
+    expect(screen.getByText('Main story')).toBeInTheDocument();
+    expect(
+      screen.getByText('A selection, not the full issue: the main story and up to four formats.')
+    ).toBeInTheDocument();
   });
 
   it('labels the issue language and each material language separately', () => {
@@ -347,7 +368,12 @@ describe('Journal FrontPage editorial composition', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Журнал' })).toBeInTheDocument();
     expect(screen.getByText('Текущий выпуск')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Главное из выпуска' })).toBeInTheDocument();
+    expect(screen.getByText('Главный материал')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Что внутри' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Читать полный выпуск/ })).toHaveAttribute(
+      'href',
+      '/flow-issues/issue-ru'
+    );
     expect(screen.getByText('Архив выпусков')).toBeInTheDocument();
     expect(screen.getByText('Подписка на еженедельную рассылку')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Все выпуски Flow/ })).toHaveAttribute(

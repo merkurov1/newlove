@@ -105,19 +105,33 @@ test.describe('Journal editorial front page', () => {
           await expect(issue).toContainText(RU_SUMMARY);
         }
 
-        // The cover links directly to the issue and to the lead publication.
+        // The main story offers its own action, while the full issue is a
+        // separate, unmissable button inside the contents block.
+        const mainStory = page.locator('#issues [data-role="main-material"]');
+        await expect(mainStory).toBeVisible();
         await expect(
-          page.locator(
-            lang === 'en'
-              ? 'a[href="/en/flow-issues/en-issue-18-2026-11-20"]'
-              : 'a[href="/flow-issues/ru-issue-26-2026-11-20"]'
-          )
-        ).toHaveCount(1);
+          mainStory.getByRole('link', { name: /Open material|Открыть материал/ })
+        ).toBeVisible();
+        await expect(
+          mainStory.getByRole('link', { name: /Read the full issue|Читать полный выпуск/ })
+        ).toHaveCount(0);
         await expect(page.locator('a[href="/unframed/spectral-tiger"]')).toHaveCount(1);
 
         // Contents is a compact selection: one main story plus at most one
         // material per format, never a duplicate of the cover story.
         const contents = page.locator('#contents');
+        const fullIssue = contents.locator('[data-role="full-issue"]');
+        await expect(fullIssue).toHaveCount(1);
+        await expect(fullIssue).toHaveAttribute(
+          'href',
+          lang === 'en'
+            ? '/en/flow-issues/en-issue-18-2026-11-20'
+            : '/flow-issues/ru-issue-26-2026-11-20'
+        );
+        await expect(fullIssue).toContainText(
+          lang === 'en' ? 'Read the full issue' : 'Читать полный выпуск'
+        );
+
         await expect(contents).toContainText('Merkurov x Pierrot');
         await expect(contents).toContainText(
           'A Wassily Kandinsky Sold by the Nahmads Fetches $85.8 M.'
@@ -131,15 +145,6 @@ test.describe('Journal editorial front page', () => {
         await expect(contents.locator('[data-material-format="photo"]')).toHaveCount(1);
         await expect(contents.locator('[data-material-format="video"]')).toHaveCount(1);
         await expect(contents.locator('[data-material-format="link"]')).toHaveCount(1);
-
-        // The cover links to the complete issue, not to a shortened copy.
-        await expect(
-          page.locator(
-            lang === 'en'
-              ? 'a[href="/en/flow-issues/en-issue-18-2026-11-20"]'
-              : 'a[href="/flow-issues/ru-issue-26-2026-11-20"]'
-          )
-        ).toHaveCount(1);
 
         // Selected material links stay real (local routes and external sources).
         await expect(contents.locator('a[href="/flow/merkurov-x-pierrot-c1dlr"]')).toHaveCount(1);
@@ -209,6 +214,9 @@ test.describe('Journal editorial front page', () => {
         }
 
         await scrollToSectionStart(page, '#contents');
+        await expect(fullIssue).toBeInViewport();
+        const fullIssueBox = await fullIssue.boundingBox();
+        expect(fullIssueBox?.height ?? 0).toBeGreaterThanOrEqual(40);
         await page.screenshot({
           path: path.join(ARTIFACT_DIR, `${viewport.label}-${lang}-contents.png`),
         });
