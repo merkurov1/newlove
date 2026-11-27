@@ -1,26 +1,9 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, BookOpen, Play } from 'lucide-react';
-import { Inter, Playfair_Display, Space_Mono } from 'next/font/google';
 import EpisodeSeriesNav from '@/components/unframed/EpisodeSeriesNav';
 import { CONTAINER_EPISODE, SPECTRAL_TIGER_EPISODE } from '@/lib/unframed/episodes';
 import { GRAIN_BACKGROUND } from '@/lib/unframed/visual';
-
-const sans = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
-
-const serif = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-serif',
-});
-
-const mono = Space_Mono({
-  weight: ['400', '700'],
-  subsets: ['latin'],
-  variable: '--font-mono',
-});
 
 const episode = SPECTRAL_TIGER_EPISODE;
 const nextEpisode = CONTAINER_EPISODE;
@@ -31,7 +14,7 @@ const sectionLabel = 'font-mono text-[10px] uppercase tracking-[0.32em] text-zin
 export default function SpectralTigerPage() {
   return (
     <div
-      className={`min-h-screen bg-[#050505] text-white selection:bg-sky-300 selection:text-black ${sans.variable} ${mono.variable} ${serif.variable}`}
+      className="min-h-screen bg-[#050505] text-white selection:bg-sky-300 selection:text-black"
     >
       {/* GLOBAL GRAIN — same treatment as the UNFRAMED landing page. */}
       <div

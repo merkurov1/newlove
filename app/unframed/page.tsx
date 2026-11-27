@@ -15,26 +15,8 @@ import {
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Inter, Space_Mono, Playfair_Display } from 'next/font/google';
 import { CONTAINER_EPISODE, SPECTRAL_TIGER_EPISODE } from '@/lib/unframed/episodes';
 import { GRAIN_BACKGROUND } from '@/lib/unframed/visual';
-
-// --- FONTS ---
-const sans = Inter({
-  subsets: ['latin'],
-  variable: '--font-sans',
-});
-
-const mono = Space_Mono({
-  weight: ['400', '700'],
-  subsets: ['latin'],
-  variable: '--font-mono',
-});
-
-const serif = Playfair_Display({
-  subsets: ['latin'],
-  variable: '--font-serif',
-});
 
 // --- ASSETS ---
 const ASSETS = {
@@ -380,9 +362,6 @@ export default function UnframedPage() {
         selection:text-white
         font-sans
         overflow-x-hidden
-        ${sans.variable}
-        ${mono.variable}
-        ${serif.variable}
       `}
     >
 

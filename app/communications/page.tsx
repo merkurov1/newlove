@@ -2,17 +2,11 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Space_Mono, Inter, Playfair_Display } from 'next/font/google';
 import { 
   Zap, Radio, Globe, Smartphone, Fingerprint, 
   MessageSquare, Server, Eye, Share2, AlertTriangle, 
   Terminal, Cpu, Clock, MousePointer
 } from 'lucide-react';
-
-// --- FONTS ---
-const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
-const serif = Playfair_Display({ subsets: ['latin'], variable: '--font-serif' });
-const mono = Space_Mono({ weight: ['400', '700'], subsets: ['latin'], variable: '--font-mono' });
 
 // --- DATA FROM PDF (FULL VOLUME) ---
 const LECTURE_DATA = [
@@ -158,7 +152,7 @@ export default function HistoryLecturePage() {
   }, []);
 
   return (
-    <div ref={containerRef} className={`bg-[#050505] text-zinc-300 min-h-screen selection:bg-red-600 selection:text-white ${sans.variable} ${mono.variable} ${serif.variable}`}>
+    <div ref={containerRef} className="bg-[#050505] text-zinc-300 min-h-screen selection:bg-red-600 selection:text-white">
       
       {/* --- PROGRESS BAR --- */}
       <div className="fixed top-0 left-0 right-0 h-1 bg-zinc-900 z-50">

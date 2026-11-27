@@ -4,12 +4,6 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Lock, Mail } from 'lucide-react';
-import { Inter, Playfair_Display, Space_Mono } from 'next/font/google';
-
-// --- FONTS ---
-const sans = Inter({ subsets: ['latin'], variable: '--font-sans' });
-const serif = Playfair_Display({ subsets: ['latin'], variable: '--font-serif' });
-const mono = Space_Mono({ weight: ['400', '700'], subsets: ['latin'], variable: '--font-mono' });
 
 // --- UPDATED SAMPLES (NO WAR / NO POLITICS) ---
 const SAMPLES = [
@@ -83,7 +77,7 @@ export default function ProposalPage() {
   const activeContent = SAMPLES.find(s => s.id === activeTab);
 
   return (
-    <div className={`min-h-screen bg-[#F5F5F0] text-[#1A1A1A] font-sans selection:bg-red-600 selection:text-white ${sans.variable} ${serif.variable} ${mono.variable}`}>
+    <div className="min-h-screen bg-[#F5F5F0] text-[#1A1A1A] font-sans selection:bg-red-600 selection:text-white">
       
       {/* --- HEADER --- */}
       <header className="mt-20 w-full border-b border-[#E5E5E5] px-6 py-4 flex justify-between items-center">
