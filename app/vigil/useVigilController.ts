@@ -193,7 +193,9 @@ export function useVigilController() {
     try {
       const { data: flame, error } = await supabase
         .from('vigil_hearts')
-        .select('id, owner_name, intention')
+        // Only public-safe columns are readable by anon/authenticated. owner_id
+        // and intention are private and never selected here.
+        .select('id, owner_name, last_lit_at')
         .eq('id', FLAME_ID)
         .maybeSingle();
 
@@ -232,12 +234,16 @@ export function useVigilController() {
       .channel(channelName())
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'vigil_hearts' },
+        // The public-safe signal is the only Realtime source. The raw
+        // vigil_hearts row (owner_id, intention) is never broadcast.
+        { event: 'INSERT', schema: 'public', table: 'temple_chronicle_signals' },
         (payload) => {
-          const newRow = payload.new as Partial<VigilFlameData> | null;
+          const eventType = String(
+            (payload?.new as { event_type?: unknown } | null)?.event_type || ''
+          ).toUpperCase();
 
-          if (newRow && newRow.id === FLAME_ID) {
-            setFlameData(newRow as VigilFlameData);
+          if (eventType === 'VIGIL_SPARK') {
+            void refreshData();
           }
         }
       )

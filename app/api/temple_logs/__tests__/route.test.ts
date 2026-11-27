@@ -239,14 +239,17 @@ describe('POST /api/temple_logs identity attribution', () => {
   });
 
   it('still rejects event types owned by trusted server routes', async () => {
-    const response = await POST(
-      makeRequest({
-        event_type: 'VIGIL_SPARK',
-        message: 'Forged spark',
-      })
-    );
+    for (const eventType of ['VIGIL', 'VIGIL_SPARK', 'CAST', 'TRIBUTE']) {
+      const response = await POST(
+        makeRequest({
+          event_type: eventType,
+          message: 'Forged completion',
+        })
+      );
 
-    expect(response.status).toBe(400);
+      expect(response.status).toBe(400);
+    }
+
     expect(mockInsert).not.toHaveBeenCalled();
   });
 });

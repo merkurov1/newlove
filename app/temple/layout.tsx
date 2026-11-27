@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import TempleAnalyticsBeacon from '@/components/temple/TempleAnalyticsBeacon';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
 const TEMPLE_URL =
@@ -62,5 +63,10 @@ export default function TempleLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      <TempleAnalyticsBeacon surface="temple" />
+      {children}
+    </>
+  );
 }

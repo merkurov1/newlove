@@ -79,8 +79,11 @@ ordering.
 
 ## Migration
 
-`migrations/2026-11-26_vigil_lifetime_metrics.sql` is additive and is **not
-applied to production by this task**:
+`migrations/2026-11-26_vigil_lifetime_metrics.sql` is additive and was not
+recorded in production at the 2026-11-27 audit. The reviewed, idempotent
+managed forward migration is
+`migrations/2026-11-27_vigil_spark_metrics_reconcile.sql`; it creates the same
+missing objects and is safe to run before or after the historical source file:
 
 - adds `spark_count` / `first_spark_at` to the existing private claim table;
 - backfills existing rows with one known spark (no invented history);
@@ -93,6 +96,23 @@ applied to production by this task**:
   no anon/authenticated role.
 
 No table or historical row is deleted, and `temple_log` is not rewritten.
+
+## Heart count
+
+The original manual table (`sql/vigil_hearts.sql`) defined
+`check (id >= 1 and id <= 5)` and the claim route rejected `heartId > 5`. Those
+were obsolete product limits, not an abuse guard. The five legacy
+`vigil_hearts` rows are data and are preserved. The cap is removed by
+`migrations/2026-11-27_temple_privacy_hardening.sql`, while the per-identity
+24h cooldown and per-IP limiter remain in force. A regression test covers a
+heart id above five.
+
+Private columns (`owner_id`, `intention`) are no longer readable by public
+clients: the migration grants only `id, owner_name, last_lit_at, is_locked,
+created_at, updated_at` to `anon`/`authenticated` and removes the raw heart row
+from the public Realtime publication. The public-safe
+`temple_chronicle_signals` stream remains the realtime hint.
+
 
 ## Telegram channel check
 

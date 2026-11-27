@@ -16,12 +16,35 @@ import {
   publicTempleTraceMessage,
   publicTempleTraceUserId,
 } from '@/lib/temple/publicTrace'
+import {
+  appendTempleAnalyticsCookies,
+  recordTempleAnalyticsEvent,
+} from '@/lib/temple/analytics.server'
+import { templeAnalyticsActionKey } from '@/lib/temple/analytics'
 
 export const runtime = 'nodejs'
 
-// VIGIL_SPARK and TRIBUTE are deliberately absent: only their trusted server
-// routes may write them (after identity/cooldown or verified payment).
-const EVENT_TYPES = new Set(['VIGIL', 'ASH', 'CAST', 'ABSOLUTION', 'MODAL_OPEN', 'INTENSITY', 'WHISPER', 'MEDITATION', 'SILENCE', 'HEARTANDANGEL'])
+// VIGIL, VIGIL_SPARK, CAST and TRIBUTE are deliberately absent: only their
+// trusted server routes may write them (after identity/cooldown, a verified
+// server completion, or verified payment). This also prevents a client from
+// forging completion analytics.
+const EVENT_TYPES = new Set(['ASH', 'ABSOLUTION', 'MODAL_OPEN', 'INTENSITY', 'WHISPER', 'MEDITATION', 'SILENCE', 'HEARTANDANGEL'])
+
+// A completed ritual is the only signal that may count as a conversion.
+const COMPLETION_EVENT_TYPES = new Set([
+  'ASH',
+  'ABSOLUTION',
+  'WHISPER',
+  'MEDITATION',
+  'SILENCE',
+  'HEARTANDANGEL',
+])
+
+function analyticsEventFor(eventType: string): 'ritual_open' | 'ritual_complete' | null {
+  if (eventType === 'MODAL_OPEN') return 'ritual_open'
+  if (COMPLETION_EVENT_TYPES.has(eventType)) return 'ritual_complete'
+  return null
+}
 
 function feedHeaders(cache: string) {
   return {
@@ -173,7 +196,32 @@ export async function POST(req: Request) {
     // Other instances/cold starts remain bounded by the documented TTL.
     invalidateTempleFeedCache()
 
-    return NextResponse.json({ ok: true, data, error: null }, { status: 201 })
+    const analyticsEvent = analyticsEventFor(eventType)
+    let setCookies: string[] = []
+
+    if (analyticsEvent) {
+      const logId =
+        data && typeof data === 'object'
+          ? (data as { id?: unknown }).id
+          : null
+      const analytics = await recordTempleAnalyticsEvent(supabase, req, {
+        eventName: analyticsEvent,
+        identity,
+        ritual: eventType,
+        path: typeof metadata.path === 'string' ? metadata.path : null,
+        eventKey:
+          logId === null || logId === undefined
+            ? null
+            : templeAnalyticsActionKey(`temple:${analyticsEvent}`, String(logId)),
+      })
+
+      setCookies = analytics.setCookies
+    }
+
+    const response = NextResponse.json({ ok: true, data, error: null }, { status: 201 })
+    appendTempleAnalyticsCookies(response, setCookies)
+
+    return response
   } catch (e) {
     console.error('API POST /api/temple_logs unexpected', e)
     return NextResponse.json({ ok: false, data: null, error: e instanceof Error ? e.message : String(e) }, { status: 500 })

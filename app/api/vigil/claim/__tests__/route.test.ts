@@ -198,8 +198,23 @@ describe('/api/vigil/claim', () => {
     );
   });
 
-  it('rejects invalid heart ids and oversized intentions', async () => {
-    expect((await POST(makeRequest({ id: 99 }))).status).toBe(400);
+  it('accepts heart ids above the removed five-heart product cap', async () => {
+    const response = await POST(makeRequest({ id: 6 }));
+
+    expect(response.status).toBe(200);
+    expect(mockClaim).toHaveBeenCalledWith(
+      expect.anything(),
+      identity,
+      6,
+      null,
+      false
+    );
+  });
+
+  it('rejects non-positive and non-integer heart ids and oversized intentions', async () => {
+    expect((await POST(makeRequest({ id: 0 }))).status).toBe(400);
+    expect((await POST(makeRequest({ id: -1 }))).status).toBe(400);
+    expect((await POST(makeRequest({ id: 1.5 }))).status).toBe(400);
     expect(
       (
         await POST(
