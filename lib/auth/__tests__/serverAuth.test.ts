@@ -6,6 +6,10 @@ jest.mock('@/lib/supabase/server', () => ({
   createClient: jest.fn(),
 }));
 
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn(),
+}));
+
 jest.mock('@/lib/logger', () => ({
   logSecurityEvent: jest.fn(),
   log: {
@@ -18,6 +22,9 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 const supabaseServer = require('@/lib/supabase/server') as {
+  createClient: jest.Mock;
+};
+const supabaseJs = require('@supabase/supabase-js') as {
   createClient: jest.Mock;
 };
 const logger = require('@/lib/logger') as {
@@ -86,6 +93,46 @@ describe('serverAuth error classification', () => {
     expect(logger.logSecurityEvent).not.toHaveBeenCalled();
   });
 
+  it('re-checks a hidden or missing browser profile with the service role before denying an owner', async () => {
+    const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+
+    try {
+      supabaseServer.createClient.mockResolvedValueOnce(
+        client({ user: { id: 'owner-1', email: 'owner@example.com' }, profile: null })
+      );
+      supabaseJs.createClient.mockReturnValueOnce({
+        from: () => ({
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: { id: 'owner-1', role: 'ADMIN' },
+                error: null,
+              }),
+            }),
+          }),
+        }),
+      });
+
+      await expect(requireAdmin()).resolves.toMatchObject({
+        id: 'owner-1',
+        role: 'ADMIN',
+      });
+      expect(supabaseJs.createClient).toHaveBeenCalledWith(
+        'https://example.supabase.co',
+        'service-role-test-key',
+        expect.any(Object)
+      );
+    } finally {
+      if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+      else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+      if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+      else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+    }
+  });
+
   it('throws a classified authentication error for an anonymous visitor', async () => {
     const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     supabaseServer.createClient.mockResolvedValueOnce(
@@ -99,7 +146,7 @@ describe('serverAuth error classification', () => {
     expect(logger.logSecurityEvent).toHaveBeenCalledWith(
       'auth_denied',
       'low',
-      expect.objectContaining({ reason: 'admin' })
+      expect.objectContaining({ reason: 'admin', cause: 'no_session' })
     );
     // Expected denials are security events, not application crashes.
     expect(errorSpy).not.toHaveBeenCalled();
@@ -118,6 +165,11 @@ describe('serverAuth error classification', () => {
 
     expect(error).toBeInstanceOf(AuthenticationError);
     expect(isAuthenticationError(error)).toBe(true);
+    expect(logger.logSecurityEvent).toHaveBeenCalledWith(
+      'auth_denied',
+      'low',
+      expect.objectContaining({ reason: 'admin', cause: 'role_not_admin' })
+    );
   });
 
   it('does not classify a profile database failure as authentication', async () => {

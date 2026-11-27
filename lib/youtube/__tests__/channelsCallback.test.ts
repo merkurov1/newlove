@@ -203,6 +203,23 @@ describe('YouTube multi-channel OAuth callback', () => {
     expect(response.headers.get('set-cookie')).toContain('Max-Age=0');
   });
 
+  it('uses the same dedicated redirect URI during token exchange when configured', async () => {
+    process.env.YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI =
+      'https://www.merkurov.love/api/auth/youtube-channels/callback';
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+
+    expect(location(response).searchParams.get('youtube_channels')).toBe('connected');
+    expect(oauth.exchangeGoogleCode).toHaveBeenCalledWith(
+      'authorization-code',
+      expect.objectContaining({
+        redirectUri: 'https://www.merkurov.love/api/auth/youtube-channels/callback',
+      })
+    );
+  });
+
   it('rejects a missing nonce cookie before exchanging the code', async () => {
     mockCookieValue = undefined;
 
@@ -251,6 +268,41 @@ describe('YouTube multi-channel OAuth callback', () => {
     expect(channels.replaceConnectionChannels).not.toHaveBeenCalled();
   });
 
+  it('accepts a broader Google grant that aliases the narrower requested scopes', async () => {
+    oauth.exchangeGoogleCode.mockResolvedValueOnce({
+      accessToken: 'access-token-secret',
+      refreshToken: 'refresh-token-secret',
+      expiresAt: null,
+      scope: [
+        'https://www.googleapis.com/auth/youtube',
+        'https://www.googleapis.com/auth/yt-analytics-monetary.readonly',
+      ].join(' '),
+      tokenType: 'Bearer',
+    });
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+
+    expect(location(response).searchParams.get('youtube_channels')).toBe('connected');
+    expect(channels.saveOAuthConnection).toHaveBeenCalled();
+  });
+
+  it('reports an identity lookup failure without persisting a grant', async () => {
+    oauth.fetchGoogleUserInfo.mockRejectedValueOnce(new Error('userinfo unavailable'));
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+    const target = location(response);
+
+    expect(target.searchParams.get('youtube_channels')).toBe('error');
+    expect(target.searchParams.get('reason')).toBe('google_identity_unavailable');
+    expect(channels.saveOAuthConnection).not.toHaveBeenCalled();
+    expect(target.toString()).not.toContain('access-token-secret');
+    expect(target.toString()).not.toContain('refresh-token-secret');
+  });
+
   it('keeps the saved account and reports a precise error when channel discovery fails', async () => {
     youtubeApi.listMyChannels.mockRejectedValueOnce(
       Object.assign(new Error('YouTube quota exceeded'), { code: 'quota_exceeded' })
@@ -268,6 +320,39 @@ describe('YouTube multi-channel OAuth callback', () => {
     expect(channels.saveOAuthConnection).toHaveBeenCalled();
     expect(channels.replaceConnectionChannels).not.toHaveBeenCalled();
     expect(target.toString()).not.toContain('access-token-secret');
+    expect(target.toString()).not.toContain('refresh-token-secret');
+  });
+
+  it('reports a connection persistence failure with a precise reason', async () => {
+    channels.saveOAuthConnection.mockRejectedValueOnce(
+      Object.assign(new Error('insert failed'), { code: 'connection_save_failed' })
+    );
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+    const target = location(response);
+
+    expect(target.searchParams.get('youtube_channels')).toBe('error');
+    expect(target.searchParams.get('reason')).toBe('connection_save_failed');
+    expect(channels.replaceConnectionChannels).not.toHaveBeenCalled();
+    expect(target.toString()).not.toContain('refresh-token-secret');
+  });
+
+  it('reports a channel persistence failure without losing the saved account', async () => {
+    channels.replaceConnectionChannels.mockRejectedValueOnce(
+      Object.assign(new Error('upsert failed'), { code: 'channels_persist_failed' })
+    );
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+    const target = location(response);
+
+    expect(target.searchParams.get('youtube_channels')).toBe('channels_failed');
+    expect(target.searchParams.get('reason')).toBe('channels_persist_failed');
+    expect(target.searchParams.get('account')).toBe('owner@example.com');
+    expect(channels.saveOAuthConnection).toHaveBeenCalled();
     expect(target.toString()).not.toContain('refresh-token-secret');
   });
 

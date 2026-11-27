@@ -4,10 +4,16 @@ import { describe, expect, it } from '@jest/globals';
 import { needsAuthRefresh } from '../routeProtection';
 
 describe('middleware auth refresh scope', () => {
-  it.each(['/admin', '/admin/pierrot', '/profile', '/research/telegram', '/heartandangel/world'])(
-    'refreshes protected route %s',
-    (path) => expect(needsAuthRefresh(path)).toBe(true)
-  );
+  it.each([
+    '/admin',
+    '/admin/pierrot',
+    '/api/admin',
+    '/api/admin/youtube/channels',
+    '/api/admin/youtube/channels/connect',
+    '/profile',
+    '/research/telegram',
+    '/heartandangel/world',
+  ])('refreshes protected route %s', (path) => expect(needsAuthRefresh(path)).toBe(true));
 
   it.each(['/', '/lots', '/media', '/flow', '/journal', '/letters', '/pierrot'])(
     'does not refresh public route %s',
@@ -16,5 +22,6 @@ describe('middleware auth refresh scope', () => {
 
   it('does not match a protected prefix inside another path', () => {
     expect(needsAuthRefresh('/administration')).toBe(false);
+    expect(needsAuthRefresh('/api/administrator')).toBe(false);
   });
 });

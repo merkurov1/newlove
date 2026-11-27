@@ -184,12 +184,20 @@ function requestPath(req?: Request | null): string | undefined {
   }
 }
 
+type AuthDenialCause =
+  | 'no_session'
+  | 'profile_missing'
+  | 'role_not_admin'
+  | 'invalid_bearer';
+
 function logAuthDenied(
   reason: 'user' | 'admin' | 'bearer' | 'bearer-role',
   req?: Request | null,
+  cause?: AuthDenialCause,
 ): void {
   logSecurityEvent('auth_denied', 'low', {
     reason,
+    ...(cause ? { cause } : {}),
     method: req?.method,
     path: requestPath(req),
   });
@@ -220,17 +228,60 @@ export async function requireAdmin(): Promise<AuthenticatedUser> {
   return requireAdminWithContext();
 }
 
+async function loadServiceRoleProfile(userId: string): Promise<Record<string, unknown> | null> {
+  const serviceClient = getServerSupabaseClient({ useServiceRole: true });
+  const { data, error } = await serviceClient
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Failed to verify administrator role.');
+  }
+
+  return (data as Record<string, unknown> | null) ?? null;
+}
+
 async function requireAdminWithContext(
   req?: Request | null,
 ): Promise<AuthenticatedUser> {
   const user = await loadRequiredUser();
 
-  if (!user || user.role !== 'ADMIN') {
-    logAuthDenied('admin', req);
+  if (!user) {
+    logAuthDenied('admin', req, 'no_session');
     throw new AuthenticationError('Unauthorized: Admin access required');
   }
 
-  return user;
+  if (user.role === 'ADMIN') {
+    return user;
+  }
+
+  // The browser-session path reads the profile through the user-scoped
+  // (RLS) client. If the row is hidden or not materialised yet, an
+  // authenticated owner would look like an ordinary visitor. Re-check the
+  // authoritative role with the server-only client by the already-verified
+  // user id; a missing row still denies access.
+  if (!user.profile) {
+    try {
+      const profile = await loadServiceRoleProfile(user.id);
+
+      if (profile?.role === 'ADMIN') {
+        return { ...user, role: 'ADMIN', profile };
+      }
+    } catch (error) {
+      // Expected authorization denials must not become 500s. A failed role
+      // lookup is still a denial, and the server-side detail is not exposed.
+      console.error('[serverAuth] admin role re-check failed:', error);
+    }
+  }
+
+  logAuthDenied(
+    'admin',
+    req,
+    user.profile ? 'role_not_admin' : 'profile_missing',
+  );
+  throw new AuthenticationError('Unauthorized: Admin access required');
 }
 
 /**
@@ -321,7 +372,7 @@ export async function requireAdminFromRequest(
     } = await authClient.auth.getUser(token);
 
     if (error || !user) {
-      logAuthDenied('bearer', req);
+      logAuthDenied('bearer', req, 'invalid_bearer');
       throw new AuthenticationError('Unauthorized');
     }
 
@@ -346,7 +397,7 @@ export async function requireAdminFromRequest(
     }
 
     if (profile?.role !== 'ADMIN') {
-      logAuthDenied('bearer-role', req);
+      logAuthDenied('bearer-role', req, 'role_not_admin');
       throw new AuthenticationError('Unauthorized: Admin access required');
     }
 

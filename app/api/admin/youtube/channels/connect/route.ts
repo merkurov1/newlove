@@ -56,7 +56,12 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // This endpoint is opened as a normal browser navigation. Redirect back to
+    // the workspace with an explicit reason instead of rendering raw JSON, so
+    // an expired session is visible and actionable.
+    const rawProject = new URL(request.url).searchParams.get('project');
+    const project = isYouTubeProjectSlug(rawProject) ? rawProject : 'art-engine';
+    return fail(request, 'unauthorized', project);
   }
 
   const url = new URL(request.url);

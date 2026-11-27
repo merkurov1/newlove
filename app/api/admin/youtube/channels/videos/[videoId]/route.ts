@@ -8,6 +8,7 @@ import {
   resolveProjectAccessToken,
 } from '@/lib/youtube/catalog';
 import { isYouTubeProjectSlug } from '@/lib/youtube/channels';
+import { youtubeAdminUnauthorizedJson } from '@/lib/youtube/adminHttp';
 import {
   analyzeVideoMetadata,
   buildMetadataDiff,
@@ -147,7 +148,7 @@ export async function GET(request: Request, context: Context) {
       throw error;
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return youtubeAdminUnauthorizedJson(request);
   }
 
   const project = projectFrom(request.url);
@@ -192,7 +193,7 @@ export async function POST(request: Request, context: Context) {
       throw error;
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return youtubeAdminUnauthorizedJson(request);
   }
 
   const project = projectFrom(request.url);

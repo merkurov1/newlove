@@ -59,14 +59,19 @@ afterAll(() => {
 });
 
 describe('GET /api/admin/youtube/channels/connect', () => {
-  it('rejects visitors', async () => {
+  it('redirects visitors back to the workspace with an explicit unauthorized reason', async () => {
     serverAuth.requireAdminFromRequest.mockRejectedValueOnce(new Error('Unauthorized'));
 
     const response = await GET(
       new Request('https://www.merkurov.love/api/admin/youtube/channels/connect?project=art-engine')
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(307);
+    const target = new URL(response.headers.get('location') || '');
+    expect(target.pathname).toBe('/admin/pierrot/youtube');
+    expect(target.searchParams.get('youtube_channels')).toBe('error');
+    expect(target.searchParams.get('reason')).toBe('unauthorized');
+    expect(target.searchParams.get('project')).toBe('art-engine');
   });
 
   it('builds a dedicated state-protected consent URL with least-privilege scopes', async () => {

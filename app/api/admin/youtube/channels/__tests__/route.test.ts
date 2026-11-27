@@ -7,6 +7,25 @@ jest.mock('@/lib/serverAuth', () => ({
   getServerSupabaseClient: jest.fn(() => ({})),
 }));
 
+jest.mock('@/lib/youtube/api', () => ({
+  listMyChannels: jest.fn(async () => ({
+    channels: [
+      {
+        channelId: 'UC_unframed',
+        title: 'UNFRAMED',
+        handle: '@unframed-tv',
+        uploadsPlaylistId: 'UU_unframed',
+        thumbnailUrl: null,
+        hiddenSubscriberCount: false,
+        subscriberCount: 1,
+        viewCount: 2,
+        videoCount: 3,
+      },
+    ],
+    truncated: false,
+  })),
+}));
+
 jest.mock('@/lib/youtube/channels', () => ({
   YOUTUBE_PROJECTS: [
     { slug: 'art-engine', name: 'Art Engine', defaultChannelHandle: '@merkurov-art' },
@@ -60,7 +79,11 @@ jest.mock('@/lib/youtube/channels', () => ({
   unbindProject: jest.fn(async () => undefined),
   disconnectOAuthConnection: jest.fn(async () => ({ revoked: true })),
   loadChannelAccessToken: jest.fn(),
-  replaceConnectionChannels: jest.fn(),
+  loadConnectionAccessToken: jest.fn(async () => ({
+    accessToken: 'access-token',
+    connection: { id: 'connection-1', googleAccountEmail: 'owner@example.com' },
+  })),
+  replaceConnectionChannels: jest.fn(async () => []),
 }));
 
 const { GET, POST } = require('../route') as {
@@ -75,6 +98,8 @@ const channels = require('@/lib/youtube/channels') as {
   disconnectOAuthConnection: jest.Mock;
   checkYouTubeMultichannelSchema: jest.Mock;
   listOAuthConnections: jest.Mock;
+  loadConnectionAccessToken: jest.Mock;
+  replaceConnectionChannels: jest.Mock;
 };
 
 function post(body: Record<string, unknown>): Request {
@@ -91,14 +116,22 @@ beforeEach(() => {
 });
 
 describe('multi-channel YouTube owner API', () => {
-  it('rejects visitors before reading channel state', async () => {
+  it('rejects visitors before reading channel state with an actionable 401', async () => {
     serverAuth.requireAdminFromRequest.mockRejectedValueOnce(new Error('Unauthorized'));
 
     const response = await GET(
       new Request('https://www.merkurov.love/api/admin/youtube/channels?project=art-engine')
     );
+    const body = await response.json();
 
     expect(response.status).toBe(401);
+    expect(body).toMatchObject({
+      ok: false,
+      error: 'unauthorized',
+      code: 'admin_auth_required',
+    });
+    expect(body.signInUrl).toContain('/login?next=');
+    expect(JSON.stringify(body)).not.toMatch(/token|secret|cookie/i);
   });
 
   it('returns every channel on one Google account without any token fields', async () => {
@@ -120,6 +153,13 @@ describe('multi-channel YouTube owner API', () => {
       'UC_art',
       'UC_unframed',
     ]);
+    expect(body.config.redirectUri).toContain('/api/auth/youtube-management/callback');
+    expect(body.config.callbackRoutes).toEqual([
+      '/api/auth/youtube-management/callback',
+      '/api/auth/youtube-channels/callback',
+    ]);
+    expect(Array.isArray(body.config.oauthMissingEnv)).toBe(true);
+    expect(typeof body.config.oauthConfigured).toBe('boolean');
     expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
   });
 
@@ -202,5 +242,25 @@ describe('multi-channel YouTube owner API', () => {
       ownerId: 'owner-1',
       connectionId: 'connection-1',
     });
+  });
+
+  it('retries discovery from the connection id when no channels were saved yet', async () => {
+    channels.replaceConnectionChannels.mockResolvedValueOnce([
+      { id: 'channel-record-1', connectionId: 'connection-1', channelId: 'UC_unframed' },
+    ]);
+
+    const response = await POST(post({ action: 'refresh', connectionId: 'connection-1' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, action: 'refresh', channelCount: 1 });
+    expect(channels.loadConnectionAccessToken).toHaveBeenCalledWith(expect.anything(), {
+      ownerId: 'owner-1',
+      connectionId: 'connection-1',
+    });
+    expect(channels.replaceConnectionChannels).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ connectionId: 'connection-1', ownerId: 'owner-1' })
+    );
   });
 });

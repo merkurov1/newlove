@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { listMyChannels } from '@/lib/youtube/api';
+import { youtubeAdminUnauthorizedJson } from '@/lib/youtube/adminHttp';
 import {
   bindChannelToProject,
   checkYouTubeMultichannelSchema,
@@ -11,7 +12,7 @@ import {
   listOAuthConnections,
   listProjectBindings,
   listYouTubeChannels,
-  loadChannelAccessToken,
+  loadConnectionAccessToken,
   replaceConnectionChannels,
   unbindProject,
   YOUTUBE_PROJECTS,
@@ -20,7 +21,9 @@ import {
 import {
   YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   getYouTubeChannelsRedirectUri,
+  getYouTubeManagementRedirectUri,
 } from '@/lib/youtube/config';
+import { getGoogleOAuthConfig } from '@/lib/analytics/website/config';
 import { YouTubeError } from '@/lib/youtube/types';
 
 export const runtime = 'nodejs';
@@ -36,6 +39,22 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function oauthDiagnostics() {
+  const google = getGoogleOAuthConfig();
+
+  return {
+    oauthConfigured: google.configured,
+    // Names only: values and secrets never leave the server.
+    oauthMissingEnv: google.missing,
+    redirectUri: getYouTubeChannelsRedirectUri(),
+    managementRedirectUri: getYouTubeManagementRedirectUri(),
+    callbackRoutes: [
+      '/api/auth/youtube-management/callback',
+      '/api/auth/youtube-channels/callback',
+    ],
+  };
+}
+
 function errorResponse(error: unknown) {
   if (error instanceof YouTubeError) {
     const status =
@@ -47,7 +66,12 @@ function errorResponse(error: unknown) {
             ? 400
             : error.code === 'not_configured'
               ? 503
-              : 502;
+              : error.code === 'connection_read_failed' ||
+                  error.code === 'connection_save_failed' ||
+                  error.code === 'channels_persist_failed' ||
+                  error.code === 'channels_reconcile_failed'
+                ? 500
+                : 502;
 
     return json(
       { error: error.code, message: error.message, requiredScopes: error.requiredScopes },
@@ -56,7 +80,14 @@ function errorResponse(error: unknown) {
   }
 
   return json(
-    { error: 'request_failed', message: 'Не удалось выполнить действие с YouTube.' },
+    {
+      error: 'request_failed',
+      code:
+        error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
+          ? String((error as { code?: unknown }).code).slice(0, 40)
+          : 'request_failed',
+      message: 'Не удалось выполнить действие с YouTube.',
+    },
     502
   );
 }
@@ -71,7 +102,7 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return youtubeAdminUnauthorizedJson(request);
   }
 
   const url = new URL(request.url);
@@ -113,7 +144,7 @@ export async function GET(request: Request) {
       activeByProject: {},
       config: {
         scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
-        redirectUri: getYouTubeChannelsRedirectUri(),
+        ...oauthDiagnostics(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       },
       message:
@@ -156,7 +187,7 @@ export async function GET(request: Request) {
       active: activeByProject[project] ?? null,
       config: {
         scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
-        redirectUri: getYouTubeChannelsRedirectUri(),
+        ...oauthDiagnostics(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       },
     });
@@ -196,7 +227,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return youtubeAdminUnauthorizedJson(request);
   }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
@@ -263,22 +294,12 @@ export async function POST(request: Request) {
         return json({ error: 'invalid_request', message: 'connectionId is required.' }, 400);
       }
 
-      const channels = await listYouTubeChannels(store, user.id);
-      const channel = channels.find((item) => item.connectionId === connectionId);
-
-      if (!channel) {
-        return json(
-          {
-            error: 'not_connected',
-            message: 'У этого подключения нет сохранённых каналов. Переподключите Google-аккаунт.',
-          },
-          409
-        );
-      }
-
-      const token = await loadChannelAccessToken(store, {
+      // Refresh works even when the first discovery returned zero channels:
+      // the connection and its sealed grant still exist, so the owner can
+      // retry discovery from the UI.
+      const token = await loadConnectionAccessToken(store, {
         ownerId: user.id,
-        channelRecordId: channel.id,
+        connectionId,
       });
       const discovered = await listMyChannels({ accessToken: token.accessToken });
       const updated = await replaceConnectionChannels(store, {

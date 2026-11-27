@@ -25,6 +25,10 @@ export type YouTubeErrorCode =
   | 'timeout'
   | 'upstream_error'
   | 'request_failed'
+  | 'connection_read_failed'
+  | 'connection_save_failed'
+  | 'channels_persist_failed'
+  | 'channels_reconcile_failed'
   | 'unsupported_combination';
 
 export class YouTubeError extends Error {

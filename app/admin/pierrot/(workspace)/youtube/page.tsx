@@ -43,6 +43,14 @@ const YOUTUBE_CHANNELS_REASON_LABELS: Record<string, string> = {
   missing_scopes:
     'Google не выдал все необходимые разрешения. Подключите аккаунт заново и подтвердите доступ к YouTube.',
   token_exchange_failed: 'Google не обменял код авторизации на токен. Повторите подключение.',
+  connection_save_failed:
+    'Не удалось сохранить Google-подключение в базе. Повторите попытку; если ошибка повторится, проверьте таблицы service role.',
+  connection_read_failed:
+    'Не удалось прочитать существующее Google-подключение. Повторите попытку или обратитесь к владельцу окружения.',
+  channels_persist_failed:
+    'Google-аккаунт сохранён, но каналы не удалось записать в базу. Нажмите «Обновить каналы».',
+  channels_reconcile_failed:
+    'Каналы получены, но не удалось согласовать их с сохранёнными. Нажмите «Обновить каналы».',
   token_encryption_unavailable:
     'Сервер не смог безопасно зашифровать токен. Проверьте ключ шифрования на сервере.',
   google_identity_unavailable:

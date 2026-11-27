@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
 import { getProjectChannelAnalytics } from '@/lib/youtube/channelAnalytics';
 import { isYouTubeProjectSlug } from '@/lib/youtube/channels';
+import { youtubeAdminUnauthorizedJson } from '@/lib/youtube/adminHttp';
 import { YouTubeError } from '@/lib/youtube/types';
 
 export const runtime = 'nodejs';
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return youtubeAdminUnauthorizedJson(request);
   }
 
   const url = new URL(request.url);

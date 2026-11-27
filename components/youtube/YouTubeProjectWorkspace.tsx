@@ -54,7 +54,15 @@ type StatusPayload = {
   bindings?: Binding[];
   activeByProject?: Record<string, { binding: Binding; channel: Channel } | undefined>;
   active?: { binding: Binding; channel: Channel; connection: Connection | null } | null;
-  config?: { connectUrl: string; redirectUri: string; scopes: string[] };
+  config?: {
+    connectUrl: string;
+    redirectUri: string;
+    scopes: string[];
+    oauthConfigured?: boolean;
+    oauthMissingEnv?: string[];
+    managementRedirectUri?: string;
+    callbackRoutes?: string[];
+  };
   message?: string;
   error?: string;
   code?: string;
@@ -277,6 +285,13 @@ function formatStatusError(error: StatusError): string {
   return `${error.message}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
 }
 
+function reconnectUrl(connectUrl: string, email: string): string {
+  const separator = connectUrl.includes('?') ? '&' : '?';
+  return `${connectUrl}${separator}login_hint=${encodeURIComponent(
+    email
+  )}&select_account=true`;
+}
+
 export default function YouTubeProjectWorkspace({
   project,
   notice,
@@ -292,6 +307,7 @@ export default function YouTubeProjectWorkspace({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(notice || null);
   const [error, setError] = useState<string | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
 
   const [selectedConnectionId, setSelectedConnectionId] = useState('');
   const [selectedChannelId, setSelectedChannelId] = useState('');
@@ -328,12 +344,17 @@ export default function YouTubeProjectWorkspace({
 
   const active = status?.active ?? null;
   const selectedChannel = channelsForConnection.find((channel) => channel.id === selectedChannelId);
+  const expectedHandle =
+    projects.find((item) => item.slug === project)?.defaultChannelHandle ?? null;
   // Keep connect actionable even when the state request itself failed or is
   // still loading; the route performs its own auth/schema/preflight checks and
   // returns a visible notice on failure.
   const connectUrl =
     status?.config?.connectUrl ||
     `/api/admin/youtube/channels/connect?project=${encodeURIComponent(project)}`;
+  const signInUrl = `/login?next=${encodeURIComponent(
+    `/admin/pierrot/youtube?project=${project}`
+  )}`;
 
   const loadStatus = useCallback(async () => {
     const requestId = ++statusRequestId.current;
@@ -344,7 +365,7 @@ export default function YouTubeProjectWorkspace({
     try {
       const response = await fetch(
         `/api/admin/youtube/channels?project=${encodeURIComponent(project)}`,
-        { cache: 'no-store' }
+        { cache: 'no-store', credentials: 'same-origin' }
       );
       const payload = (await response.json().catch(() => ({}))) as StatusPayload;
 
@@ -368,6 +389,7 @@ export default function YouTubeProjectWorkspace({
       setStatus(payload);
       setStatusCheckedAt(new Date().toISOString());
       setStatusError(null);
+      setAuthRequired(false);
 
       const firstConnection = payload.connections?.[0];
       if (firstConnection) {
@@ -381,7 +403,9 @@ export default function YouTubeProjectWorkspace({
       }
     } catch (loadError) {
       if (requestId !== statusRequestId.current) return;
-      setStatusError(describeStatusError(loadError));
+      const described = describeStatusError(loadError);
+      setStatusError(described);
+      setAuthRequired(described.httpStatus === 401);
     } finally {
       if (requestId === statusRequestId.current) {
         setStatusLoading(false);
@@ -393,6 +417,7 @@ export default function YouTubeProjectWorkspace({
     setStatus(null);
     setStatusError(null);
     setStatusCheckedAt(null);
+    setAuthRequired(false);
     setAnalytics(null);
     setCatalog(null);
     setVideo(null);
@@ -422,6 +447,7 @@ export default function YouTubeProjectWorkspace({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        credentials: 'same-origin',
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -451,7 +477,9 @@ export default function YouTubeProjectWorkspace({
       );
       await loadStatus();
     } catch (actionError) {
-      setError(formatStatusError(describeStatusError(actionError)));
+      const described = describeStatusError(actionError);
+      setError(formatStatusError(described));
+      setAuthRequired(described.httpStatus === 401);
     } finally {
       setBusy(false);
     }
@@ -470,25 +498,30 @@ export default function YouTubeProjectWorkspace({
         });
         const response = await fetch(`/api/admin/youtube/channels/analytics?${params.toString()}`, {
           cache: 'no-store',
+          credentials: 'same-origin',
         });
         const payload = (await response.json().catch(() => ({}))) as {
           report?: AnalyticsReport;
           message?: string;
           error?: string;
+          code?: string;
         };
 
         if (!response.ok || !payload.report) {
-          throw new Error(payload.message || payload.error || 'analytics');
+          throw statusFailure(
+            payload.message || payload.error || 'Не удалось получить аналитику канала.',
+            response.status,
+            payload.code || payload.error || 'analytics_failed'
+          );
         }
 
         setAnalytics(payload.report);
+        setAuthRequired(false);
       } catch (analyticsError) {
         setAnalytics(null);
-        setError(
-          analyticsError instanceof Error
-            ? analyticsError.message
-            : 'Не удалось получить аналитику канала.'
-        );
+        const described = describeStatusError(analyticsError);
+        setError(formatStatusError(described));
+        setAuthRequired(described.httpStatus === 401);
       } finally {
         setAnalyticsLoading(false);
       }
@@ -512,25 +545,30 @@ export default function YouTubeProjectWorkspace({
         if (token) params.set('pageToken', token);
         const response = await fetch(`/api/admin/youtube/channels/videos?${params.toString()}`, {
           cache: 'no-store',
+          credentials: 'same-origin',
         });
         const payload = (await response.json().catch(() => ({}))) as {
           page?: CatalogPage;
           message?: string;
           error?: string;
+          code?: string;
         };
 
         if (!response.ok || !payload.page) {
-          throw new Error(payload.message || payload.error || 'catalog');
+          throw statusFailure(
+            payload.message || payload.error || 'Не удалось получить каталог видео.',
+            response.status,
+            payload.code || payload.error || 'catalog_failed'
+          );
         }
 
         setCatalog(payload.page);
+        setAuthRequired(false);
       } catch (catalogError) {
         setCatalog(null);
-        setError(
-          catalogError instanceof Error
-            ? catalogError.message
-            : 'Не удалось получить каталог видео.'
-        );
+        const described = describeStatusError(catalogError);
+        setError(formatStatusError(described));
+        setAuthRequired(described.httpStatus === 401);
       } finally {
         setCatalogLoading(false);
       }
@@ -576,7 +614,7 @@ export default function YouTubeProjectWorkspace({
     try {
       const response = await fetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(videoId)}?project=${encodeURIComponent(project)}`,
-        { cache: 'no-store' }
+        { cache: 'no-store', credentials: 'same-origin' }
       );
       const payload = (await response.json().catch(() => ({}))) as {
         video?: VideoDetail;
@@ -584,10 +622,15 @@ export default function YouTubeProjectWorkspace({
         analysis?: Analysis;
         message?: string;
         error?: string;
+        code?: string;
       };
 
       if (!response.ok || !payload.video) {
-        throw new Error(payload.message || payload.error || 'video');
+        throw statusFailure(
+          payload.message || payload.error || 'Не удалось открыть видео.',
+          response.status,
+          payload.code || payload.error || 'video_failed'
+        );
       }
 
       setVideo(payload.video);
@@ -598,8 +641,11 @@ export default function YouTubeProjectWorkspace({
         description: payload.video.description,
         tags: tagsToInput(payload.video.tags),
       });
+      setAuthRequired(false);
     } catch (videoError) {
-      setError(videoError instanceof Error ? videoError.message : 'Не удалось открыть видео.');
+      const described = describeStatusError(videoError);
+      setError(formatStatusError(described));
+      setAuthRequired(described.httpStatus === 401);
     } finally {
       setEditorBusy(false);
     }
@@ -622,6 +668,7 @@ export default function YouTubeProjectWorkspace({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ action, changes }),
+          credentials: 'same-origin',
         }
       );
       const payload = (await response.json().catch(() => ({}))) as {
@@ -632,6 +679,7 @@ export default function YouTubeProjectWorkspace({
         diff?: DiffRow[];
         message?: string;
         error?: string;
+        code?: string;
         changedFields?: string[];
         preservedFields?: string[];
       };
@@ -650,7 +698,11 @@ export default function YouTubeProjectWorkspace({
       }
 
       if (!response.ok || payload.error) {
-        throw new Error(payload.message || payload.error || 'preview');
+        throw statusFailure(
+          payload.message || payload.error || 'Не удалось построить diff.',
+          response.status,
+          payload.code || payload.error || 'preview_failed'
+        );
       }
 
       setConfirmation(null);
@@ -659,8 +711,11 @@ export default function YouTubeProjectWorkspace({
           ? 'Предпросмотр готов. На YouTube ничего не отправлено.'
           : 'Предпросмотр готов.'
       );
+      setAuthRequired(false);
     } catch (previewError) {
-      setError(previewError instanceof Error ? previewError.message : 'Не удалось построить diff.');
+      const described = describeStatusError(previewError);
+      setError(formatStatusError(described));
+      setAuthRequired(described.httpStatus === 401);
     } finally {
       setEditorBusy(false);
     }
@@ -688,6 +743,7 @@ export default function YouTubeProjectWorkspace({
             baseFingerprint: confirmation.baseFingerprint,
             confirmationToken: confirmation.token,
           }),
+          credentials: 'same-origin',
         }
       );
       const payload = (await response.json().catch(() => ({}))) as {
@@ -695,10 +751,15 @@ export default function YouTubeProjectWorkspace({
         preservedFields?: string[];
         message?: string;
         error?: string;
+        code?: string;
       };
 
       if (!response.ok) {
-        throw new Error(payload.message || payload.error || 'update');
+        throw statusFailure(
+          payload.message || payload.error || 'Изменение не записано.',
+          response.status,
+          payload.code || payload.error || 'update_failed'
+        );
       }
 
       setLastSaved({
@@ -712,7 +773,9 @@ export default function YouTubeProjectWorkspace({
       await openVideo(video.videoId);
       await loadCatalog(pageTokens[pageIndex] ?? null);
     } catch (applyError) {
-      setError(applyError instanceof Error ? applyError.message : 'Изменение не записано.');
+      const described = describeStatusError(applyError);
+      setError(formatStatusError(described));
+      setAuthRequired(described.httpStatus === 401);
     } finally {
       setEditorBusy(false);
     }
@@ -764,6 +827,13 @@ export default function YouTubeProjectWorkspace({
           нескольким проектам. Токены хранятся только на сервере и не возвращаются в браузер.
         </p>
 
+        {expectedHandle ? (
+          <p className="pw-analytics-hint">
+            Ожидаемый канал для проекта: <code>{expectedHandle}</code>. Привяжите именно его, чтобы
+            аналитика и метаданные не смешивались с другим аккаунтом.
+          </p>
+        ) : null}
+
         <div className="pw-analytics-card-actions">
           <a className="pw-analytics-button" href={connectUrl}>
             Подключить Google-аккаунт
@@ -785,10 +855,31 @@ export default function YouTubeProjectWorkspace({
           </p>
         )}
 
+        {status?.config?.oauthConfigured === false && (
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              Google OAuth не настроен на сервере: отсутствуют{' '}
+              <code>{(status.config.oauthMissingEnv || []).join(', ') || 'GOOGLE_CLIENT_ID/SECRET'}</code>.
+              Подключение аккаунта недоступно до добавления этих переменных.
+            </p>
+          </div>
+        )}
+
         {statusError && (
           <div className="pw-analytics-error" role="alert">
             <p>{formatStatusError(statusError)}</p>
+            {statusError.httpStatus === 401 && (
+              <p>
+                Сессия администратора не найдена или истекла. Войдите снова под аккаунтом владельца,
+                затем обновите состояние.
+              </p>
+            )}
             <div className="pw-analytics-card-actions">
+              {statusError.httpStatus === 401 && (
+                <a className="pw-analytics-button" href={signInUrl}>
+                  Войти снова
+                </a>
+              )}
               <button
                 type="button"
                 className="pw-analytics-button pw-analytics-button--quiet"
@@ -796,6 +887,28 @@ export default function YouTubeProjectWorkspace({
                 onClick={() => void loadStatus()}
               >
                 {statusLoading ? 'Повторяю…' : 'Повторить'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {authRequired && !statusError && (
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              Действие отклонено: сессия администратора не найдена или истекла (HTTP 401). Войдите
+              снова под аккаунтом владельца и повторите действие.
+            </p>
+            <div className="pw-analytics-card-actions">
+              <a className="pw-analytics-button" href={signInUrl}>
+                Войти снова
+              </a>
+              <button
+                type="button"
+                className="pw-analytics-button pw-analytics-button--quiet"
+                disabled={statusLoading}
+                onClick={() => void loadStatus()}
+              >
+                Обновить состояние
               </button>
             </div>
           </div>
@@ -813,6 +926,9 @@ export default function YouTubeProjectWorkspace({
         {status?.config?.redirectUri && (
           <p className="pw-analytics-hint">
             Redirect URI для Google Cloud: <code>{status.config.redirectUri}</code>
+            {status.config.callbackRoutes && status.config.callbackRoutes.length > 0
+              ? ` · callback-маршруты: ${status.config.callbackRoutes.join(' и ')}`
+              : ''}
           </p>
         )}
 
@@ -865,6 +981,9 @@ export default function YouTubeProjectWorkspace({
                 <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
                 {connection.scopes.length} scopes
                 {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                {connection.lastErrorMessage ? (
+                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
+                ) : null}
                 <div className="pw-analytics-card-actions">
                   <button
                     type="button"
@@ -876,6 +995,14 @@ export default function YouTubeProjectWorkspace({
                   >
                     Обновить каналы
                   </button>
+                  {connection.status !== 'connected' ? (
+                    <a
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      href={reconnectUrl(connectUrl, connection.googleAccountEmail)}
+                    >
+                      Переподключить этот аккаунт
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     className="pw-analytics-button pw-analytics-button--quiet"

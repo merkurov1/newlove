@@ -89,5 +89,10 @@ export async function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|xml|txt)$).*)',
+    // Admin route handlers authenticate from the Supabase cookie session. Run
+    // the refresh proxy for them as well; otherwise an admin tab that has been
+    // open longer than the access-token lifetime starts returning 401 until
+    // the next full page navigation.
+    '/api/admin/:path*',
   ],
 };
