@@ -1005,7 +1005,7 @@ describe('Flow composer dialog accessibility', () => {
     trigger.remove();
   });
 
-  it('keeps exactly three permanent controls and no Clear action', async () => {
+  it('keeps exactly four permanent controls and no Clear action', async () => {
     render(<NewPostModal open onClose={jest.fn()} />);
 
     await waitFor(() => {
@@ -1018,7 +1018,12 @@ describe('Flow composer dialog accessibility', () => {
       return label || button.textContent?.trim() || '';
     });
 
-    expect(buttons).toEqual(['Close composer', 'Attach images', 'Post']);
+    expect(buttons).toEqual([
+      'Close composer',
+      'Attach images',
+      'Proofread text',
+      'Post',
+    ]);
     expect(screen.queryByRole('button', { name: /clear/i })).toBeNull();
   });
 

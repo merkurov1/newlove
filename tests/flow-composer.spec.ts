@@ -177,6 +177,15 @@ async function mockComposerApis(page: Page, mode: ComposerMode = 'link') {
       return;
     }
 
+    if (url.pathname === '/api/flow/proofread') {
+      const payload = request.postDataJSON() as { text?: string };
+      await json({
+        text: (payload.text ?? '').replace('wrld', 'world'),
+        unchanged: false,
+      });
+      return;
+    }
+
     if (url.pathname === '/api/upload') {
       await json({ success: true, file: { url: 'https://cdn.example.com/photo.jpg' } });
       return;
@@ -293,7 +302,7 @@ test.describe('Flow composer editorial surface', () => {
   });
 
   for (const viewport of VIEWPORTS) {
-    test(`keeps three controls and a dominant writing field at ${viewport.label}`, async ({
+    test(`keeps four controls and a dominant writing field at ${viewport.label}`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -303,7 +312,12 @@ test.describe('Flow composer editorial surface', () => {
 
       const metrics = await readComposerMetrics(page);
 
-      expect(metrics.controls).toEqual(['Close composer', 'Attach images', 'Post']);
+      expect(metrics.controls).toEqual([
+        'Close composer',
+        'Attach images',
+        'Proofread text',
+        'Post',
+      ]);
       expect(metrics.controls).not.toContain('Clear');
       expect(metrics.textarea.width).toBeGreaterThan(metrics.dialog.width * 0.8);
       expect(metrics.textarea.height).toBeGreaterThan(300);
@@ -323,6 +337,43 @@ test.describe('Flow composer editorial surface', () => {
       });
     });
   }
+
+  test('places the proofread wand beside Post and applies the correction in place', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page);
+    await mockComposerApis(page, 'link');
+    await openComposer(page);
+
+    const textarea = page.getByLabel('Post text');
+    await textarea.fill('Hello, wrld. This is corect.');
+
+    const wand = page.getByRole('button', { name: 'Proofread text' });
+    const post = page.getByRole('button', { name: 'Post' });
+
+    await expect(wand).toBeVisible();
+    await expect(wand).toBeEnabled();
+
+    const wandBox = await wand.boundingBox();
+    const postBox = await post.boundingBox();
+
+    expect(wandBox).not.toBeNull();
+    expect(postBox).not.toBeNull();
+    expect((wandBox?.x ?? 0) + (wandBox?.width ?? 0)).toBeLessThanOrEqual(
+      (postBox?.x ?? 0) + 1,
+    );
+
+    await wand.click();
+
+    await expect(textarea).toHaveValue('Hello, world. This is corect.');
+    await expect(page.getByRole('dialog', { name: /proofread/i })).toHaveCount(0);
+    await expect(wand).toBeEnabled();
+
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, 'proofread-wand-mobile.png'),
+    });
+  });
 
   test('shows a persistent compact link receipt at mobile and desktop sizes', async ({ page }) => {
     for (const viewport of [

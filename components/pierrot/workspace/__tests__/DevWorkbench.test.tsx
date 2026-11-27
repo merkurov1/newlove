@@ -319,6 +319,7 @@ async function renderWorkbench() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.restoreAllMocks();
 });
 
 describe('execution screen', () => {
@@ -367,6 +368,7 @@ describe('execution screen', () => {
       ],
     } as unknown as DevWorkbenchOverview;
     const fetchMock = installFetch(queuedOverview);
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     await renderWorkbench();
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Details' })[0]);
@@ -374,6 +376,10 @@ describe('execution screen', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Draft task/ }));
     fireEvent.click(screen.getByRole('button', { name: /Queue task/ }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Acceptance criteria'),
+    );
 
     await waitFor(() => {
       const call = fetchMock.mock.calls.find(([input]) =>

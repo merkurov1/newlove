@@ -1,5 +1,11 @@
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+  type SetStateAction,
+} from "react";
 import { telegramAuthHeaders } from "@/lib/telegram/clientAuth";
 import type {
   FlowImageAttachment,
@@ -54,6 +60,17 @@ export function useNewPostModal({
   const [item, setItem] = useState<any>(null);
   const [title, setTitle] = useState("");
   const [bodyMd, setBodyMd] = useState("");
+  // The ref is the synchronous source of truth for stale-response checks. It
+  // is updated by the returned setter before React commits the render.
+  const bodyRef = useRef("");
+
+  const updateBody = useCallback((value: SetStateAction<string>) => {
+    const next =
+      typeof value === "function" ? value(bodyRef.current) : value;
+
+    bodyRef.current = next;
+    setBodyMd(next);
+  }, []);
 
   const [links, setLinks] = useState<FlowLinkAttachment[]>([]);
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -73,9 +90,13 @@ export function useNewPostModal({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isProofreading, setIsProofreading] = useState(false);
+  const [proofreadStatus, setProofreadStatus] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const proofreadEpochRef = useRef(0);
+  const proofreadInFlightRef = useRef(false);
 
   // Async results must never be written back after the composer was closed,
   // cleared or the attachment they belong to was removed. The counters also
@@ -118,6 +139,18 @@ export function useNewPostModal({
     isPublishing ||
     isClearing;
 
+  const canProofread = Boolean(bodyMd.trim()) && !busy && !isProofreading;
+
+  // The proofread status is deliberately quiet and transient. It disappears on
+  // its own and never occupies the writing column or shifts the composer.
+  useEffect(() => {
+    if (!proofreadStatus) return;
+
+    const timer = window.setTimeout(() => setProofreadStatus(null), 5_000);
+
+    return () => window.clearTimeout(timer);
+  }, [proofreadStatus]);
+
   // Reset the composer when it closes.
   useEffect(() => {
     if (!open) {
@@ -126,6 +159,8 @@ export function useNewPostModal({
       linkEpochRef.current += 1;
       youtubeRequestSeqRef.current += 1;
       uploadEpochRef.current += 1;
+      proofreadEpochRef.current += 1;
+      proofreadInFlightRef.current = false;
       linkRequestsRef.current.clear();
       suppressedLinkKeysRef.current.clear();
       pendingLinkParsesRef.current.clear();
@@ -134,7 +169,7 @@ export function useNewPostModal({
 
       setItem(null);
       setTitle("");
-      setBodyMd("");
+      updateBody("");
       setLinks([]);
       setYoutubeUrl("");
       setYoutubeMetadata(null);
@@ -149,6 +184,8 @@ export function useNewPostModal({
       setIsUploadingImage(false);
       setIsPublishing(false);
       setIsClearing(false);
+      setIsProofreading(false);
+      setProofreadStatus(null);
       return;
     }
 
@@ -183,7 +220,7 @@ export function useNewPostModal({
 
         setItem(found);
         setTitle(found.title || "");
-        setBodyMd(found.body_md || "");
+        updateBody(found.body_md || "");
 
         const meta =
           found.metadata && typeof found.metadata === "object"
@@ -359,7 +396,7 @@ export function useNewPostModal({
     return () => {
       cancelled = true;
     };
-  }, [open, itemId]);
+  }, [open, itemId, updateBody]);
 
   const uploadImageFile = useCallback(
     async (file: File): Promise<FlowImageAttachment> => {
@@ -764,7 +801,7 @@ export function useNewPostModal({
         textWithoutUrls +
         currentText.slice(end);
 
-      setBodyMd(nextText);
+      updateBody(nextText);
 
       // Restore the caret after React updates the controlled textarea.
       const nextCaret = start + textWithoutUrls.length;
@@ -778,7 +815,7 @@ export function useNewPostModal({
         }
       });
     } else if (textWithoutUrls) {
-      setBodyMd((prev) => prev + textWithoutUrls);
+      updateBody((prev) => prev + textWithoutUrls);
     }
 
     // Capture the current attachment once: state updates inside this loop do
@@ -816,6 +853,13 @@ export function useNewPostModal({
 
   const finish = useCallback(async () => {
     if (!canPost || busy) return;
+
+    // Publishing takes the body snapshot below. Cancel an in-flight proofread
+    // so its late result cannot land in a composer that is already posting.
+    proofreadEpochRef.current += 1;
+    proofreadInFlightRef.current = false;
+    setIsProofreading(false);
+    setProofreadStatus(null);
 
     setIsPublishing(true);
     setError(null);
@@ -1058,6 +1102,89 @@ export function useNewPostModal({
     onClose,
   ]);
 
+  const proofread = useCallback(async () => {
+    if (proofreadInFlightRef.current || busy) return;
+
+    // Capture the exact source text. The author may keep typing while the
+    // request is in flight; the response is applied only when the draft still
+    // matches this snapshot.
+    const source = bodyRef.current;
+
+    if (!source.trim()) return;
+
+    proofreadInFlightRef.current = true;
+    setIsProofreading(true);
+    setProofreadStatus(null);
+    setError(null);
+
+    const epoch = proofreadEpochRef.current;
+
+    try {
+      const res = await fetch("/api/flow/proofread", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...telegramAuthHeaders(),
+        },
+        body: JSON.stringify({ text: source }),
+      });
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      const data = await readResponse(res);
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      if (!res.ok) {
+        const status =
+          data?.error === "provider_rate_limited" || res.status === 429
+            ? "Too many requests. Try again shortly."
+            : data?.error === "provider_timeout"
+              ? "Proofreading timed out. Your text is unchanged."
+              : data?.error === "input_too_long" ||
+                  data?.error === "payload_too_large"
+                ? "This post is too long to proofread."
+                : "Couldn't proofread. Your text is unchanged.";
+
+        setProofreadStatus(status);
+        return;
+      }
+
+      const corrected = typeof data?.text === "string" ? data.text : "";
+
+      if (!corrected.trim()) {
+        setProofreadStatus(
+          "Proofreading returned no text. Your draft is unchanged.",
+        );
+        return;
+      }
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      // A stale result must never replace newer author edits.
+      if (bodyRef.current !== source) {
+        setProofreadStatus("Text changed; kept your edits.");
+        return;
+      }
+
+      updateBody(corrected);
+      setProofreadStatus(
+        corrected === source ? "No changes needed." : null,
+      );
+    } catch {
+      if (epoch === proofreadEpochRef.current) {
+        setProofreadStatus(
+          "Couldn't proofread. Your text is unchanged.",
+        );
+      }
+    } finally {
+      if (epoch === proofreadEpochRef.current) {
+        proofreadInFlightRef.current = false;
+        setIsProofreading(false);
+      }
+    }
+  }, [busy, updateBody]);
+
   const clearDraft = async () => {
     setIsClearing(true);
 
@@ -1066,6 +1193,8 @@ export function useNewPostModal({
       linkEpochRef.current += 1;
       youtubeRequestSeqRef.current += 1;
       uploadEpochRef.current += 1;
+      proofreadEpochRef.current += 1;
+      proofreadInFlightRef.current = false;
       linkRequestsRef.current.clear();
       suppressedLinkKeysRef.current.clear();
       pendingLinkParsesRef.current.clear();
@@ -1073,7 +1202,7 @@ export function useNewPostModal({
       pendingUploadsRef.current.clear();
 
       setTitle("");
-      setBodyMd("");
+      updateBody("");
       setLinks([]);
       setYoutubeUrl("");
       setYoutubeMetadata(null);
@@ -1084,6 +1213,8 @@ export function useNewPostModal({
       setIsParsingLink(false);
       setIsParsingYouTube(false);
       setIsUploadingImage(false);
+      setIsProofreading(false);
+      setProofreadStatus(null);
     } finally {
       setIsClearing(false);
     }
@@ -1128,7 +1259,7 @@ export function useNewPostModal({
     title,
     setTitle,
     bodyMd,
-    setBodyMd,
+    setBodyMd: updateBody,
     links,
     parseLink,
     removeLink,
@@ -1152,14 +1283,18 @@ export function useNewPostModal({
     isUploadingImage,
     isPublishing,
     isClearing,
+    isProofreading,
     isEditing,
     canClear,
     canPost,
+    canProofread,
     busy,
     fileRef,
     textareaRef,
     handlePaste,
     finish,
+    proofread,
+    proofreadStatus,
     clearDraft,
     handleClose,
   };

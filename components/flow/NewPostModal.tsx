@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, Loader2, Wand2, X } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -48,7 +48,26 @@ function readPixelVariable(name: string): number {
   return match ? Number.parseFloat(match[1]) : 0;
 }
 
-function SaveStatus({ state }: { state: SaveState }) {
+function SaveStatus({
+  state,
+  notice,
+}: {
+  state: SaveState;
+  notice?: string | null;
+}) {
+  if (notice) {
+    return (
+      <span
+        role="status"
+        aria-live="polite"
+        title={notice}
+        className="block truncate text-[11px] leading-none text-[#9A9388]"
+      >
+        {notice}
+      </span>
+    );
+  }
+
   const labels: Partial<Record<SaveState, string>> = {
     creating: "Opening…",
     loading: "Loading…",
@@ -93,13 +112,17 @@ export default function NewPostModal({
     isParsingYouTube,
     isUploadingImage,
     isPublishing,
+    isProofreading,
     isEditing,
     canPost,
+    canProofread,
     busy,
     fileRef,
     textareaRef,
     handlePaste,
     finish,
+    proofread,
+    proofreadStatus,
     handleClose,
   } = useNewPostModal({
     open,
@@ -387,8 +410,9 @@ export default function NewPostModal({
           </div>
         </div>
 
-        {/* Three permanent controls in total: close above, attach and
-            post/save here. Parsing and save feedback share this fixed row. */}
+        {/* Four permanent controls in total: close above, attach, proofread
+            and post/save here. Parsing, proofread and save feedback share
+            this fixed row. */}
         <footer
           className="
             flex shrink-0 items-center gap-2
@@ -434,9 +458,37 @@ export default function NewPostModal({
             {processingLabel ? (
               <ProcessingStatus text={processingLabel} />
             ) : (
-              <SaveStatus state={saveState} />
+              <SaveStatus state={saveState} notice={proofreadStatus} />
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => void proofread()}
+            disabled={!canProofread}
+            aria-label="Proofread text"
+            aria-busy={isProofreading}
+            className="
+              flex h-11 w-11 shrink-0 items-center justify-center
+              rounded-full text-[#898277] transition-colors
+              hover:bg-black/[0.05] hover:text-[#37332D]
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
+              focus-visible:ring-offset-[#FAF8F4]
+              disabled:cursor-not-allowed disabled:opacity-40
+            "
+          >
+            {isProofreading ? (
+              <Loader2
+                size={18}
+                strokeWidth={1.6}
+                className="animate-spin"
+                aria-hidden="true"
+              />
+            ) : (
+              <Wand2 size={18} strokeWidth={1.6} aria-hidden="true" />
+            )}
+          </button>
 
           <button
             type="button"
