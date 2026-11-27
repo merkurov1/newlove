@@ -1,11 +1,12 @@
 /** Presentation-only helpers for verbatim question text. */
 
 /**
- * Seeded questions are short single lines and keep the original display
- * headline. Restored verbatim questions may be much longer and may contain
- * their original paragraphs, so they need a calmer reading scale.
+ * Seeded questions are short single lines (the longest seed is 83 characters)
+ * and keep the original display headline. Restored verbatim questions are
+ * usually full sentences or paragraphs; from this length on the display scale
+ * turns them into a poster, so they get the calmer reading scale instead.
  */
-export const QUESTION_LONG_TEXT_MIN_CHARS = 180;
+export const QUESTION_LONG_TEXT_MIN_CHARS = 100;
 export const QUESTION_LONG_TEXT_MIN_LINES = 3;
 export const QUESTION_LONG_TEXT_MIN_PARAGRAPHS = 2;
 
