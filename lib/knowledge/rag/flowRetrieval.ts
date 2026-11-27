@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+import { extractTextParts, joinTextFragments } from '@/lib/flow/text';
 import {
   BRAIN_RAG_MAX_QUERY_CHARS,
   BRAIN_RAG_TIMEOUT_MS,
@@ -102,12 +103,6 @@ export type FlowPublicRetrievalDeps = {
   timeoutMs?: number;
 };
 
-function clean(value: unknown, max: number): string {
-  return typeof value === 'string'
-    ? value.replace(/\s+/g, ' ').trim().slice(0, max)
-    : '';
-}
-
 export function isFlowPublicSourceType(value: string | null | undefined): boolean {
   if (!value) return false;
   if (FORBIDDEN_SOURCE_TYPES.has(value)) return false;
@@ -138,13 +133,22 @@ export function resolveFlowAiRagThreshold(env: RagEnvironment = process.env): nu
  * from the item itself; no private Brain text is sent to the embedding model.
  */
 export function buildFlowRetrievalQuery(item: FlowRagItemInput): string {
-  const metadata = item.metadata ?? {};
-  const title = clean(item.title, 500);
-  const description = clean(metadata.description, 500);
-  const body = clean(item.body_md, 1200);
-  const query = [title, description, body].filter(Boolean).join('\n').trim();
+  // Every text field participates in retrieval, not only title/description/
+  // body. Visual URLs and technical values are excluded by the extractor.
+  const parts = extractTextParts(
+    {
+      title: item.title,
+      body_md: item.body_md,
+      metadata: item.metadata,
+    },
+    item.title,
+    BRAIN_RAG_MAX_QUERY_CHARS
+  );
 
-  return query.slice(0, BRAIN_RAG_MAX_QUERY_CHARS);
+  return joinTextFragments(
+    [parts.title, parts.body],
+    BRAIN_RAG_MAX_QUERY_CHARS
+  );
 }
 
 function createFlowPublicDocumentLoader(

@@ -137,6 +137,37 @@ describe("Flow issue AI analysis", () => {
     expect(supabase.updates[0].id).toBe("allowed");
   });
 
+  it("sends text from every item type and never sends visual payloads", async () => {
+    const imageUrl = "https://cdn.example.com/photo.jpg";
+    const photo = item({
+      id: "photo-with-text",
+      type: "photo",
+      title: "",
+      body_md: "",
+      metadata: {
+        public_url: imageUrl,
+        alt: "A quiet street at dawn",
+        caption: "Morning light on the facades.",
+        images: [{ url: imageUrl, alt: "Nested alt text" }],
+      },
+    });
+
+    mockCreate.mockResolvedValue(aiResponse(validAnalysis()));
+
+    const result = await classifyNewItems(fakeSupabase().client, [photo]);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    const request = mockCreate.mock.calls[0][0];
+    const payload = JSON.parse(request.messages[1].content);
+
+    expect(payload.material).toContain("A quiet street at dawn");
+    expect(payload.material).toContain("Morning light on the facades.");
+    expect(payload.material).toContain("Nested alt text");
+    expect(payload.material).not.toContain(imageUrl);
+    expect(result.get("photo-with-text")?.model).not.toBe(HEURISTIC_MODEL);
+  });
+
   it("ignores cached model analysis after an item is marked ai_allowed === false", async () => {
     const forbidden = item({
       id: "forbidden-cached",

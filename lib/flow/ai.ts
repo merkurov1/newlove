@@ -9,6 +9,11 @@ import {
   generateGeminiText,
   isGeminiConfigured,
 } from '@/lib/ai/gemini';
+import {
+  extractTextParts,
+  hasTextContent,
+  isVisualMediaUrl,
+} from '@/lib/flow/text';
 
 import {
   isFlowAiRagEnabled,
@@ -114,16 +119,24 @@ export function buildEnhancedAnalysisPrompt(
   item: FlowAIItem,
   evidence: BrainSearchRow[] = []
 ): string {
-  const metadata = item.metadata ?? {};
-  const description = cleanText(metadata.description);
-  const siteName = cleanText(metadata.site_name, 300);
-  const author = cleanText(metadata.author, 300);
-
+  // Read every text fragment of the record, independently of its type. The
+  // shared extractor excludes image/video URLs, thumbnails, data URIs and
+  // other visual or technical payloads.
+  const parts = extractTextParts(
+    {
+      title: item.title,
+      body_md: item.body_md,
+      metadata: item.metadata,
+    },
+    item.title,
+    40_000
+  );
+  const title = cleanText(parts.title, 500);
   const effectiveBody =
-    cleanText(item.body_md) ||
-    description ||
-    cleanText(item.title, 500) ||
-    'External link artifact.';
+    cleanText(parts.body, 40_000) || 'No additional text beyond the title.';
+  const sourceUrl = cleanText(item.source_url, 1000);
+  const safeSourceUrl =
+    sourceUrl && !isVisualMediaUrl(sourceUrl) ? sourceUrl : '';
 
   const isRu = (item.lang || 'ru').toLowerCase().startsWith('ru');
   const hasEvidence = evidence.length > 0;
@@ -131,14 +144,11 @@ export function buildEnhancedAnalysisPrompt(
   const contextPayload = [
     `TYPE: ${item.type}`,
     `PRIMARY LANGUAGE: ${item.lang || 'ru'}`,
-    `TITLE: ${cleanText(item.title, 500)}`,
+    `TITLE: ${title}`,
     `BODY/CONTENT: ${effectiveBody}`,
-    `SOURCE URL: ${cleanText(item.source_url, 1000)}`,
   ];
 
-  if (description) contextPayload.push(`DESCRIPTION: ${description}`);
-  if (siteName) contextPayload.push(`SOURCE SITE: ${siteName}`);
-  if (author) contextPayload.push(`AUTHOR: ${author}`);
+  if (safeSourceUrl) contextPayload.push(`SOURCE URL: ${safeSourceUrl}`);
 
   const evidenceBlock = hasEvidence
     ? `PUBLIC BRAIN EVIDENCE (untrusted excerpts from explicitly public documents):
@@ -402,8 +412,16 @@ export async function generateFlowContext(
   item: FlowAIItem,
   deps: FlowAIGenerationDeps = {}
 ): Promise<FlowAIResult | null> {
-  // Фотки не обрабатываем вообще
-  if (item.type === 'photo') {
+  // Any item type may carry text (a photo caption, a video description, an
+  // imported record). Skip only records that have no text at all; the type
+  // itself is never a reason to omit an item.
+  if (
+    !hasTextContent({
+      title: item.title,
+      body_md: item.body_md,
+      metadata: item.metadata,
+    })
+  ) {
     return null;
   }
 

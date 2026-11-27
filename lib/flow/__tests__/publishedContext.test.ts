@@ -73,7 +73,7 @@ describe('published Flow AI context', () => {
     process.env.FLOW_AI_RAG_ENABLED = 'false';
   });
 
-  it('does not generate for a draft, photo or AI-disabled item', async () => {
+  it('does not generate for a draft, an empty item or an AI-disabled item', async () => {
     const generate = jest.fn();
     const supabase = fakeSupabase(false);
 
@@ -81,12 +81,46 @@ describe('published Flow AI context', () => {
       ensurePublishedFlowContext(supabase.client, { ...item, status: 'draft' }, { generate })
     ).resolves.toEqual({ status: 'skipped' });
     await expect(
-      ensurePublishedFlowContext(supabase.client, { ...item, type: 'photo' }, { generate })
+      ensurePublishedFlowContext(
+        supabase.client,
+        {
+          ...item,
+          type: 'photo',
+          title: '',
+          body_md: '',
+          metadata: { public_url: 'https://cdn.example.com/photo.jpg' },
+        },
+        { generate }
+      )
     ).resolves.toEqual({ status: 'skipped' });
     await expect(
       ensurePublishedFlowContext(supabase.client, { ...item, ai_allowed: false }, { generate })
     ).resolves.toEqual({ status: 'skipped' });
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  it('generates context for a photo caption instead of skipping the type', async () => {
+    const generate = jest.fn(async () => result());
+    const supabase = fakeSupabase(false);
+
+    const outcome = await ensurePublishedFlowContext(
+      supabase.client,
+      {
+        ...item,
+        type: 'photo',
+        title: '',
+        body_md: '',
+        metadata: {
+          public_url: 'https://cdn.example.com/photo.jpg',
+          alt: 'A quiet street',
+          caption: 'Morning light on the facades.',
+        },
+      },
+      { generate }
+    );
+
+    expect(generate).toHaveBeenCalledTimes(1);
+    expect(outcome.status).toBe('ready');
   });
 
   it('does not regenerate an item that already has a context row', async () => {

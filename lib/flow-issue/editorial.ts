@@ -1,5 +1,9 @@
 
 import {
+  extractTextFragments,
+  joinTextFragments,
+} from "@/lib/flow/text";
+import {
   HEURISTIC_MODEL,
   analysisForItem,
   keywordTokens,
@@ -153,24 +157,16 @@ function normalizedUrl(value: string | null): string {
 }
 
 export function candidateText(candidate: IssueCandidate): string {
-  const metadata = candidate.entry.metadata || {};
-
-  return [
-    candidate.entry.title,
-    candidate.entry.body,
-    metadata.title,
-    metadata.description,
-    metadata.alt,
-    metadata.caption,
-    metadata.youtube?.title,
-    candidate.analysis.topic,
-    candidate.analysis.subtopic,
-    candidate.analysis.summary,
-    candidate.analysis.thesis,
-  ]
-    .map(clean)
-    .filter(Boolean)
-    .join("\n");
+  return joinTextFragments(
+    [
+      ...extractTextFragments(candidate.entry),
+      clean(candidate.analysis.topic),
+      clean(candidate.analysis.subtopic),
+      clean(candidate.analysis.summary),
+      clean(candidate.analysis.thesis),
+    ],
+    20_000,
+  );
 }
 
 function tokenSet(candidate: IssueCandidate): Set<string> {

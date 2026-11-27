@@ -1,3 +1,4 @@
+import { hasTextContent } from '@/lib/flow/text';
 import {
   MIN_LEAD_SCORE,
   MIN_SELECTION_SCORE,
@@ -97,7 +98,8 @@ export function entryHasMaterial(entry: IssueEntry | undefined): boolean {
         clean(metadata.caption) ||
         clean(entry.image) ||
         clean(entry.title) ||
-        clean(entry.body)
+        clean(entry.body) ||
+        hasTextContent(entry)
     );
   }
 
@@ -106,7 +108,8 @@ export function entryHasMaterial(entry: IssueEntry | undefined): boolean {
       clean(metadata.youtube?.video_id) ||
         clean(metadata.youtube?.title) ||
         clean(entry.title) ||
-        clean(entry.url)
+        clean(entry.url) ||
+        hasTextContent(entry)
     );
   }
 
@@ -114,7 +117,9 @@ export function entryHasMaterial(entry: IssueEntry | undefined): boolean {
     clean(entry.title) ||
       clean(entry.body) ||
       clean(entry.description) ||
-      clean(entry.url)
+      clean(entry.url) ||
+      // Imported or future item types may keep all prose in metadata.
+      hasTextContent(entry)
   );
 }
 

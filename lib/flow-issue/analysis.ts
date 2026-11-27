@@ -1,4 +1,8 @@
 import { z } from "zod";
+import {
+  extractTextFragments,
+  joinTextFragments,
+} from "@/lib/flow/text";
 import { getLinkPreviews } from "./metadata";
 import type {
   FlowItem,
@@ -12,9 +16,15 @@ import type {
  * Bump this when the prompt, fields, or score semantics change. Cached
  * analyses with a different version are recomputed, never silently reused.
  */
-export const ANALYSIS_VERSION = 3;
+export const ANALYSIS_VERSION = 4;
 
 export const HEURISTIC_MODEL = "heuristic-fallback";
+
+/**
+ * Upper bound for one item's material. The bound protects the provider
+ * context while the extraction itself covers every text field of the item.
+ */
+export const MAX_ANALYSIS_TEXT_CHARS = 40_000;
 
 const Score = z.number().min(0).max(5);
 const Confidence = z.number().min(0).max(1);
@@ -97,67 +107,27 @@ export function contentHash(value: string): string {
 /**
  * Canonical text used both for hashing and for the model prompt.
  *
- * Only metadata that is part of the item's published presentation is
- * included. We never fetch or infer the contents of a link/video/photo.
+ * Every textual fragment of the record is included, whatever the item type or
+ * metadata source. Visual payloads (image URLs, thumbnails, data URIs) and
+ * technical bookkeeping are excluded by the shared extractor. We never fetch
+ * or infer the contents of a link/video/photo.
  */
 export function buildAnalysisInput(item: FlowItem): string {
-  const metadata = item.metadata || {};
-  const linkPreviewFields = getLinkPreviews(metadata)
-    .slice(0, 2)
-    .flatMap((preview) => [
-      clean(preview.title),
-      clean(preview.description),
-      clean(preview.site_name),
-      clean(preview.domain),
-    ]);
+  const type = clean(item.type);
+  const prefix = type ? `type: ${type}\n\n` : "";
+  const material = joinTextFragments(
+    extractTextFragments(item),
+    Math.max(0, MAX_ANALYSIS_TEXT_CHARS - prefix.length),
+  );
 
-  const parts = [
-    `type: ${clean(item.type)}`,
-    clean(item.title),
-    clean(item.body_md),
-    clean(metadata.title),
-    clean(metadata.description),
-    clean(metadata.site_name),
-    clean(metadata.domain),
-    clean(metadata.author),
-    clean(metadata.public_url),
-    clean(metadata.alt),
-    clean(metadata.caption),
-    ...linkPreviewFields,
-    clean(metadata.youtube?.title),
-    clean(metadata.youtube?.author_name),
-    clean(metadata.youtube?.provider_name),
-  ].filter(Boolean);
-
-  // Preserve order while removing accidental duplicates (e.g. title stored
-  // both in items.title and metadata.title).
-  return [...new Set(parts)].join("\n\n").slice(0, 7_000);
+  return `${prefix}${material}`.trim();
 }
 
 export function plainAnalysisText(item: FlowItem): string {
-  const metadata = item.metadata || {};
-  const linkPreviewFields = getLinkPreviews(metadata)
-    .slice(0, 2)
-    .flatMap((preview) => [
-      clean(preview.title),
-      clean(preview.description),
-      clean(preview.site_name),
-    ]);
-
-  return [
-    clean(item.title),
-    clean(item.body_md),
-    clean(metadata.title),
-    clean(metadata.description),
-    clean(metadata.alt),
-    clean(metadata.caption),
-    ...linkPreviewFields,
-    clean(metadata.youtube?.title),
-  ]
-    .filter(Boolean)
-    .filter((value, index, all) => all.indexOf(value) === index)
-    .join("\n\n")
-    .slice(0, 7_000);
+  return joinTextFragments(
+    extractTextFragments(item),
+    MAX_ANALYSIS_TEXT_CHARS,
+  );
 }
 
 function words(text: string): string[] {

@@ -263,6 +263,44 @@ describe('Flow AI RAG prompt and result metadata', () => {
     expect(prompt).toContain('Do not add a source list');
   });
 
+  it('includes all textual fields of any item type and excludes visual payloads', () => {
+    const imageUrl = 'https://cdn.example.com/photo.jpg';
+    const thumbnailUrl = 'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg';
+    const dataUri = `data:image/png;base64,${'A'.repeat(200)}`;
+
+    const photo: FlowAIItem = {
+      ...item,
+      type: 'photo',
+      title: '',
+      body_md: '',
+      source_url: imageUrl,
+      metadata: {
+        public_url: imageUrl,
+        images: [{ url: imageUrl, alt: 'A nested image description' }],
+        alt: 'A quiet street at dawn',
+        caption: 'Morning light on the facades.',
+        imported_note: 'An imported textual note.',
+        youtube: {
+          title: 'A video title stored on a photo record',
+          description: 'A provider description.',
+          thumbnail_url: thumbnailUrl,
+        },
+        binary: dataUri,
+      },
+    };
+
+    const prompt = buildEnhancedAnalysisPrompt(photo);
+
+    expect(prompt).toContain('A quiet street at dawn');
+    expect(prompt).toContain('Morning light on the facades.');
+    expect(prompt).toContain('A nested image description');
+    expect(prompt).toContain('An imported textual note.');
+    expect(prompt).toContain('A provider description.');
+    expect(prompt).not.toContain(imageUrl);
+    expect(prompt).not.toContain(thumbnailUrl);
+    expect(prompt).not.toContain('data:image');
+  });
+
   it('builds a bounded retrieval query from the public item', () => {
     const query = buildFlowRetrievalQuery({
       ...item,
@@ -271,6 +309,71 @@ describe('Flow AI RAG prompt and result metadata', () => {
 
     expect(query).toContain('Digital sovereignty');
     expect(query.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('builds the retrieval query from textual metadata regardless of type', () => {
+    const imageUrl = 'https://cdn.example.com/photo.jpg';
+    const query = buildFlowRetrievalQuery({
+      ...item,
+      type: 'photo',
+      title: '',
+      body_md: '',
+      metadata: {
+        public_url: imageUrl,
+        alt: 'A quiet street at dawn',
+        caption: 'Morning light on the facades.',
+        imported_note: 'An imported textual note.',
+      },
+    });
+
+    expect(query).toContain('A quiet street at dawn');
+    expect(query).toContain('Morning light on the facades.');
+    expect(query).toContain('An imported textual note.');
+    expect(query).not.toContain(imageUrl);
+    expect(query.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('analyzes a photo when it carries text and skips only an empty record', async () => {
+    const complete = jest.fn(async (_prompt: string) => ({
+      content: 'ok',
+      model: 'm',
+      provider: 'p',
+    }));
+    const photo: FlowAIItem = {
+      ...item,
+      type: 'photo',
+      title: '',
+      body_md: '',
+      metadata: {
+        public_url: 'https://cdn.example.com/photo.jpg',
+        alt: 'A photograph with a caption',
+        caption: 'The caption text.',
+      },
+      rag_allowed: false,
+    };
+
+    const generated = await generateFlowContext(photo, {
+      ragEnabled: false,
+      complete,
+    });
+
+    expect(generated?.content).toBe('ok');
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(String(complete.mock.calls[0]?.[0])).toContain(
+      'The caption text.'
+    );
+
+    complete.mockClear();
+
+    const emptyPhoto: FlowAIItem = {
+      ...photo,
+      metadata: { public_url: 'https://cdn.example.com/photo.jpg' },
+    };
+
+    await expect(
+      generateFlowContext(emptyPhoto, { ragEnabled: false, complete })
+    ).resolves.toBeNull();
+    expect(complete).not.toHaveBeenCalled();
   });
 
   it('skips retrieval when RAG is disabled for the item', async () => {
