@@ -73,9 +73,14 @@ export function useNewPostModal({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isProofreading, setIsProofreading] = useState(false);
+  const [proofreadStatus, setProofreadStatus] = useState<string | null>(null);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const bodyRef = useRef(bodyMd);
+  const proofreadEpochRef = useRef(0);
+  const proofreadInFlightRef = useRef(false);
 
   // Async results must never be written back after the composer was closed,
   // cleared or the attachment they belong to was removed. The counters also
@@ -118,6 +123,24 @@ export function useNewPostModal({
     isPublishing ||
     isClearing;
 
+  const canProofread = Boolean(bodyMd.trim()) && !busy && !isProofreading;
+
+  // Keep a synchronous copy of the draft so a proofread response can be
+  // compared with the latest author edits without waiting for a render.
+  useEffect(() => {
+    bodyRef.current = bodyMd;
+  }, [bodyMd]);
+
+  // The status is deliberately quiet and transient; it disappears on its own
+  // and never locks or reflows the composer.
+  useEffect(() => {
+    if (!proofreadStatus) return;
+
+    const timer = window.setTimeout(() => setProofreadStatus(null), 5_000);
+
+    return () => window.clearTimeout(timer);
+  }, [proofreadStatus]);
+
   // Reset the composer when it closes.
   useEffect(() => {
     if (!open) {
@@ -126,6 +149,8 @@ export function useNewPostModal({
       linkEpochRef.current += 1;
       youtubeRequestSeqRef.current += 1;
       uploadEpochRef.current += 1;
+      proofreadEpochRef.current += 1;
+      proofreadInFlightRef.current = false;
       linkRequestsRef.current.clear();
       suppressedLinkKeysRef.current.clear();
       pendingLinkParsesRef.current.clear();
@@ -149,6 +174,8 @@ export function useNewPostModal({
       setIsUploadingImage(false);
       setIsPublishing(false);
       setIsClearing(false);
+      setIsProofreading(false);
+      setProofreadStatus(null);
       return;
     }
 
@@ -817,6 +844,13 @@ export function useNewPostModal({
   const finish = useCallback(async () => {
     if (!canPost || busy) return;
 
+    // Publishing takes the body snapshot below. Cancel an in-flight proofread
+    // so its late result cannot land in a composer that is already posting.
+    proofreadEpochRef.current += 1;
+    proofreadInFlightRef.current = false;
+    setIsProofreading(false);
+    setProofreadStatus(null);
+
     setIsPublishing(true);
     setError(null);
     setSaveState("publishing");
@@ -1050,6 +1084,89 @@ export function useNewPostModal({
     onClose,
   ]);
 
+  const proofread = useCallback(async () => {
+    if (proofreadInFlightRef.current || busy) return;
+
+    // Capture the exact source text. The author may keep typing while the
+    // request is in flight; the response is applied only when the draft still
+    // matches this snapshot.
+    const source = bodyRef.current;
+
+    if (!source.trim()) return;
+
+    proofreadInFlightRef.current = true;
+    setIsProofreading(true);
+    setProofreadStatus(null);
+    setError(null);
+
+    const epoch = proofreadEpochRef.current;
+
+    try {
+      const res = await fetch("/api/flow/proofread", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...telegramAuthHeaders(),
+        },
+        body: JSON.stringify({ text: source }),
+      });
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      const data = await readResponse(res);
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      if (!res.ok) {
+        const status =
+          data?.error === "provider_rate_limited" || res.status === 429
+            ? "Too many requests. Try again shortly."
+            : data?.error === "provider_timeout"
+              ? "Proofreading timed out. Your text is unchanged."
+              : data?.error === "input_too_long" ||
+                  data?.error === "payload_too_large"
+                ? "This post is too long to proofread."
+                : "Couldn't proofread. Your text is unchanged.";
+
+        setProofreadStatus(status);
+        return;
+      }
+
+      const corrected = typeof data?.text === "string" ? data.text : "";
+
+      if (!corrected.trim()) {
+        setProofreadStatus(
+          "Proofreading returned no text. Your draft is unchanged.",
+        );
+        return;
+      }
+
+      if (epoch !== proofreadEpochRef.current) return;
+
+      // A stale result must never replace newer author edits.
+      if (bodyRef.current !== source) {
+        setProofreadStatus("Text changed; kept your edits.");
+        return;
+      }
+
+      setBodyMd(corrected);
+      setProofreadStatus(
+        corrected === source ? "No changes needed." : null,
+      );
+    } catch {
+      if (epoch === proofreadEpochRef.current) {
+        setProofreadStatus(
+          "Couldn't proofread. Your text is unchanged.",
+        );
+      }
+    } finally {
+      if (epoch === proofreadEpochRef.current) {
+        proofreadInFlightRef.current = false;
+        setIsProofreading(false);
+      }
+    }
+  }, [busy]);
+
   const clearDraft = async () => {
     setIsClearing(true);
 
@@ -1058,6 +1175,8 @@ export function useNewPostModal({
       linkEpochRef.current += 1;
       youtubeRequestSeqRef.current += 1;
       uploadEpochRef.current += 1;
+      proofreadEpochRef.current += 1;
+      proofreadInFlightRef.current = false;
       linkRequestsRef.current.clear();
       suppressedLinkKeysRef.current.clear();
       pendingLinkParsesRef.current.clear();
@@ -1076,6 +1195,8 @@ export function useNewPostModal({
       setIsParsingLink(false);
       setIsParsingYouTube(false);
       setIsUploadingImage(false);
+      setIsProofreading(false);
+      setProofreadStatus(null);
     } finally {
       setIsClearing(false);
     }
@@ -1144,14 +1265,18 @@ export function useNewPostModal({
     isUploadingImage,
     isPublishing,
     isClearing,
+    isProofreading,
     isEditing,
     canClear,
     canPost,
+    canProofread,
     busy,
     fileRef,
     textareaRef,
     handlePaste,
     finish,
+    proofread,
+    proofreadStatus,
     clearDraft,
     handleClose,
   };
