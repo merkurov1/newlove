@@ -12,9 +12,10 @@ jest.mock('@/components/AuthContext', () => ({
 
 jest.mock('next/dynamic', () => ({
   __esModule: true,
-  default: () => function MockLoginModal() {
-    return null;
-  },
+  default: () =>
+    function MockLoginModal() {
+      return null;
+    },
 }));
 
 const question = {
@@ -78,6 +79,18 @@ describe('QuestionExperience', () => {
     expect(heading).toHaveAttribute('data-question-size', 'long');
   });
 
+  it('calms a restored single-line question without changing its wording', () => {
+    const singleLine =
+      'тот кто делает вид, что понимает, выглядит, как правило, гораздо убедительней того кто понимает? типа в коммуникации хитрая риторика кроет наивную компетентность?';
+
+    render(<QuestionExperience {...baseProps} question={{ ...question, text: singleLine }} />);
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading.textContent).toBe(singleLine);
+    expect(heading.textContent).not.toContain('\n');
+    expect(heading).toHaveAttribute('data-question-size', 'long');
+  });
+
   it('loads the next random question without a page reload', async () => {
     const fetchMock = jest.fn(async () => ({
       ok: true,
@@ -127,9 +140,7 @@ describe('QuestionExperience', () => {
       expect(screen.getByRole('button', { name: 'Ссылка скопирована' })).toBeInTheDocument();
     });
 
-    expect(writeText).toHaveBeenCalledWith(
-      expect.stringContaining(`/question?q=${question.id}`)
-    );
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`/question?q=${question.id}`));
   });
 
   it('requires 25 client-side words before enabling submission', () => {
@@ -149,12 +160,12 @@ describe('QuestionExperience', () => {
     render(<QuestionExperience {...baseProps} />);
 
     const draft = words(25);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Ваш ответ' }), { target: { value: draft } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ваш ответ' }), {
+      target: { value: draft },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
-    expect(window.localStorage.getItem('login_redirect_path')).toBe(
-      `/question?q=${question.id}`
-    );
+    expect(window.localStorage.getItem('login_redirect_path')).toBe(`/question?q=${question.id}`);
     expect(window.sessionStorage.getItem(`question:draft:${question.id}`)).toBe(draft);
     expect(new URL(window.location.href).searchParams.get('q')).toBe(question.id);
   });
@@ -185,7 +196,9 @@ describe('QuestionExperience', () => {
     render(<QuestionExperience {...baseProps} isAuthenticated />);
 
     const draft = words(30);
-    fireEvent.change(screen.getByRole('textbox', { name: 'Ваш ответ' }), { target: { value: draft } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ваш ответ' }), {
+      target: { value: draft },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Отправить' }));
 
     await waitFor(() => {
