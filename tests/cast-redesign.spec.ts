@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 import { test, expect, type Page } from '@playwright/test';
 
 const ARTIFACT_DIR = path.resolve(process.cwd(), 'artifacts/cast-redesign');
@@ -144,6 +145,160 @@ async function expectNoHorizontalOverflow(page: Page) {
 
   expect(overflow).toBeLessThanOrEqual(1);
 }
+
+const TOKEN_NAMES = ['--canvas', '--ink', '--muted', '--faint', '--gold', '--line'] as const;
+
+async function readTokens(page: Page, selector: string) {
+  return page.locator(selector).first().evaluate((element, names) => {
+    const styles = getComputedStyle(element);
+    return Object.fromEntries(
+      names.map((name) => [name, styles.getPropertyValue(name).trim()])
+    );
+  }, TOKEN_NAMES);
+}
+
+async function composePair(left: string, right: string, out: string) {
+  if (!fs.existsSync(left) || !fs.existsSync(right)) return;
+
+  const width = 720;
+
+  const [leftBuffer, rightBuffer] = await Promise.all([
+    sharp(left).resize({ width }).toBuffer(),
+    sharp(right).resize({ width }).toBuffer(),
+  ]);
+
+  const [leftMeta, rightMeta] = await Promise.all([
+    sharp(leftBuffer).metadata(),
+    sharp(rightBuffer).metadata(),
+  ]);
+
+  const height = Math.max(leftMeta.height ?? 450, rightMeta.height ?? 450);
+
+  await sharp({
+    create: {
+      width: width * 2,
+      height,
+      channels: 3,
+      background: '#f6f1e8',
+    },
+  })
+    .composite([
+      { input: leftBuffer, left: 0, top: 0 },
+      { input: rightBuffer, left: width, top: 0 },
+    ])
+    .png()
+    .toFile(out);
+}
+
+test.describe('Cast matches the Sanctuary design system', () => {
+  test('standalone Cast resolves the same tokens as the Temple homepage', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+
+    await page.goto('/temple');
+    await hideDevIndicator(page);
+    await expect(page.locator('[data-temple-theme="light"]')).toBeVisible();
+
+    const templeTokens = await readTokens(page, '[data-temple-theme="light"]');
+    const templeBody = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor
+    );
+
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, 'temple-1440x900.png'),
+    });
+
+    await openStandalone(page);
+
+    const castTokens = await readTokens(page, '.cast-page[data-cast-variant="page"]');
+    const castBody = await page.evaluate(
+      () => getComputedStyle(document.body).backgroundColor
+    );
+
+    expect(castTokens).toEqual(templeTokens);
+    expect(castBody).toBe(templeBody);
+
+    // The Cast-specific stylesheet must not introduce its own surface values.
+    const hasLegacySurface = await page.evaluate(() => {
+      const pageElement = document.querySelector('.cast-page');
+      if (!pageElement) return true;
+      return Array.from(pageElement.querySelectorAll<HTMLElement>('*')).some((node) => {
+        const styles = getComputedStyle(node);
+        return (
+          styles.backgroundColor === 'rgb(250, 248, 245)' ||
+          styles.backgroundColor === 'rgb(20, 18, 16)'
+        );
+      });
+    });
+
+    expect(hasLegacySurface).toBe(false);
+
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, 'desktop-1440x900-standalone-sanctuary.png'),
+    });
+
+    await composePair(
+      path.join(ARTIFACT_DIR, 'temple-1440x900.png'),
+      path.join(ARTIFACT_DIR, 'desktop-1440x900-standalone-sanctuary.png'),
+      path.join(ARTIFACT_DIR, 'side-by-side-light.png')
+    );
+  });
+
+  test('keeps the first phone screen minimal and both languages reachable', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openStandalone(page);
+
+    await expect(page.getByText('The Sanctuary')).toHaveCount(1);
+
+    const english = await page
+      .getByRole('button', { name: /Continue in English/i })
+      .boundingBox();
+    const russian = await page
+      .getByRole('button', { name: /Continue in Русский/i })
+      .boundingBox();
+
+    expect(english).not.toBeNull();
+    expect(russian).not.toBeNull();
+    expect(english!.y + english!.height).toBeLessThanOrEqual(844);
+    expect(russian!.y + russian!.height).toBeLessThanOrEqual(844);
+  });
+
+  test('modal Cast uses the lamplight side of the same token scope', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openModal(page);
+
+    const modalTokens = await readTokens(
+      page,
+      '.cast-page[data-cast-variant="modal"]'
+    );
+
+    // These are the documented `tokensDark` values shared with the Temple
+    // chronicles dialog, not a Cast-only night palette.
+    expect(modalTokens['--canvas']).toBe('#1c1713');
+    expect(modalTokens['--ink']).toBe('#f6f1e8');
+    expect(modalTokens['--muted']).toBe('#cfc0a8');
+    expect(modalTokens['--gold']).toBe('#e4bc72');
+
+    const surface = await page
+      .locator('.cast-page[data-cast-variant="modal"]')
+      .getAttribute('data-cast-surface');
+
+    expect(surface).toBe('lamplight');
+
+    await page.screenshot({
+      path: path.join(ARTIFACT_DIR, 'desktop-1440x900-modal-lamplight.png'),
+    });
+
+    await composePair(
+      path.join(ARTIFACT_DIR, 'temple-1440x900.png'),
+      path.join(ARTIFACT_DIR, 'desktop-1440x900-modal-lamplight.png'),
+      path.join(ARTIFACT_DIR, 'side-by-side-lamplight.png')
+    );
+  });
+});
 
 test.describe('Cast language selector, question and result stages', () => {
   test.beforeAll(() => {

@@ -2038,3 +2038,27 @@ body.ritual-route > header {
     padding-inline: 0.75rem;
   }
 }
+
+/*
+ * Sanctuary daylight bar. The Cast page composes the shared Temple tokens, so
+ * its chrome reads stone and gold instead of the dark amber ritual chrome.
+ */
+.temple-topbar--sanctuary .temple-topbar__back,
+.temple-topbar--sanctuary .temple-topbar__actions > button {
+  border-color: var(--line-strong, rgba(55, 43, 34, 0.34));
+  background: var(--control, rgba(255, 255, 255, 0.46));
+  color: var(--ink, #251f1a);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.temple-topbar--sanctuary .temple-topbar__back:hover,
+.temple-topbar--sanctuary .temple-topbar__actions > button:hover {
+  border-color: var(--gold, #7d5e2c);
+  background: var(--control-hover, rgba(255, 255, 255, 0.72));
+}
+
+.temple-topbar--sanctuary .temple-topbar__back:focus-visible,
+.temple-topbar--sanctuary .temple-topbar__actions > button:focus-visible {
+  outline-color: var(--focus, #2f5f9e);
+}

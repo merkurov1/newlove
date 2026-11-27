@@ -11,7 +11,6 @@ import {
   ArrowRight,
   RefreshCw,
   Sparkles,
-  Terminal,
 } from 'lucide-react';
 
 import { useAuth } from '@/components/AuthContext';
@@ -24,103 +23,18 @@ import {
 } from '@/lib/temple/ritualDraft';
 import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
 
+import styles from './cast.module.css';
+
 const CAST_DRAFT_KEY = 'cast:draft:v1';
 
 export type CastVariant = 'page' | 'modal';
 
-type CastTheme = {
-  page: string;
-  title: string;
-  ambientCore: string;
-  ambientWash: string;
-  panel: string;
-  panelSoft: string;
-  heading: string;
-  body: string;
-  muted: string;
-  faint: string;
-  accent: string;
-  accentSoft: string;
-  divider: string;
-  input: string;
-  primaryButton: string;
-  secondaryButton: string;
-  choiceButton: string;
-  choiceMeta: string;
-  analysis: string;
-  cursor: string;
-  errorText: string;
-  stampSurface: string;
-};
-
-/**
- * Standalone /cast keeps the Sanctuary's daylight palette. The intercepted
- * modal uses the same type scale and geometry inside the dark ritual shell.
+/*
+ * There is no Cast palette. `cast.module.css` composes the shared Sanctuary
+ * tokens (`tokens` for the standalone daylight page, `tokensDark` for the
+ * ritual-modal lamplight surface) from app/temple/temple.module.css, so the
+ * homepage, the Cast and the chronicles dialog all read from one place.
  */
-const CAST_THEME: Record<CastVariant, CastTheme> = {
-  page: {
-    page: 'bg-[#FAF8F5] text-stone-900',
-    title: 'text-amber-800',
-    ambientCore: 'bg-amber-200/40',
-    ambientWash:
-      'bg-[radial-gradient(circle_at_50%_35%,rgba(160,120,60,0.12),transparent_48%)]',
-    panel:
-      'border-stone-300/80 bg-white/80 text-stone-900 shadow-[0_24px_80px_rgba(70,55,35,0.10)] backdrop-blur-xl',
-    panelSoft:
-      'border-stone-300/70 bg-white/65 text-stone-900 shadow-sm backdrop-blur-xl',
-    heading: 'text-stone-900',
-    body: 'text-stone-700',
-    muted: 'text-stone-600',
-    faint: 'text-stone-600',
-    accent: 'text-amber-700',
-    accentSoft: 'text-amber-800',
-    divider: 'border-stone-300/80',
-    input:
-      'border-stone-300 bg-white/80 text-stone-900 placeholder:text-stone-500 focus:border-amber-600 focus:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-700',
-    primaryButton:
-      'border-amber-700/35 bg-amber-100/70 text-stone-900 hover:border-amber-700/60 hover:bg-amber-100 disabled:opacity-30',
-    secondaryButton:
-      'border-stone-300 bg-white/80 text-stone-700 hover:border-amber-600/50 hover:bg-white',
-    choiceButton:
-      'border-stone-300 bg-white/80 text-stone-900 hover:border-amber-700/60 hover:bg-white',
-    choiceMeta: 'text-amber-800',
-    analysis: 'text-stone-700',
-    cursor: 'bg-amber-600 text-stone-50',
-    errorText: 'text-red-700',
-    stampSurface: 'bg-white/70',
-  },
-  modal: {
-    page: 'bg-[#141210] text-stone-200',
-    title: 'text-amber-300/80',
-    ambientCore: 'bg-amber-900/20',
-    ambientWash:
-      'bg-[radial-gradient(circle_at_50%_35%,rgba(120,80,20,0.10),transparent_45%)]',
-    panel:
-      'border-stone-800/80 bg-stone-900/80 text-stone-100 shadow-xl backdrop-blur-xl',
-    panelSoft:
-      'border-stone-800/80 bg-stone-950/80 text-stone-200 shadow-xl backdrop-blur-xl',
-    heading: 'text-stone-100',
-    body: 'text-stone-300',
-    muted: 'text-stone-300',
-    faint: 'text-stone-400',
-    accent: 'text-amber-300',
-    accentSoft: 'text-amber-300/80',
-    divider: 'border-stone-800',
-    input:
-      'border-stone-800 bg-white/5 text-stone-200 placeholder:text-stone-400 focus:border-amber-400/60 focus:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300',
-    primaryButton:
-      'border-amber-300/30 bg-white/10 text-stone-100 hover:border-amber-300/60 hover:bg-white/15 disabled:opacity-25',
-    secondaryButton:
-      'border-amber-300/25 bg-white/5 text-stone-100 hover:border-amber-300/60 hover:bg-white/10',
-    choiceButton:
-      'border-stone-700/80 bg-white/[0.04] text-stone-100 hover:border-amber-300/50 hover:bg-white/[0.08]',
-    choiceMeta: 'text-amber-200',
-    analysis: 'text-stone-300',
-    cursor: 'bg-amber-400 text-stone-950',
-    errorText: 'text-red-300',
-    stampSurface: 'bg-stone-950/50',
-  },
-};
 
 const QUESTIONS_EN = [
   'Which object in your home do you keep because it reminds you of **failed ambition** or a **bad compromise**?',
@@ -172,6 +86,8 @@ const CAST_COPY: Record<
   CastLanguage,
   {
     pageTitle: string;
+    sanctuaryLabel: string;
+    pageLede: string;
     languageTitle: string;
     languageGroup: string;
     disclosureTitle: string;
@@ -209,6 +125,8 @@ const CAST_COPY: Record<
 > = {
   en: {
     pageTitle: 'The Cast — A Reading of the Self',
+    sanctuaryLabel: 'The Sanctuary',
+    pageLede: 'A reading of the self',
     languageTitle: 'Choose your language',
     languageGroup: 'Reading language',
     disclosureTitle: 'Before you begin',
@@ -254,6 +172,8 @@ const CAST_COPY: Record<
   },
   ru: {
     pageTitle: 'Каст — прочтение себя',
+    sanctuaryLabel: 'Святилище',
+    pageLede: 'Прочтение себя',
     languageTitle: 'Выберите язык',
     languageGroup: 'Язык прочтения',
     disclosureTitle: 'Прежде чем начать',
@@ -398,27 +318,20 @@ function Stamp({
   type: string;
   variant: CastVariant;
 }) {
-  const colors: Record<string, string> =
-    variant === 'page'
-      ? {
-          VOID: 'text-stone-500 border-stone-500',
-          NOISE: 'text-amber-700 border-amber-700',
-          STONE: 'text-stone-700 border-stone-700',
-          UNFRAMED: 'text-stone-900 border-stone-900',
-        }
-      : {
-          VOID: 'text-stone-500 border-stone-500',
-          NOISE: 'text-amber-400 border-amber-400',
-          STONE: 'text-stone-300 border-stone-300',
-          UNFRAMED: 'text-stone-100 border-stone-100',
-        };
+  const colors: Record<string, string> = {
+    VOID: styles.stampVoid,
+    NOISE: styles.stampNoise,
+    STONE: styles.stampStone,
+    UNFRAMED: styles.stampUnframed,
+  };
 
   const style = colors[type] || colors.VOID;
 
   return (
     <div className="cast-stamp pointer-events-none absolute right-5 top-5 z-20 md:right-8 md:top-8">
       <div
-        className={`border-2 ${style} ${CAST_THEME[variant].stampSurface} px-2 py-1.5 font-mono text-lg font-bold uppercase tracking-[0.16em] backdrop-blur-sm sm:px-3 sm:py-2 sm:text-xl md:px-4 md:text-2xl md:text-3xl`}
+        data-cast-stamp={variant}
+        className={`border-2 ${style} ${styles.stampSurface} px-2 py-1.5 font-mono text-lg font-bold uppercase tracking-[0.16em] backdrop-blur-sm sm:px-3 sm:py-2 sm:text-xl md:px-4 md:text-2xl`}
       >
         [{type}]
       </div>
@@ -472,7 +385,6 @@ export default function CastClient({
   const { user } = useAuth();
   const identity = useTempleIdentity();
   const isModal = variant === 'modal';
-  const ui = CAST_THEME[variant];
   const subjectName = identity.displayName || user?.email || 'Anonymous';
 
   const [language, setLanguage] =
@@ -977,61 +889,44 @@ export default function CastClient({
     <div
       className={`cast-page ${
         isModal ? 'cast-page--modal min-h-full' : 'min-h-[100dvh]'
-      } relative flex w-full flex-col overflow-x-hidden font-sans antialiased selection:bg-amber-500/30 ${ui.page}`}
+      } antialiased ${
+        isModal ? styles.pageModal : styles.page
+      }`}
       data-cast-variant={variant}
+      data-cast-surface={isModal ? 'lamplight' : 'daylight'}
+      data-temple-theme={isModal ? undefined : 'light'}
       lang={language ?? 'en'}
     >
-      {/* Ambient Temple light */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 z-0"
-      >
-        <div
-          className={`absolute left-1/2 top-[42%] h-[32rem] w-[32rem] -translate-x-1/2 -translate-y-1/2 rounded-full blur-[130px] ${ui.ambientCore}`}
-        />
-
-        <div
-          className={`absolute inset-0 ${ui.ambientWash}`}
-        />
-      </div>
-
-      {!isModal && <TempleTopBar backTo="temple" />}
+      {!isModal && <TempleTopBar backTo="temple" tone="sanctuary" />}
 
       {!isModal && (
-        <h1
-          className={`relative z-10 mx-auto mt-24 max-w-4xl px-6 font-serif text-xs uppercase tracking-[0.3em] sm:mt-28 ${ui.title}`}
-        >
-          The Cast — A Reading of the Self
-        </h1>
+        <header className={styles.masthead}>
+          <p className={styles.eyebrow}>{copy.sanctuaryLabel}</p>
+
+          <h1 className={styles.pageTitle}>{copy.stageLabel}</h1>
+
+          <p className={styles.displayLede}>{copy.pageLede}</p>
+        </header>
       )}
 
-      {/* LANGUAGE SELECT — minimal first screen, no card pair */}
+      {/* LANGUAGE SELECT — one minimal selector, no card pair */}
       {currentStep === 0 && (
-        <div className="cast-stage relative z-10 flex flex-1 items-center justify-center px-6 pb-16 pt-12 sm:pt-16">
+        <div className={`cast-stage ${styles.stageBody}`}>
           <section
-            className={`cast-intro w-full max-w-xl overflow-hidden rounded-[2rem] border p-7 text-center animate-in fade-in duration-700 sm:p-10 ${ui.panel}`}
+            className={`cast-intro ${styles.panel}`}
             aria-labelledby="cast-language-title"
             data-testid="cast-language-select"
           >
-            <span
-              className={`inline-flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.28em] ${ui.accentSoft}`}
-            >
-              <Terminal size={12} aria-hidden="true" />
-              The Digital Temple
-            </span>
-
             <h2
               id="cast-language-title"
-              className={`mt-4 font-serif text-3xl tracking-[0.02em] sm:text-4xl ${ui.heading}`}
+              className={styles.heading}
             >
               {copy.languageTitle}
             </h2>
 
             <div
               aria-hidden="true"
-              className={`mx-auto mt-5 h-px w-14 ${
-                isModal ? 'bg-amber-300/30' : 'bg-amber-700/30'
-              }`}
+              className={styles.rule}
             />
 
             {/*
@@ -1043,33 +938,22 @@ export default function CastClient({
             <section
               data-testid="cast-disclosure"
               aria-labelledby="cast-disclosure-title"
-              className={`mt-6 rounded-2xl border px-4 py-4 text-left ${
-                isModal
-                  ? 'border-stone-700/80 bg-stone-950/45'
-                  : 'border-stone-300/80 bg-white/60'
-              }`}
+              className={styles.disclosure}
             >
               <h3
                 id="cast-disclosure-title"
-                className={`font-mono text-[9px] font-semibold uppercase tracking-[0.22em] ${ui.accentSoft}`}
+                className={styles.disclosureTitle}
               >
-                Before you begin
+                {copy.disclosureTitle}
               </h3>
 
-              <p className={`mt-2 text-[11px] leading-relaxed ${ui.body}`}>
-                Your answers are sent to an external AI model (DeepSeek) to
-                generate this reflection. The result is stored privately in the
-                Temple Cast archive; signed-in readings keep the answers in your
-                account, while anonymous readings do not retain raw answers.
-                Adding an email links the result to you. Only the archetype and
-                a display name may appear in the public Temple trace — never
-                your answers. This is an interpretive ritual, not a clinical
-                diagnosis.
+              <p className={styles.disclosureBody}>
+                {copy.disclosure}
               </p>
 
               <p
                 lang="ru"
-                className={`mt-2 text-[10px] leading-relaxed ${ui.muted}`}
+                className={styles.disclosureBodyMuted}
               >
                 Ответы отправляются внешней ИИ-модели DeepSeek. Результат
                 хранится приватно; у авторизованных чтений ответы остаются в
@@ -1082,7 +966,7 @@ export default function CastClient({
             <div
               role="group"
               aria-label={copy.languageGroup}
-              className="mt-8 flex flex-col gap-3 sm:flex-row"
+              className="mt-6 grid gap-2.5 sm:grid-cols-2"
             >
               {(
                 [
@@ -1108,19 +992,19 @@ export default function CastClient({
                       item.lang
                     )
                   }
-                  className={`group/button flex min-h-[3.5rem] flex-1 items-center justify-between gap-4 rounded-full border px-6 py-4 font-serif text-sm tracking-[0.08em] shadow-sm transition-all ${ui.choiceButton}`}
+                  className={`group/button ${styles.choice}`}
                 >
-                  <span>{item.label}</span>
+                  <span className="font-serif text-sm tracking-[0.08em]">
+                    {item.label}
+                  </span>
 
                   <span className="flex items-center gap-3">
-                    <span
-                      className={`font-mono text-[10px] uppercase tracking-[0.2em] ${ui.choiceMeta}`}
-                    >
+                    <span className={styles.choiceMeta}>
                       {item.meta}
                     </span>
 
                     <ArrowRight
-                      size={16}
+                      size={15}
                       aria-hidden="true"
                       className="transition-transform group-hover/button:translate-x-1"
                     />
@@ -1136,16 +1020,16 @@ export default function CastClient({
       {currentStep > 0 &&
         currentStep <= 10 &&
         language && (
-          <div className="cast-stage relative z-10 mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center px-6 pb-16 pt-10 sm:pt-14">
+          <div className={`cast-stage ${styles.stageBody} ${styles.stageBodyTop}`}>
             <div className="w-full">
               <div
-                className={`mb-5 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.22em] ${ui.muted}`}
+                className={`mb-4 flex items-center justify-between font-mono text-[9px] uppercase tracking-[0.22em] ${styles.muted}`}
               >
                 <span className="flex items-center gap-2">
                   <Sparkles
-                    size={12}
+                    size={11}
                     aria-hidden="true"
-                    className={ui.accent}
+                    className={styles.accent}
                   />
 
                   {copy.questionCounter(currentStep)}
@@ -1158,14 +1042,12 @@ export default function CastClient({
 
               <p
                 data-testid="cast-question-disclosure"
-                className={`mb-3 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${ui.faint}`}
+                className={`mb-4 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${styles.faint}`}
               >
                 {copy.shortDisclosure}
               </p>
 
-              <div
-                className={`mb-4 rounded-[28px] border p-4 text-base leading-relaxed sm:mb-6 sm:p-6 sm:text-lg md:p-8 md:text-xl ${ui.panel}`}
-              >
+              <div className={styles.questionPanel}>
                 {renderQuestionText(
                   currentQuestion
                 )}
@@ -1182,13 +1064,13 @@ export default function CastClient({
                 onKeyDown={handleKeyDown}
                 disabled={loading}
                 maxLength={4000}
-                className={`mb-4 min-h-[96px] w-full resize-none rounded-2xl border p-4 text-sm outline-none shadow-inner transition-all sm:mb-6 sm:min-h-[150px] sm:p-5 sm:text-base ${ui.input}`}
+                className={`mb-4 mt-4 min-h-[96px] w-full resize-none text-sm sm:mb-5 sm:min-h-[150px] ${styles.input}`}
                 placeholder={copy.placeholder}
               />
 
               <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
                 <span
-                  className={`order-2 hidden font-mono text-[10px] uppercase tracking-[0.18em] sm:order-1 sm:inline ${ui.faint}`}
+                  className={`order-2 hidden font-mono text-[9px] uppercase tracking-[0.18em] sm:order-1 sm:inline ${styles.faint}`}
                 >
                   {copy.enterHint}
                 </span>
@@ -1202,7 +1084,7 @@ export default function CastClient({
                     !isAnswerValid ||
                     loading
                   }
-                  className={`order-1 min-h-[44px] w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:order-2 sm:w-auto sm:py-4 ${ui.primaryButton}`}
+                  className={`order-1 w-full sm:order-2 sm:w-auto ${styles.primary}`}
                 >
                   {currentStep === 10
                     ? copy.analyze
@@ -1215,11 +1097,11 @@ export default function CastClient({
 
       {/* RESULT */}
       {currentStep === 11 && (
-        <div className="cast-stage relative z-10 mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 pb-20 pt-10 sm:pt-14">
+        <div className={`cast-stage ${styles.stageBody} ${styles.stageBodyTop} ${styles.resultStage}`}>
           {loading ? (
             <div className="flex min-h-[50vh] flex-col items-center justify-center">
               <div
-                className={`flex items-center gap-2 text-center font-mono text-xs tracking-[0.28em] md:text-sm ${ui.accent}`}
+                className={`flex items-center gap-2 text-center font-mono text-xs tracking-[0.28em] md:text-sm ${styles.accent}`}
                 role="status"
                 aria-live="polite"
               >
@@ -1234,33 +1116,31 @@ export default function CastClient({
               </div>
 
               <div
-                className={`mt-8 h-px w-64 overflow-hidden ${
-                  isModal ? 'bg-stone-800' : 'bg-stone-200'
-                }`}
+                className={`mt-8 h-px w-64 overflow-hidden ${styles.progressTrack}`}
               >
-                <div className="h-full w-1/3 animate-progress-indeterminate bg-amber-400" />
+                <div className={`h-full w-1/3 animate-progress-indeterminate ${styles.progressBar}`} />
               </div>
             </div>
           ) : error ? (
             <div className="flex min-h-[50vh] items-center justify-center text-center">
               <div
-                className={`w-full max-w-lg rounded-[28px] border p-8 ${ui.panel}`}
+                className={`w-full max-w-lg ${styles.panel} ${styles.errorPanel}`}
                 role="alert"
               >
                 <AlertTriangle
                   size={24}
                   aria-hidden="true"
-                  className={`mx-auto mb-5 ${ui.accent}`}
+                  className={`mx-auto mb-5 ${styles.accent}`}
                 />
 
                 <div
-                  className={`mb-4 font-mono text-[10px] uppercase tracking-[0.25em] ${ui.accent}`}
+                  className={`mb-4 font-mono text-[10px] uppercase tracking-[0.25em] ${styles.accent}`}
                 >
                   {copy.errorTitle}
                 </div>
 
                 <p
-                  className={`mb-7 text-sm leading-relaxed ${ui.muted}`}
+                  className={`mb-7 text-sm leading-relaxed ${styles.muted}`}
                 >
                   {error}
                 </p>
@@ -1274,7 +1154,7 @@ export default function CastClient({
                     answers.length !==
                       10 || loading
                   }
-                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
+                  className={`inline-flex items-center gap-2 ${styles.secondary}`}
                 >
                   <RefreshCw
                     size={14}
@@ -1288,7 +1168,7 @@ export default function CastClient({
           ) : analysisData ? (
             <>
               <div
-                className={`relative mb-8 overflow-hidden rounded-[28px] border p-6 md:p-10 ${ui.panel}`}
+                className={`relative mb-6 ${styles.panel} ${styles.resultPanel}`}
               >
                 {showStamp &&
                   archetype && (
@@ -1299,7 +1179,7 @@ export default function CastClient({
                   )}
 
                 <div
-                  className={`mb-6 flex flex-col justify-between gap-2 border-b pb-4 pr-24 font-mono text-[9px] uppercase tracking-[0.2em] sm:flex-row sm:pr-40 ${ui.divider} ${ui.muted}`}
+                  className={`mb-6 flex flex-col justify-between gap-2 border-b pb-4 pr-24 font-mono text-[9px] uppercase tracking-[0.2em] sm:flex-row sm:pr-40 ${styles.divider} ${styles.muted}`}
                 >
                   <span>{copy.subject}: {subjectName}</span>
 
@@ -1315,13 +1195,13 @@ export default function CastClient({
                 </div>
 
                 <p
-                  className={`mb-4 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${ui.muted}`}
+                  className={`mb-4 text-[10px] uppercase leading-relaxed tracking-[0.12em] ${styles.muted}`}
                 >
                   {copy.interpretation}
                 </p>
 
                 <pre
-                  className={`whitespace-pre-wrap font-mono text-xs font-light leading-loose md:text-sm ${ui.analysis}`}
+                  className={`whitespace-pre-wrap font-mono text-xs font-light leading-loose md:text-sm ${styles.analysis}`}
                 >
                   {displayedText}
 
@@ -1331,7 +1211,7 @@ export default function CastClient({
                       language
                     ).length && (
                     <span
-                      className={`ml-1 inline-block w-2 animate-pulse px-1 ${ui.cursor}`}
+                      className={`ml-1 inline-block w-2 animate-pulse px-1 ${styles.cursor}`}
                     >
                       {' '}
                     </span>
@@ -1343,23 +1223,23 @@ export default function CastClient({
                 recordId &&
                 (captureToken || emailSent) && (
                   <div
-                    className={`mb-8 rounded-[28px] border p-6 md:p-8 ${ui.panelSoft}`}
+                    className={`mb-6 ${styles.panelSoft}`}
                   >
                     <h3
-                      className={`mb-2 font-serif text-sm uppercase tracking-[0.12em] ${ui.heading}`}
+                      className={`mb-2 font-serif text-base tracking-[0.02em] ${styles.heading}`}
                     >
                       {copy.archiveTitle}
                     </h3>
 
                     <p
-                      className={`mb-5 text-xs leading-relaxed ${ui.muted}`}
+                      className={`mb-5 text-xs leading-relaxed ${styles.muted}`}
                     >
                       {copy.archiveBody}
                     </p>
 
                     {emailSent ? (
                       <div
-                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.18em] ${ui.accent}`}
+                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.18em] ${styles.accent}`}
                         role="status"
                       >
                         {copy.saved}
@@ -1386,7 +1266,7 @@ export default function CastClient({
                             disabled={
                               emailLoading
                             }
-                            className={`min-h-[44px] flex-1 rounded-full border px-5 py-3 text-sm outline-none transition-all disabled:opacity-50 ${ui.input}`}
+                            className={`flex-1 text-sm ${styles.input}`}
                           />
 
                           <button
@@ -1394,7 +1274,7 @@ export default function CastClient({
                             disabled={
                               emailLoading
                             }
-                            className={`min-h-[44px] rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.16em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
+                            className={styles.secondary}
                           >
                             {emailLoading
                               ? '...'
@@ -1404,7 +1284,7 @@ export default function CastClient({
 
                         {emailError && (
                           <p
-                            className={`mt-3 text-xs ${ui.errorText}`}
+                            className={`mt-3 text-xs ${styles.error}`}
                             role="alert"
                           >
                             {emailError}
@@ -1415,10 +1295,10 @@ export default function CastClient({
                   </div>
                 )}
 
-              <div className="mt-8 text-center">
+              <div className="mt-6 text-center">
                 <Link
                   href="/temple"
-                  className={`inline-block min-h-[44px] rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
+                  className={`inline-flex items-center ${styles.secondary}`}
                 >
                   {copy.returnToTemple}
                 </Link>
