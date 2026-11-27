@@ -45,6 +45,12 @@ export async function logTempleEvent({
         metadata: {
           client: 'web_app',
           timestamp: new Date().toISOString(),
+          // Coarse, allowlisted page path; the server drops query strings and
+          // unknown paths before storing an analytics event.
+          path:
+            typeof window !== 'undefined'
+              ? window.location.pathname
+              : undefined,
           ...metadata
         }
       })

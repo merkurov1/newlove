@@ -39,6 +39,7 @@ import RitualLink from '@/components/temple/RitualLink';
 import TempleChronicles from '@/components/temple/TempleChronicles';
 import { useDialogFocus } from '@/components/temple/useDialogFocus';
 import { readPublicIdentityPreference } from '@/lib/temple/publicIdentity';
+import { sendTempleAnalyticsEvent } from '@/lib/temple/analyticsClient';
 import { consumeLeftWithoutTrace } from '@/lib/temple/visitTrace';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
@@ -1134,7 +1135,14 @@ export default function TempleClient({
                     <RitualLink
                       key={ritual.href}
                       href={ritual.href}
-                      onClick={() => hapticImpact('ritual-select')}
+                      onClick={() => {
+                        hapticImpact('ritual-select');
+                        void sendTempleAnalyticsEvent({
+                          event: 'ritual_nav',
+                          ritual: meta.key,
+                          path: ritual.href,
+                        });
+                      }}
                       className={styles.ritualCard}
                       data-ritual={meta.key}
                       aria-label={ritual.label}

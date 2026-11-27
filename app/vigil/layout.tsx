@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import TempleAnalyticsBeacon from '@/components/temple/TempleAnalyticsBeacon';
 
 const VIGIL_URL =
   'https://www.merkurov.love/vigil';
@@ -62,5 +63,10 @@ export default function VigilLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children;
+  return (
+    <>
+      <TempleAnalyticsBeacon surface="vigil" />
+      {children}
+    </>
+  );
 }

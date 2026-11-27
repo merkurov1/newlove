@@ -2,8 +2,13 @@ import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { createCastCaptureToken } from '@/lib/cast/captureToken';
-import { resolveTempleIdentity } from '@/lib/temple/identity';
+import { resolveTempleIdentity, type TempleIdentity } from '@/lib/temple/identity';
 import { publicTempleTraceMessage } from '@/lib/temple/publicTrace';
+import {
+  appendTempleAnalyticsCookies,
+  recordTempleAnalyticsEvent,
+} from '@/lib/temple/analytics.server';
+import { templeAnalyticsActionKey } from '@/lib/temple/analytics';
 
 export const runtime = 'nodejs';
 
@@ -310,6 +315,8 @@ type CastActor = {
   userEmail: string | null;
   userName: string;
   source: 'telegram' | 'supabase' | null;
+  /** Kept for privacy-safe analytics hashing; never persisted directly. */
+  identity: TempleIdentity | null;
 };
 
 /**
@@ -327,6 +334,7 @@ async function resolveCastActor(req: Request): Promise<CastActor> {
       userEmail: null,
       userName: 'Visitor',
       source: null,
+      identity: null,
     };
   }
 
@@ -335,6 +343,7 @@ async function resolveCastActor(req: Request): Promise<CastActor> {
     userEmail: identity.source === 'supabase' ? identity.email : null,
     userName: identity.displayName,
     source: identity.source,
+    identity,
   };
 }
 
@@ -486,6 +495,7 @@ export async function POST(
       userId,
       userEmail,
       userName,
+      identity,
     } = await resolveCastActor(req);
 
     const attempts: Array<{
@@ -692,7 +702,16 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({
+    // Server-derived completion analytics. The public ritual log remains the
+    // source of truth; this private event only feeds owner aggregates.
+    const analytics = await recordTempleAnalyticsEvent(supabase, req, {
+      eventName: 'ritual_complete',
+      identity,
+      ritual: 'CAST',
+      eventKey: templeAnalyticsActionKey('cast', String(record.id)),
+    });
+
+    const response = NextResponse.json({
       analysis: normalized,
       archetype:
         normalized.archetype,
@@ -701,6 +720,10 @@ export async function POST(
       recordId: record.id,
       captureToken,
     });
+
+    appendTempleAnalyticsCookies(response, analytics.setCookies);
+
+    return response;
   } catch (error: any) {
     console.error(
       '[Cast] Fatal error:',

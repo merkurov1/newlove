@@ -78,6 +78,10 @@ const PRIVATE_TABLES = [
   'newsletter_jobs',
   'newsletter_logs',
   'temple_log',
+  'vigil_spark_claims',
+  'vigil_spark_stats',
+  'temple_analytics_events',
+  'temple_analytics_sessions',
 ];
 
 const PUBLIC_TABLES = [
@@ -91,7 +95,6 @@ const PUBLIC_TABLES = [
   'Tag',
   '_ArticleToTag',
   'temple_chronicle_signals',
-  'vigil_hearts',
 ];
 
 const failures = [];
@@ -132,6 +135,43 @@ for (const table of PUBLIC_TABLES) {
   const readable = status === 200;
   assert(readable, `${table}: public read was expected but returned ${status}`);
   console.log(`${String(status).padEnd(4)} ${range.padEnd(12)} ${table}`);
+}
+
+// vigil_hearts is a public-safe projection, not a full row. The shared flame
+// needs id/owner_name/last_lit_at; owner_id and intention must be denied.
+const heartSafe = await probe('vigil_hearts?select=id,owner_name,last_lit_at');
+assert(
+  heartSafe.status === 200,
+  `vigil_hearts: public-safe columns were expected but returned ${heartSafe.status}`
+);
+
+for (const privateColumn of ['owner_id', 'intention']) {
+  const deniedProbe = await probe(`vigil_hearts?select=${privateColumn}`);
+  assert(
+    deniedProbe.status !== 200,
+    `vigil_hearts.${privateColumn}: anon can still read the private column`
+  );
+}
+
+// SECURITY DEFINER trigger functions must not be callable through PostgREST.
+for (const rpc of [
+  'record_temple_chronicle_signal',
+  'record_vigil_spark_count',
+]) {
+  const rpcProbe = await fetch(`${url}/rest/v1/rpc/${rpc}`, {
+    method: 'POST',
+    headers: {
+      apikey: anon,
+      Authorization: `Bearer ${anon}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({}),
+  });
+
+  assert(
+    rpcProbe.status === 401 || rpcProbe.status === 403 || rpcProbe.status === 404,
+    `${rpc} is still executable by anon (${rpcProbe.status})`
+  );
 }
 
 const draftProbe = await probe('articles?select=id&published=eq.false');
@@ -211,6 +251,68 @@ if (databaseUrl) {
       `select has_function_privilege('anon','public.get_my_user_roles_any(text)','EXECUTE') as allowed`
     );
     assert(anonRpc.rows[0]?.allowed === false, 'get_my_user_roles_any is still executable by anon');
+
+    const templeDefiner = await client.query(
+      `select p.proname,
+              has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
+              has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute
+         from pg_proc p
+         join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public'
+          and p.proname in ('record_temple_chronicle_signal', 'record_vigil_spark_count')`
+    );
+    for (const row of templeDefiner.rows) {
+      assert(
+        row.anon_execute === false,
+        `${row.proname} is still executable by anon`
+      );
+      assert(
+        row.authenticated_execute === false,
+        `${row.proname} is still executable by authenticated`
+      );
+    }
+
+    const templeLogGrants = await client.query(
+      `select grantee, privilege_type
+         from information_schema.role_table_grants
+        where table_schema='public' and table_name='temple_log'
+          and grantee in ('anon','authenticated')`
+    );
+    assert(
+      templeLogGrants.rowCount === 0,
+      `temple_log still grants client access: ${templeLogGrants.rows
+        .map((row) => `${row.grantee}:${row.privilege_type}`)
+        .join(', ')}`
+    );
+
+    const heartGrants = await client.query(
+      `select column_name
+         from information_schema.column_privileges
+        where table_schema='public' and table_name='vigil_hearts'
+          and grantee in ('anon','authenticated')
+          and column_name in ('owner_id','intention')`
+    );
+    assert(
+      heartGrants.rowCount === 0,
+      `vigil_hearts still grants private columns: ${heartGrants.rows
+        .map((row) => row.column_name)
+        .join(', ')}`
+    );
+
+    const stalePolicy = await client.query(
+      `select policyname, roles from pg_policies
+        where schemaname='public' and tablename='temple_log'
+          and (
+            roles && array['anon','authenticated','public']::name[]
+            or coalesce(qual,'') in ('true','(true)')
+          )`
+    );
+    assert(
+      stalePolicy.rowCount === 0,
+      `temple_log still has client public policies: ${stalePolicy.rows
+        .map((row) => row.policyname)
+        .join(', ')}`
+    );
 
     const selfRpcPresent = await client.query(
       `select to_regprocedure('public.get_my_user_roles()') is not null as present`

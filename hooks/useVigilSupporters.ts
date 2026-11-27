@@ -146,19 +146,6 @@ export function useVigilSupporters(): VigilSupporterSnapshot & {
           }
         }
       )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'vigil_hearts' },
-        (payload) => {
-          const heartId = Number(
-            (payload?.new as { id?: unknown } | null)?.id
-          );
-
-          if (heartId === 1) {
-            void refresh();
-          }
-        }
-      )
       .subscribe((status) => {
         if (!mountedRef.current) return;
 

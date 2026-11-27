@@ -151,7 +151,9 @@ describe('useVigilSupporters', () => {
     fetchMock.mockRejectedValue(new Error('network down'));
 
     await act(async () => {
-      channelHandlers['vigil_hearts:*']?.({ new: { id: 1 } });
+      channelHandlers['temple_chronicle_signals:INSERT']?.({
+        new: { event_type: 'VIGIL_SPARK' },
+      });
     });
 
     await waitFor(() => {

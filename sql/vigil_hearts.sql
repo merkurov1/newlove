@@ -1,6 +1,13 @@
--- Create vigil_hearts table for The Vigil interactive installation
+-- Create vigil_hearts table for The Vigil interactive installation.
+--
+-- Historical bootstrap script. The managed migrations
+-- (2026-10-30_security_hardening_private_data.sql and
+-- 2026-11-27_temple_privacy_hardening.sql) are the source of truth for grants
+-- and policies. The obsolete five-heart product cap is intentionally absent:
+-- the table accepts any positive heart id. The five seeded rows are data, not a
+-- cap.
 CREATE TABLE IF NOT EXISTS vigil_hearts (
-  id INTEGER PRIMARY KEY CHECK (id >= 1 AND id <= 5),
+  id INTEGER PRIMARY KEY CHECK (id >= 1),
   owner_name TEXT,
   owner_id UUID,
   last_lit_at TIMESTAMPTZ DEFAULT NOW(),

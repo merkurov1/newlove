@@ -7,6 +7,11 @@ import {
   getVigilSparkStatus,
 } from '@/lib/vigil/claim';
 import { resolveVigilIdentity } from '@/lib/vigil/identity';
+import {
+  appendTempleAnalyticsCookies,
+  recordTempleAnalyticsEvent,
+} from '@/lib/temple/analytics.server';
+import { templeAnalyticsActionKey } from '@/lib/temple/analytics';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -100,7 +105,11 @@ export async function POST(req: Request) {
 
     const heartId = Number(id);
 
-    if (!Number.isInteger(heartId) || heartId < 1 || heartId > 5) {
+    // There is no product cap on the number of hearts. The id must still be a
+    // positive integer; existence is enforced by the heart row/claim update,
+    // and abuse remains bounded by the per-identity 24h cooldown and the per-IP
+    // limiter above.
+    if (!Number.isInteger(heartId) || heartId < 1) {
       return NextResponse.json({ error: 'invalid heart id' }, { status: 400 });
     }
 
@@ -160,9 +169,23 @@ export async function POST(req: Request) {
     // announcement and must never turn a successful Vigil into an error.
     await publishVigilChannelPost().catch(() => undefined);
 
+    // Conversion analytics is server-derived from the accepted claim, never
+    // from a browser event. The key is stable for the same spark window.
+    const analytics = await recordTempleAnalyticsEvent(supabaseAdmin, req, {
+      eventName: 'ritual_complete',
+      identity,
+      ritual: 'VIGIL_SPARK',
+      eventKey: templeAnalyticsActionKey(
+        'vigil_spark',
+        `${heartId}:${result.lastSparkAt}`
+      ),
+    });
+
     const { data: record, error: recordError } = await supabaseAdmin
       .from('vigil_hearts')
-      .select('*')
+      // Only public-safe heart fields may leave the server. owner_id and
+      // intention stay private even for the claiming visitor.
+      .select('id,owner_name,last_lit_at,is_locked,created_at,updated_at')
       .eq('id', heartId)
       .maybeSingle();
 
@@ -170,7 +193,7 @@ export async function POST(req: Request) {
       console.warn('Vigil heart readback failed:', recordError.message);
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       ok: true,
       record: record ?? null,
       cooldown: {
@@ -179,6 +202,10 @@ export async function POST(req: Request) {
         lastSparkAt: result.lastSparkAt,
       },
     });
+
+    appendTempleAnalyticsCookies(response, analytics.setCookies);
+
+    return response;
   } catch (error) {
     console.error(
       'Vigil claim error:',
