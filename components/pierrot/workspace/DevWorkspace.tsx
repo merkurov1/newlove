@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import WorkspaceMarkdown from './WorkspaceMarkdown';
 import DevTaskStudio from './DevTaskStudio';
+import AdminAuthDiagnostics from '@/components/admin/AdminAuthDiagnostics';
 import { useOnlineStatus } from './useOnlineStatus';
 import type {
   DevMemoryEntry,
@@ -635,6 +636,8 @@ export default function DevWorkspace({
             <PanelRight size={17} strokeWidth={1.5} aria-hidden="true" />
           </button>
         </header>
+
+        <AdminAuthDiagnostics />
 
         {migrationRequired && (
           <div className="pw-dev-banner" role="alert">
