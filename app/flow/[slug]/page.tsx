@@ -15,8 +15,10 @@ import {
 import { resolveFlowMetadataFromContent, type FlowSocialMetadata } from '@/lib/flow/metadata';
 import { getCachedFlowItem, getCachedFlowNeighbors } from '@/lib/flow/items-cash';
 import { readDistributionUrl } from '@/lib/flow/distribution';
+import { isInternalFlowHref } from '@/lib/flow/linkKind';
 import PierrotContextBlock from '@/components/flow/PierrotContextBlock';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import FlowLinkCard from '@/components/flow/FlowLinkCard';
 import FlowHomeScreenPrompt from '@/components/flow/FlowHomeScreenPrompt';
 import FlowReaderShell from '@/components/flow/FlowReaderShell';
 import FlowShare from '@/components/flow/FlowShare';
@@ -203,6 +205,24 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
               {children}
             </h4>
           ),
+          h5: ({ children, node }) => (
+            <h5
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-2 mt-6 break-words [overflow-wrap:anywhere] font-serif text-base font-medium leading-snug text-stone-900 first:mt-0 sm:text-lg"
+            >
+              {children}
+            </h5>
+          ),
+          h6: ({ children, node }) => (
+            <h6
+              id={headingId(node?.position?.start.line)}
+              tabIndex={-1}
+              className="mb-2 mt-5 break-words [overflow-wrap:anywhere] font-mono text-[11px] font-medium uppercase leading-snug tracking-[0.12em] text-stone-600 first:mt-0"
+            >
+              {children}
+            </h6>
+          ),
           p: ({ children, node }) => {
             const onlyChild = node?.children?.length === 1 ? node.children[0] : null;
 
@@ -228,12 +248,13 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
             </blockquote>
           ),
           a: ({ href, children }) => {
-            const isInternal = href?.startsWith('/') || href?.includes('merkurov.love');
+            const isInternal = isInternalFlowHref(href);
 
             if (isInternal && href) {
               return (
                 <Link
                   href={href}
+                  data-link-kind="internal"
                   className="break-words [overflow-wrap:anywhere] underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
                 >
                   {children}
@@ -246,6 +267,7 @@ function MarkdownBody({ body, headingIds }: { body: string; headingIds: Map<numb
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
+                data-link-kind="external"
                 className="break-words [overflow-wrap:anywhere] underline decoration-stone-300 underline-offset-4 transition hover:decoration-stone-900"
               >
                 {children}
@@ -529,54 +551,7 @@ function SmartLinks({ links }: { links: FlowLink[] }) {
   return (
     <div className="divide-y divide-stone-200/70 overflow-hidden rounded-2xl border border-stone-200/80 bg-stone-50/40">
       {links.map((link) => (
-        <a
-          key={link.url}
-          href={link.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group flex min-w-0 items-center justify-between gap-4 p-4 transition hover:bg-stone-100/50"
-        >
-          <div className="flex min-w-0 items-center gap-4">
-            {link.image ? (
-              <FlowImageComponent
-                src={link.image}
-                alt=""
-                aspectRatio="1 / 1"
-                sizes="56px"
-                transformWidth={160}
-                className="shrink-0 rounded-xl"
-                style={{ width: 56, height: 56 }}
-              />
-            ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-stone-200/60 font-mono text-sm text-stone-500">
-                ↗
-              </div>
-            )}
-
-            <div className="min-w-0 flex-1">
-              <span className="block truncate font-mono text-[10px] uppercase tracking-wider text-stone-500">
-                {link.siteName || link.domain}
-              </span>
-
-              <span className="mt-0.5 block truncate font-serif text-[16px] font-medium leading-snug text-stone-900 transition group-hover:text-stone-600 sm:text-[17px]">
-                {link.title || link.siteName || link.url}
-              </span>
-
-              {link.description && (
-                <span className="mt-1 line-clamp-1 block text-xs leading-relaxed text-stone-500">
-                  {link.description}
-                </span>
-              )}
-            </div>
-          </div>
-
-          <span
-            aria-hidden="true"
-            className="shrink-0 p-1 font-mono text-sm text-stone-500 transition group-hover:text-stone-900"
-          >
-            ↗
-          </span>
-        </a>
+        <FlowLinkCard key={link.url} link={link} itemHref={link.url} variant="reader" />
       ))}
     </div>
   );

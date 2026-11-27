@@ -14,6 +14,7 @@ import {
   type TelegramMedia,
   type TelegramMediaBatch,
 } from './telegramComposition';
+import { buildTelegramMiniAppUrl } from '@/lib/telegram/miniAppLinks';
 
 export {
   TELEGRAM_CAPTION_LIMIT,
@@ -237,7 +238,15 @@ export async function publishTelegramContent(
     };
   }
 
-  const composition = composeTelegramPublication(content);
+  const miniAppPath = content.slug
+    ? `/flow/${encodeURIComponent(content.slug)}`
+    : '/flow';
+  const miniAppUrl = buildTelegramMiniAppUrl(miniAppPath);
+
+  // In Telegram the publication link should open the Mini App on the exact
+  // Flow post. Outside Telegram (or before the bot username is configured) the
+  // canonical web URL stays the safe fallback.
+  const composition = composeTelegramPublication(content, { flowUrl: miniAppUrl });
 
   if (!composition.validation.ok) {
     return {

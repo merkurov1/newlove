@@ -76,7 +76,7 @@ function installBottomButton() {
   return button;
 }
 
-function installFetch(admin: boolean) {
+function installFetch(admin: boolean, items: unknown[] = [FLOW_ITEM]) {
   const fetchMock = jest.fn((input: RequestInfo | URL) => {
     const url =
       typeof input === 'string'
@@ -89,7 +89,7 @@ function installFetch(admin: boolean) {
       return Promise.resolve({
         ok: true,
         status: 200,
-        json: async () => ({ items: [FLOW_ITEM], hasMore: false }),
+        json: async () => ({ items, hasMore: false }),
       } as Response);
     }
 
@@ -191,5 +191,43 @@ describe('Telegram Flow layout', () => {
     expect(screen.queryByText('← Temple')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'WRITE' })).not.toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('renders exactly one date marker for a calendar day with several posts', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'same-day-1',
+        title: 'First same-day entry',
+        published_at: '2026-11-27T14:00:00.000Z',
+      },
+      {
+        ...FLOW_ITEM,
+        id: 'same-day-2',
+        title: 'Second same-day entry',
+        published_at: '2026-11-27T09:00:00.000Z',
+      },
+      {
+        ...FLOW_ITEM,
+        id: 'previous-day',
+        title: 'Previous-day entry',
+        published_at: '2026-11-26T22:00:00.000Z',
+      },
+    ]);
+
+    render(app());
+
+    await screen.findByText('First same-day entry');
+    await screen.findByText('Second same-day entry');
+    await screen.findByText('Previous-day entry');
+
+    const markers = Array.from(document.querySelectorAll('.flow-entry__date'));
+
+    expect(markers).toHaveLength(2);
+    expect(markers[0]).toHaveTextContent('27 Nov 2026');
+    expect(markers[1]).toHaveTextContent('26 Nov 2026');
+    expect(
+      document.querySelectorAll('[data-flow-entry-id="same-day-2"] .flow-entry__date')
+    ).toHaveLength(0);
   });
 });

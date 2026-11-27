@@ -1209,9 +1209,15 @@ function shouldUseTelegramPreview(fullHtml: string): boolean {
   return fullHtml.length > TELEGRAM_PREVIEW_THRESHOLD;
 }
 
-export function composeTelegramPublication(content: FlowContent): TelegramComposition {
+export function composeTelegramPublication(
+  content: FlowContent,
+  options: { flowUrl?: string | null } = {}
+): TelegramComposition {
   const language = telegramLanguage(content.language);
-  const flowUrl = normalizeHttpUrl(content.canonicalUrl) ?? `${FLOW_SITE_URL}/flow`;
+  const flowUrl =
+    normalizeHttpUrl(options.flowUrl) ??
+    normalizeHttpUrl(content.canonicalUrl) ??
+    `${FLOW_SITE_URL}/flow`;
   const { url: sourceUrl } = pickSource(content, flowUrl);
 
   let bodyHtml = markdownToTelegramHtml(content.body);

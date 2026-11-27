@@ -308,16 +308,8 @@ export default function NewPostModal({
           <div className="flex min-h-full flex-col">
             <div
               data-composer-writing
-              className="group flex min-h-0 flex-1 flex-col"
+              className="flex min-h-0 flex-1 flex-col"
             >
-              <span
-                aria-hidden="true"
-                data-composer-focus-rule
-                className="
-                  mb-1 mt-0.5 block h-0.5 w-8 rounded-full bg-transparent
-                  group-focus-within:bg-[#8A8378]
-                "
-              />
               <textarea
                 ref={textareaRef}
                 value={bodyMd}

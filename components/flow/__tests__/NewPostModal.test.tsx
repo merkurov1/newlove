@@ -1022,7 +1022,7 @@ describe('Flow composer dialog accessibility', () => {
     expect(screen.queryByRole('button', { name: /clear/i })).toBeNull();
   });
 
-  it('removes the dark writing-field frame while keeping a restrained focus rule', async () => {
+  it('removes the dark writing-field frame and the stray focus rule', async () => {
     render(<NewPostModal open onClose={jest.fn()} />);
 
     const textarea = screen.getByLabelText('Post text');
@@ -1034,9 +1034,7 @@ describe('Flow composer dialog accessibility', () => {
     expect(textarea.className).toContain('focus-visible:outline-none');
     expect(textarea.className).toContain('border-0');
     expect(textarea.className).not.toMatch(/border-\[#/);
-    expect(textarea.parentElement?.className).toContain('group');
-    const focusRule = document.querySelector('[data-composer-focus-rule]');
-    expect(focusRule?.className).toContain('group-focus-within:bg-[#8A8378]');
+    expect(document.querySelector('[data-composer-focus-rule]')).toBeNull();
     expect(dialog.className).not.toMatch(/(^|\s)border(\s|$)/);
   });
 

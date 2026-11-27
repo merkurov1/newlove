@@ -141,6 +141,42 @@ describe('Telegram publisher', () => {
     expect(calls[0].body.text).not.toContain('КОНЕЦ');
   });
 
+  it('links the crosspost to the exact Flow post inside the Telegram Mini App', async () => {
+    process.env.TELEGRAM_MINI_APP_BOT_USERNAME = 'PierrotAi_bot';
+
+    try {
+      const calls = installFetch((call) => success(callsIndex(call)));
+      const result = await publishTelegramContent(content());
+
+      expect(result.ok).toBe(true);
+      expect(calls[0].body.text).toContain('https://t.me/PierrotAi_bot?startapp=');
+      expect(calls[0].body.text).toContain(
+        encodeURIComponent(
+          `flow__${Buffer.from('telegram-test', 'utf8').toString('base64url')}`
+        )
+      );
+      expect(calls[0].body.text).not.toContain(
+        'https://www.merkurov.love/flow/telegram-test'
+      );
+    } finally {
+      delete process.env.TELEGRAM_MINI_APP_BOT_USERNAME;
+    }
+  });
+
+  it('falls back to the canonical web link when no Mini App bot is configured', async () => {
+    delete process.env.TELEGRAM_MINI_APP_BOT_USERNAME;
+    delete process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
+
+    const calls = installFetch((call) => success(callsIndex(call)));
+    const result = await publishTelegramContent(content());
+
+    expect(result.ok).toBe(true);
+    expect(calls[0].body.text).toContain(
+      'https://www.merkurov.love/flow/telegram-test'
+    );
+    expect(calls[0].body.text).not.toContain('startapp=');
+  });
+
   it('splits more than ten images into logical albums and keeps all of them', async () => {
     const metadata = {
       images: Array.from({ length: 12 }, (_, index) => `https://cdn.example.com/${index}.jpg`),

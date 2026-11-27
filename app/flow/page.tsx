@@ -5,12 +5,14 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { PenLine, Trash2 } from 'lucide-react';
 import NewPostModal from '@/components/flow/NewPostModal';
 import FlowImageComponent from '@/components/flow/FlowImage';
+import FlowLinkCard from '@/components/flow/FlowLinkCard';
 import FlowHomeScreenPrompt from '@/components/flow/FlowHomeScreenPrompt';
 import useIsTelegram from '@/components/useIsTelegram';
 import { useTelegramBottomButton } from '@/components/telegram/useTelegramBottomButton';
 import { telegramAuthHeaders } from '@/lib/telegram/clientAuth';
 import { hapticSelection } from '@/lib/telegram/webApp';
 import { resolveFlowCardComposition } from '@/lib/flow/cardComposition';
+import { flowDayMarkers } from '@/lib/flow/dayMarker';
 import { formatReadingProgress } from '@/lib/flow/readingProgress';
 import {
   readFlowFeedPosition,
@@ -122,17 +124,21 @@ function EntryDate({ item }: { item: FlowItem }) {
 function EntryMeta({
   item,
   admin,
+  showDate,
   onEdit,
   onDelete,
 }: {
   item: FlowItem;
   admin: boolean;
+  showDate: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  if (!showDate && !admin) return null;
+
   return (
     <div className="flow-entry__meta">
-      <EntryDate item={item} />
+      {showDate && <EntryDate item={item} />}
 
       {admin && <AdminControls onEdit={onEdit} onDelete={onDelete} />}
     </div>
@@ -154,102 +160,6 @@ function AdminControls({ onEdit, onDelete }: { onEdit: () => void; onDelete: () 
       >
         <Trash2 size={13} aria-hidden="true" />
       </button>
-    </div>
-  );
-}
-
-function LinkCard({ preview, itemHref: href }: { preview: FlowLink; itemHref: string }) {
-  const domain = preview.siteName || preview.domain || '';
-
-  return (
-    <div className="group/card flex items-stretch overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40 transition hover:border-neutral-300 hover:bg-neutral-50">
-      <div className="flex flex-1 flex-col justify-between p-4">
-        <div>
-          <Link
-            href={href}
-            className="text-[15px] font-medium leading-snug text-neutral-900 group-hover/card:text-neutral-700"
-          >
-            {preview.title || domain || preview.url}
-          </Link>
-
-          {preview.description && (
-            <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-neutral-500">
-              {preview.description}
-            </p>
-          )}
-        </div>
-
-        <a
-          href={preview.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-block w-fit font-mono text-[11px] tracking-wider text-neutral-500 transition hover:text-neutral-800"
-          onClick={(event) => event.stopPropagation()}
-        >
-          {domain} ↗
-        </a>
-      </div>
-
-      {preview.image && (
-        <Link href={href} tabIndex={-1} aria-hidden="true" className="w-32 shrink-0 sm:w-40">
-          <FlowImageComponent
-            src={preview.image}
-            alt=""
-            aspectRatio="1 / 1"
-            sizes="(max-width: 640px) 128px, 160px"
-            transformWidth={320}
-          />
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function CompactLinkRow({ preview, itemHref: href }: { preview: FlowLink; itemHref: string }) {
-  const domain = preview.siteName || preview.domain || '';
-
-  return (
-    <div className="group/row flex items-center justify-between gap-3 p-3 transition hover:bg-neutral-100/50">
-      <div className="flex min-w-0 items-center gap-3">
-        {preview.image ? (
-          <FlowImageComponent
-            src={preview.image}
-            alt=""
-            aspectRatio="1 / 1"
-            sizes="40px"
-            transformWidth={160}
-            className="shrink-0 rounded-lg"
-            style={{ width: 40, height: 40 }}
-          />
-        ) : (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-neutral-200/60 font-mono text-xs text-neutral-500">
-            ↗
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <span className="block font-mono text-[10px] uppercase tracking-wider text-neutral-500">
-            {domain}
-          </span>
-          <Link
-            href={href}
-            className="block truncate text-[13px] font-medium leading-tight text-neutral-900 group-hover/row:text-neutral-700"
-          >
-            {preview.title || domain || preview.url}
-          </Link>
-        </div>
-      </div>
-
-      <a
-        href={preview.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`Open ${domain}`}
-        onClick={(event) => event.stopPropagation()}
-        className="shrink-0 p-1 font-mono text-xs text-neutral-500 transition hover:text-neutral-900"
-      >
-        ↗
-      </a>
     </div>
   );
 }
@@ -434,11 +344,13 @@ function VideoCards({ videos }: { videos: FlowVideo[] }) {
 function Entry({
   item,
   admin,
+  showDate,
   onEdit,
   onDelete,
 }: {
   item: FlowItem;
   admin: boolean;
+  showDate: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -464,7 +376,7 @@ function Entry({
       data-content-type={item.contentType || item.type}
       data-flow-entry-id={item.id}
     >
-      <EntryMeta item={item} admin={admin} onEdit={onEdit} onDelete={onDelete} />
+      <EntryMeta item={item} admin={admin} showDate={showDate} onEdit={onEdit} onDelete={onDelete} />
 
       {/* Image and video are the lead element whenever they exist. The title
        * and body follow, so text can never visually displace the media. */}
@@ -502,14 +414,14 @@ function Entry({
 
       {links.length === 1 && (
         <div className="flow-entry__links">
-          <LinkCard preview={links[0]} itemHref={href} />
+          <FlowLinkCard link={links[0]} itemHref={href} variant="card" />
         </div>
       )}
 
       {links.length > 1 && (
         <div className="flow-entry__links divide-y divide-neutral-200/50 overflow-hidden rounded-2xl border border-neutral-200/60 bg-neutral-50/40">
           {links.map((preview) => (
-            <CompactLinkRow key={preview.url} preview={preview} itemHref={href} />
+            <FlowLinkCard key={preview.url} link={preview} itemHref={href} variant="row" />
           ))}
         </div>
       )}
@@ -874,6 +786,8 @@ export default function FlowPage() {
     },
   });
 
+  const dayMarkers = flowDayMarkers(items);
+
   return (
     <>
       <JsonLd
@@ -944,11 +858,12 @@ export default function FlowPage() {
           ) : (
             <>
               <div>
-                {items.map((item) => (
+                {items.map((item, index) => (
                   <Entry
                     key={item.id}
                     item={item}
                     admin={isAdmin}
+                    showDate={dayMarkers[index] ?? false}
                     onEdit={() => setEditingId(item.id)}
                     onDelete={() => void deleteItem(item)}
                   />
