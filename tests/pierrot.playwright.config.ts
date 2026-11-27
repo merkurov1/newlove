@@ -21,6 +21,7 @@ export default defineConfig({
     'temple-sanctuary.spec.ts',
     'telegram-navigation.spec.ts',
     'flow-telegram-reader.spec.ts',
+    'flow-composer.spec.ts',
     'journal-redesign.spec.ts',
   ],
   timeout: 90_000,

@@ -6,14 +6,11 @@ import { Image as ImageIcon, X } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
-  ShimmerPreview,
+  ProcessingStatus,
   YouTubePreview,
 } from "./new-post/Previews";
 import { useNewPostModal } from "./new-post/useNewPostModal";
-import type {
-  NewPostModalProps,
-  SaveState,
-} from "./new-post/types";
+import type { NewPostModalProps, SaveState } from "./new-post/types";
 
 const FOCUSABLE_SELECTOR = [
   "a[href]",
@@ -51,25 +48,7 @@ function readPixelVariable(name: string): number {
   return match ? Number.parseFloat(match[1]) : 0;
 }
 
-function SaveStatus({
-  state,
-  error,
-}: {
-  state: SaveState;
-  error?: string | null;
-}) {
-  if (error) {
-    return (
-      <span
-        className="max-w-[220px] truncate text-xs text-[#A45E50]"
-        title={error}
-        role="status"
-      >
-        {error}
-      </span>
-    );
-  }
-
+function SaveStatus({ state }: { state: SaveState }) {
   const labels: Partial<Record<SaveState, string>> = {
     creating: "Opening…",
     loading: "Loading…",
@@ -83,11 +62,7 @@ function SaveStatus({
   if (!label) return null;
 
   return (
-    <span
-      role="status"
-      aria-live="polite"
-      className="text-xs text-[#9A9388]"
-    >
+    <span role="status" aria-live="polite" className="truncate text-[11px] leading-none text-[#9A9388]">
       {label}
     </span>
   );
@@ -102,8 +77,6 @@ export default function NewPostModal({
 }: NewPostModalProps) {
   const {
     item,
-    title,
-    setTitle,
     bodyMd,
     setBodyMd,
     links,
@@ -120,16 +93,13 @@ export default function NewPostModal({
     isParsingYouTube,
     isUploadingImage,
     isPublishing,
-    isClearing,
     isEditing,
-    canClear,
     canPost,
     busy,
     fileRef,
     textareaRef,
     handlePaste,
     finish,
-    clearDraft,
     handleClose,
   } = useNewPostModal({
     open,
@@ -141,6 +111,7 @@ export default function NewPostModal({
 
   const dialogRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const loading = isInitializing || !item;
 
   useEffect(() => {
     if (!open) return;
@@ -208,6 +179,22 @@ export default function NewPostModal({
     };
   }, [open, textareaRef]);
 
+  // An edited item is disabled while it loads. Focus the writing area once it
+  // becomes editable so the composer always opens as a writing surface.
+  useEffect(() => {
+    if (!open || loading) return;
+
+    if (document.activeElement === textareaRef.current) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      textareaRef.current?.focus({ preventScroll: true });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [open, loading, textareaRef]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -248,7 +235,18 @@ export default function NewPostModal({
 
   if (!open) return null;
 
-  const loading = isInitializing || !item;
+  // One truthful line belongs to the fixed bottom row, never to the writing
+  // column: parsing or uploading must not push the text or attachments around.
+  const processingLabel = isUploadingImage
+    ? "Uploading image…"
+    : isParsingYouTube
+      ? "Loading video…"
+      : isParsingLink
+        ? "Loading link…"
+        : null;
+
+  const hasAttachments =
+    Boolean(youtubeMetadata) || links.length > 0 || images.length > 0;
 
   return createPortal(
     <div
@@ -276,17 +274,14 @@ export default function NewPostModal({
           max-h-[var(--pi-composer-height,var(--tg-viewport-height,100dvh))]
           translate-y-[var(--pi-composer-offset,0px)] sm:translate-y-0
           bg-[#FAF8F4] text-[#37332D] outline-none
-          sm:h-[min(86dvh,760px,var(--pi-composer-height,var(--tg-viewport-height,100dvh)))] sm:max-h-[calc(100dvh-2rem)]
-          sm:max-w-[40rem] sm:rounded-2xl
+          sm:h-[min(88dvh,820px,var(--pi-composer-height,var(--tg-viewport-height,100dvh)))]
+          sm:max-h-[calc(100dvh-2rem)] sm:w-[min(92vw,54rem)]
+          sm:max-w-[54rem] sm:rounded-2xl
         "
         onMouseDown={(event) => event.stopPropagation()}
       >
-        {/* Minimal top row */}
-        <header className="flex shrink-0 items-center justify-between pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pt-[max(16px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))] sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-[max(20px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))]">
-          <div className="min-w-0">
-            <SaveStatus state={saveState} error={error} />
-          </div>
-
+        {/* The only permanent control in the top row. */}
+        <header className="flex shrink-0 items-center justify-end pl-[max(22px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(22px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pt-[max(12px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))] sm:pl-[max(40px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(40px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-[max(16px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))]">
           <button
             type="button"
             onClick={() => {
@@ -308,161 +303,82 @@ export default function NewPostModal({
           </button>
         </header>
 
-        {/* Writing area: no field borders or inner card */}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pb-5 pt-3 sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-4">
+        {/* Writing area: no field borders, no inner card, no focus frame. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pl-[max(22px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(22px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pb-4 pt-1 sm:pl-[max(40px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(40px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pb-6 sm:pt-2">
           <div className="flex min-h-full flex-col">
-            <textarea
-              ref={textareaRef}
-              value={bodyMd}
-              onChange={(event) => setBodyMd(event.target.value)}
-              onPaste={handlePaste}
-              placeholder="Write something…"
-              disabled={busy}
-              rows={5}
-              aria-label="Post text"
-              className="
-                min-h-36 w-full flex-1 resize-none border-0
-                bg-transparent p-0 font-serif text-lg
-                leading-[1.7] tracking-[-0.01em] text-[#49443C]
-                outline-none ring-0 placeholder:text-[#B8B0A4]
-                focus:ring-0 focus-visible:rounded-[2px]
-                focus-visible:outline focus-visible:outline-2
-                focus-visible:outline-offset-[6px]
-                focus-visible:outline-[#8A8378]
-                sm:text-xl
-              "
-            />
+            <div
+              data-composer-writing
+              className="group flex min-h-0 flex-1 flex-col"
+            >
+              <span
+                aria-hidden="true"
+                data-composer-focus-rule
+                className="
+                  mb-1 mt-0.5 block h-0.5 w-8 rounded-full bg-transparent
+                  group-focus-within:bg-[#8A8378]
+                "
+              />
+              <textarea
+                ref={textareaRef}
+                value={bodyMd}
+                onChange={(event) => setBodyMd(event.target.value)}
+                onPaste={handlePaste}
+                disabled={loading || isPublishing}
+                rows={8}
+                aria-label="Post text"
+                className="
+                  min-h-[9rem] w-full flex-1 resize-none appearance-none
+                  border-0 bg-transparent p-0 font-serif text-lg
+                  leading-[1.7] tracking-[-0.01em] text-[#49443C]
+                  caret-[#37332D] outline-none ring-0
+                  focus:outline-none focus:ring-0
+                  focus-visible:outline-none focus-visible:ring-0
+                  sm:min-h-[16rem] sm:text-xl sm:leading-[1.68]
+                "
+              />
+            </div>
 
-            {/* Automatic URL / YouTube previews */}
-            {(isParsingLink || isParsingYouTube) && (
-              <div className="mt-4">
-                <ShimmerPreview
-                  variant={
-                    isParsingYouTube ? "youtube" : "link"
-                  }
-                  text={
-                    isParsingYouTube
-                      ? "Loading video…"
-                      : "Loading link…"
-                  }
-                />
-              </div>
-            )}
+            {hasAttachments && (
+              <div className="mt-4 space-y-1.5" aria-label="Attachments">
+                {youtubeMetadata && (
+                  <YouTubePreview
+                    metadata={youtubeMetadata}
+                    url={
+                      youtubeMetadata.video_id
+                        ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
+                        : ""
+                    }
+                    onRemove={removeYouTube}
+                  />
+                )}
 
-            {isUploadingImage && (
-              <div className="mt-4">
-                <ShimmerPreview
-                  variant="image"
-                  text="Uploading image…"
-                />
-              </div>
-            )}
-
-            {youtubeMetadata && (
-              <div className="group relative mt-4">
-                <button
-                  type="button"
-                  onClick={removeYouTube}
-                  aria-label="Remove video"
-                  title="Remove video"
-                  className="
-                    absolute right-2 top-2 z-10 flex h-8 w-8
-                    items-center justify-center rounded-full
-                    bg-black/55 text-white opacity-100 transition
-                    hover:bg-black/75 focus-visible:opacity-100
-                    focus-visible:outline-none focus-visible:ring-2
-                    focus-visible:ring-white focus-visible:ring-offset-2
-                    focus-visible:ring-offset-black/40
-                    sm:opacity-0 sm:group-hover:opacity-100
-                  "
-                >
-                  <X size={15} />
-                </button>
-
-                <YouTubePreview
-                  metadata={youtubeMetadata}
-                  url={
-                    youtubeMetadata.video_id
-                      ? `https://www.youtube.com/watch?v=${youtubeMetadata.video_id}`
-                      : ""
-                  }
-                />
-              </div>
-            )}
-
-            {links.length > 0 && (
-              <div className="mt-4 space-y-4">
                 {links.map((link) => (
-                  <div key={link.id} className="group relative">
-                    <button
-                      type="button"
-                      onClick={() => removeLink(link.id)}
-                      aria-label="Remove link"
-                      title="Remove link"
-                      className="
-                        absolute right-2 top-2 z-10 flex h-8 w-8
-                        items-center justify-center rounded-full
-                        bg-black/55 text-white opacity-100 transition
-                        hover:bg-black/75 focus-visible:opacity-100
-                        focus-visible:outline-none focus-visible:ring-2
-                        focus-visible:ring-white focus-visible:ring-offset-2
-                        focus-visible:ring-offset-black/40
-                        sm:opacity-0 sm:group-hover:opacity-100
-                      "
-                    >
-                      <X size={15} />
-                    </button>
-
-                    <LinkPreviewCard
-                      preview={link.preview}
-                      url={link.url}
-                    />
-                  </div>
+                  <LinkPreviewCard
+                    key={link.id}
+                    preview={link.preview}
+                    url={link.url}
+                    onRemove={() => removeLink(link.id)}
+                  />
                 ))}
-              </div>
-            )}
 
-            {images.length > 0 && (
-              <div
-                className={
-                  images.length === 1
-                    ? "mt-4"
-                    : "mt-4 grid grid-cols-2 gap-3 sm:gap-4"
-                }
-              >
-                {images.map((image) => (
-                  <div key={image.id} className="group relative">
-                    <button
-                      type="button"
-                      onClick={() => removeImage(image.id)}
-                      aria-label="Remove image"
-                      title="Remove image"
-                      className="
-                        absolute right-2 top-2 z-10 flex h-8 w-8
-                        items-center justify-center rounded-full
-                        bg-black/55 text-white opacity-100 transition
-                        hover:bg-black/75 focus-visible:opacity-100
-                        focus-visible:outline-none focus-visible:ring-2
-                        focus-visible:ring-white focus-visible:ring-offset-2
-                        focus-visible:ring-offset-black/40
-                        sm:opacity-0 sm:group-hover:opacity-100
-                      "
-                    >
-                      <X size={15} />
-                    </button>
-
-                    <ImagePreview
-                      src={image.url}
-                      alt={image.name || "Flow image"}
-                    />
+                {images.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-0.5">
+                    {images.map((image) => (
+                      <ImagePreview
+                        key={image.id}
+                        src={image.url}
+                        alt={image.name || "Flow image"}
+                        onRemove={() => removeImage(image.id)}
+                      />
+                    ))}
                   </div>
-                ))}
+                )}
               </div>
             )}
 
             {error && (
               <p
-                className="mt-4 text-sm leading-relaxed text-[#A45E50]"
+                className="mt-3 text-xs leading-relaxed text-[#A45E50]"
                 role="alert"
               >
                 {error}
@@ -471,64 +387,54 @@ export default function NewPostModal({
           </div>
         </div>
 
-        {/* Quiet bottom toolbar */}
+        {/* Three permanent controls in total: close above, attach and
+            post/save here. Parsing and save feedback share this fixed row. */}
         <footer
           className="
-            flex shrink-0 items-center justify-between gap-3
-            pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))]
-            pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))]
-            pb-[max(16px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
-            pt-3 sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pb-[max(20px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
+            flex shrink-0 items-center gap-2
+            pl-[max(22px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))]
+            pr-[max(22px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))]
+            pb-[max(12px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
+            pt-2
+            sm:pl-[max(40px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))]
+            sm:pr-[max(40px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))]
+            sm:pb-[max(20px,env(safe-area-inset-bottom),var(--tg-safe-area-bottom,0px))]
           "
         >
-          <div className="flex min-w-0 items-center gap-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept="image/*"
-              multiple
-              tabIndex={-1}
-              className="hidden"
-              onChange={handleImageUpload}
-            />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            tabIndex={-1}
+            className="hidden"
+            onChange={handleImageUpload}
+          />
 
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              disabled={busy || loading}
-              aria-label="Attach images"
-              title="Attach images"
-              className={`
-                flex h-11 w-11 shrink-0 items-center justify-center
-                rounded-full transition-colors
-                hover:bg-black/[0.05]
-                focus-visible:outline-none focus-visible:ring-2
-                focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
-                focus-visible:ring-offset-[#FAF8F4] disabled:opacity-40
-                ${
-                  images.length > 0
-                    ? "text-[#37332D]"
-                    : "text-[#898277]"
-                }
-              `}
-            >
-              <ImageIcon size={19} strokeWidth={1.6} />
-            </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy || loading}
+            aria-label="Attach images"
+            title="Attach images"
+            className={`
+              flex h-11 w-11 shrink-0 items-center justify-center
+              rounded-full transition-colors
+              hover:bg-black/[0.05]
+              focus-visible:outline-none focus-visible:ring-2
+              focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
+              focus-visible:ring-offset-[#FAF8F4] disabled:opacity-40
+              ${images.length > 0 ? "text-[#37332D]" : "text-[#898277]"}
+            `}
+          >
+            <ImageIcon size={19} strokeWidth={1.6} />
+          </button>
 
-            {canClear && (
-              <button
-                type="button"
-                onClick={() => void clearDraft()}
-                disabled={busy || isClearing}
-                className="
-                  rounded-sm text-xs text-[#92897D] transition-colors
-                  hover:text-[#37332D] focus-visible:text-[#37332D]
-                  focus-visible:underline focus-visible:underline-offset-4
-                  focus-visible:outline-none disabled:opacity-40
-                "
-              >
-                {isClearing ? "Clearing…" : "Clear"}
-              </button>
+          <div className="flex min-w-0 flex-1 items-center">
+            {processingLabel ? (
+              <ProcessingStatus text={processingLabel} />
+            ) : (
+              <SaveStatus state={saveState} />
             )}
           </div>
 
@@ -537,7 +443,7 @@ export default function NewPostModal({
             onClick={() => void finish()}
             disabled={!canPost || busy}
             className="
-              min-h-11 rounded-full bg-[#37332D] px-6 py-2.5
+              min-h-11 shrink-0 rounded-full bg-[#37332D] px-6 py-2.5
               text-sm text-white transition-colors
               hover:bg-[#514B42] active:scale-[0.98]
               focus-visible:outline-none focus-visible:ring-2
