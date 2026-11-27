@@ -522,6 +522,43 @@ export async function bindChannelToProject(
   }
 
   const channel = mapChannel(channelRow as unknown as Record<string, unknown>);
+
+  if (channel.status !== 'active') {
+    throw new YouTubeError({
+      code: 'not_connected',
+      message:
+        'This channel is no longer available to the connected Google account. Refresh the account channels first.',
+      stage: 'binding',
+    });
+  }
+
+  const { data: connectionRow, error: connectionError } = await store
+    .from('youtube_oauth_connections')
+    .select('id,status')
+    .eq('id', channel.connectionId)
+    .eq('owner_id', input.ownerId)
+    .maybeSingle();
+
+  if (connectionError && isMissingYouTubeSchema(connectionError)) {
+    throw new YouTubeError({
+      code: 'not_configured',
+      message: 'The multi-channel YouTube migration has not been applied.',
+      stage: 'schema',
+    });
+  }
+
+  const connectionStatus = text(
+    (connectionRow as unknown as Record<string, unknown> | null)?.status
+  );
+
+  if (!connectionRow || !['connected', 'error'].includes(connectionStatus)) {
+    throw new YouTubeError({
+      code: 'needs_reauthorization',
+      message: 'The Google connection for this channel is disconnected or needs reauthorization.',
+      stage: 'binding',
+    });
+  }
+
   const now = new Date().toISOString();
 
   // Update the existing active row in place when possible. This keeps the
@@ -650,6 +687,169 @@ export type ChannelAccessToken = {
   connection: SafeOAuthConnection;
 };
 
+export type ConnectionAccessToken = {
+  accessToken: string;
+  connection: SafeOAuthConnection;
+};
+
+/**
+ * Refreshes and caches an access token for one Google connection. The refresh
+ * token is decrypted only inside this function and is never returned.
+ *
+ * `error` is retryable: a transient upstream/quota failure must not force a new
+ * consent. `needs_reauthorization` and `revoked` require an explicit reconnect.
+ */
+async function refreshConnectionAccessToken(
+  store: SupabaseClient,
+  ownerId: string,
+  connectionRow: Record<string, unknown>
+): Promise<ConnectionAccessToken> {
+  const connection = mapSafeConnection(connectionRow);
+
+  if (!['connected', 'error'].includes(connection.status)) {
+    throw new YouTubeError({
+      code: 'needs_reauthorization',
+      message: 'The Google connection for this channel needs to be reconnected.',
+      stage: 'connection',
+    });
+  }
+
+  const fingerprint = `${text(connectionRow.token_ciphertext)}:${text(connectionRow.token_tag)}`;
+  const cached = tokenCache.get(connection.id);
+  const now = Date.now();
+
+  if (cached && cached.fingerprint === fingerprint && cached.expiresAtMs > now + 30_000) {
+    return { accessToken: cached.accessToken, connection };
+  }
+
+  const refreshToken = openSecret({
+    ciphertext: text(connectionRow.token_ciphertext) || null,
+    iv: text(connectionRow.token_iv) || null,
+    tag: text(connectionRow.token_tag) || null,
+    keyVersion: text(connectionRow.token_key_version) || null,
+  });
+
+  if (!refreshToken) {
+    await markOAuthConnectionError(
+      store,
+      connection.id,
+      'needs_reauthorization',
+      'missing_token',
+      ownerId
+    );
+    throw new YouTubeError({
+      code: 'needs_reauthorization',
+      message: 'The stored Google authorization cannot be decrypted. Reconnect the account.',
+      stage: 'token',
+    });
+  }
+
+  let token;
+  try {
+    token = await refreshGoogleAccessToken(refreshToken);
+  } catch (error) {
+    const code =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code?: unknown }).code ?? '')
+        : '';
+    const needsReauth = code === 'invalid_grant' || code === 'needs_reauthorization';
+
+    await markOAuthConnectionError(
+      store,
+      connection.id,
+      needsReauth ? 'needs_reauthorization' : 'upstream_error',
+      needsReauth ? 'refresh_rejected' : 'refresh_failed',
+      ownerId
+    );
+
+    throw new YouTubeError({
+      code: needsReauth ? 'needs_reauthorization' : 'upstream_error',
+      message: needsReauth
+        ? 'Google no longer accepts this authorization. Reconnect the Google account.'
+        : 'Google could not refresh the YouTube access token.',
+      stage: 'refresh',
+    });
+  }
+
+  let effectiveFingerprint = fingerprint;
+
+  // Google may omit `refresh_token` on a repeated consent or refresh. Only
+  // rotate the stored credential when a new one was actually returned.
+  if (token.refreshToken && token.refreshToken !== refreshToken) {
+    const sealed = sealSecret(token.refreshToken);
+    await store
+      .from('youtube_oauth_connections')
+      .update({
+        token_ciphertext: sealed.ciphertext,
+        token_iv: sealed.iv,
+        token_tag: sealed.tag,
+        token_key_version: sealed.keyVersion,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connection.id)
+      .eq('owner_id', ownerId);
+    effectiveFingerprint = `${sealed.ciphertext}:${sealed.tag}`;
+  }
+
+  if (connection.status === 'error') {
+    // A successful retry clears the transient error without touching the
+    // sealed token or requiring another consent.
+    await store
+      .from('youtube_oauth_connections')
+      .update({
+        status: 'connected',
+        last_error_code: null,
+        last_error_message: null,
+        last_checked_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', connection.id)
+      .eq('owner_id', ownerId);
+
+    connection.status = 'connected';
+    connection.lastErrorCode = null;
+    connection.lastErrorMessage = null;
+  }
+
+  const expiresAtMs = token.expiresAt ? Date.parse(token.expiresAt) : now + 3_000_000;
+
+  tokenCache.set(connection.id, {
+    connectionId: connection.id,
+    fingerprint: effectiveFingerprint,
+    accessToken: token.accessToken,
+    expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : now + 3_000_000,
+  });
+
+  return { accessToken: token.accessToken, connection };
+}
+
+/** Loads a token for a connection even when channel discovery returned zero. */
+export async function loadConnectionAccessToken(
+  store: SupabaseClient,
+  input: { ownerId: string; connectionId: string }
+): Promise<ConnectionAccessToken> {
+  const { data, error } = await store
+    .from('youtube_oauth_connections')
+    .select('*')
+    .eq('id', input.connectionId)
+    .eq('owner_id', input.ownerId)
+    .maybeSingle();
+
+  if (error || !data) {
+    throw new YouTubeError({
+      code: 'not_connected',
+      message: 'The Google connection was not found for this owner.',
+      stage: 'connection',
+    });
+  }
+
+  return refreshConnectionAccessToken(
+    store,
+    input.ownerId,
+    data as unknown as Record<string, unknown>
+  );
+}
+
 /**
  * Refreshes and caches an access token for one channel connection. The refresh
  * token is decrypted only inside this function and is never returned.
@@ -689,118 +889,39 @@ export async function loadChannelAccessToken(
     });
   }
 
-  const raw = connectionRow as unknown as Record<string, unknown>;
-  const connection = mapSafeConnection(raw);
+  const token = await refreshConnectionAccessToken(
+    store,
+    input.ownerId,
+    connectionRow as unknown as Record<string, unknown>
+  );
 
-  if (connection.status !== 'connected') {
-    throw new YouTubeError({
-      code: 'needs_reauthorization',
-      message: 'The Google connection for this channel needs to be reconnected.',
-      stage: 'connection',
-    });
-  }
-
-  const fingerprint = `${text(raw.token_ciphertext)}:${text(raw.token_tag)}`;
-  const cached = tokenCache.get(channel.connectionId);
-  const now = Date.now();
-
-  if (cached && cached.fingerprint === fingerprint && cached.expiresAtMs > now + 30_000) {
-    return { accessToken: cached.accessToken, channel, connection };
-  }
-
-  const refreshToken = openSecret({
-    ciphertext: text(raw.token_ciphertext) || null,
-    iv: text(raw.token_iv) || null,
-    tag: text(raw.token_tag) || null,
-  });
-
-  if (!refreshToken) {
-    await markOAuthConnectionError(store, connection.id, 'needs_reauthorization', 'missing_token');
-    throw new YouTubeError({
-      code: 'needs_reauthorization',
-      message: 'The stored Google authorization cannot be decrypted. Reconnect the account.',
-      stage: 'token',
-    });
-  }
-
-  let token;
-  try {
-    token = await refreshGoogleAccessToken(refreshToken);
-  } catch (error) {
-    const code =
-      error && typeof error === 'object' && 'code' in error
-        ? String((error as { code?: unknown }).code ?? '')
-        : '';
-    const needsReauth = code === 'invalid_grant' || code === 'needs_reauthorization';
-
-    await markOAuthConnectionError(
-      store,
-      connection.id,
-      needsReauth ? 'needs_reauthorization' : 'upstream_error',
-      needsReauth ? 'refresh_rejected' : 'refresh_failed'
-    );
-
-    throw new YouTubeError({
-      code: needsReauth ? 'needs_reauthorization' : 'upstream_error',
-      message: needsReauth
-        ? 'Google no longer accepts this authorization. Reconnect the Google account.'
-        : 'Google could not refresh the YouTube access token.',
-      stage: 'refresh',
-    });
-  }
-
-  let effectiveFingerprint = fingerprint;
-
-  if (token.refreshToken && token.refreshToken !== refreshToken) {
-    const sealed = sealSecret(token.refreshToken);
-    await store
-      .from('youtube_oauth_connections')
-      .update({
-        token_ciphertext: sealed.ciphertext,
-        token_iv: sealed.iv,
-        token_tag: sealed.tag,
-        token_key_version: sealed.keyVersion,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', connection.id)
-      .eq('owner_id', input.ownerId);
-    effectiveFingerprint = `${sealed.ciphertext}:${sealed.tag}`;
-  }
-
-  const expiresAtMs = token.expiresAt ? Date.parse(token.expiresAt) : now + 3_000_000;
-
-  tokenCache.set(channel.connectionId, {
-    connectionId: channel.connectionId,
-    fingerprint: effectiveFingerprint,
-    accessToken: token.accessToken,
-    expiresAtMs: Number.isFinite(expiresAtMs) ? expiresAtMs : now + 3_000_000,
-  });
-
-  return { accessToken: token.accessToken, channel, connection };
+  return { ...token, channel };
 }
 
 export async function markOAuthConnectionError(
   store: SupabaseClient,
   connectionId: string,
   code: string,
-  message: string
+  message: string,
+  ownerId?: string
 ): Promise<void> {
-  await store
-    .from('youtube_oauth_connections')
-    .update({
-      status:
-        code === 'needs_reauthorization' || code === 'invalid_grant'
-          ? 'needs_reauthorization'
-          : 'error',
-      last_error_code: code.slice(0, 120),
-      last_error_message: message.slice(0, 300),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', connectionId)
-    .then(
-      () => undefined,
-      () => undefined
-    );
+  let query = store.from('youtube_oauth_connections').update({
+    status:
+      code === 'needs_reauthorization' || code === 'invalid_grant'
+        ? 'needs_reauthorization'
+        : 'error',
+    last_error_code: code.slice(0, 120),
+    last_error_message: message.slice(0, 300),
+    updated_at: new Date().toISOString(),
+  });
+
+  query = query.eq('id', connectionId);
+  if (ownerId) query = query.eq('owner_id', ownerId);
+
+  await query.then(
+    () => undefined,
+    () => undefined
+  );
 }
 
 /**
@@ -832,13 +953,13 @@ export async function disconnectOAuthConnection(
     ciphertext: text(raw.token_ciphertext) || null,
     iv: text(raw.token_iv) || null,
     tag: text(raw.token_tag) || null,
+    keyVersion: text(raw.token_key_version) || null,
   });
 
   let revoked = false;
   if (refreshToken) {
     try {
-      await revokeGoogleToken(refreshToken);
-      revoked = true;
+      revoked = await revokeGoogleToken(refreshToken);
     } catch {
       revoked = false;
     }

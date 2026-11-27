@@ -8,7 +8,11 @@ import {
   probeGoogleConsentUrl,
 } from '@/lib/analytics/website/providers/oauth';
 import { signState } from '@/lib/analytics/website/tokenCrypto';
-import { requireAdminFromRequest, getServerSupabaseClient } from '@/lib/serverAuth';
+import {
+  explainAdminDenial,
+  requireAdminFromRequest,
+  getServerSupabaseClient,
+} from '@/lib/serverAuth';
 import {
   YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   getYouTubeChannelsRedirectUri,
@@ -56,7 +60,16 @@ export async function GET(request: Request) {
       throw error;
     }
 
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const reason = await explainAdminDenial(request);
+
+    return fail(request, reason, 'art-engine', {
+      detail:
+        reason === 'not_authenticated'
+          ? 'admin_session_missing'
+          : reason === 'admin_role_required'
+            ? 'admin_role_missing'
+            : 'admin_check_failed',
+    });
   }
 
   const url = new URL(request.url);

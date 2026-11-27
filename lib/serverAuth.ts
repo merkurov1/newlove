@@ -144,13 +144,127 @@ async function loadCurrentUser(): Promise<AuthenticatedUser | null> {
     );
   }
 
+  /*
+   * `users.role` is canonical. The legacy `user_roles` fallback is consulted
+   * only when the account has no `users` row at all: an explicit USER value is
+   * authoritative and must not be overridden by a stale legacy table.
+   */
+  const role =
+    String(profile?.role || '').toUpperCase() === 'ADMIN' ||
+    (!profile && (await isAdminByRoleTables(user.id)))
+      ? 'ADMIN'
+      : 'USER';
+
   return {
     id: user.id,
     email: user.email,
-    role: profile?.role === 'ADMIN' ? 'ADMIN' : 'USER',
+    role,
     profile,
     user,
   };
+}
+
+/**
+ * The authoritative admin predicate lives in `users.role` and/or the legacy
+ * `user_roles` table (see 2026-10-30_security_hardening_private_data.sql and
+ * 2026-11-03_auth_role_consolidation.sql). Production had an administrator
+ * whose `users` row was missing or out of sync while `user_roles` still named
+ * ADMIN, which made every admin API return 401 even though the browser session
+ * was valid. Both sources are now consulted, with the service role, on the
+ * server only.
+ */
+async function isAdminByRoleTables(userId: string): Promise<boolean> {
+  if (!userId) return false;
+
+  let service: SupabaseClient;
+
+  try {
+    service = getServerSupabaseClient({ useServiceRole: true });
+  } catch (error) {
+    console.error('[serverAuth] service role unavailable for role lookup', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+    return false;
+  }
+
+  const { data: profile, error: profileError } = await service
+    .from('users')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+
+  if (profileError) {
+    console.error('[serverAuth] users.role lookup failed', {
+      code: profileError.code,
+    });
+  } else if (String(profile?.role || '').toUpperCase() === 'ADMIN') {
+    return true;
+  }
+
+  const { data: roleRows, error: roleError } = await service
+    .from('user_roles')
+    .select('roles!inner(name)')
+    .eq('user_id', userId);
+
+  if (roleError) {
+    // A missing legacy table is not an error worth failing authorization on.
+    if (roleError.code !== '42P01' && roleError.code !== '42703') {
+      console.error('[serverAuth] user_roles lookup failed', {
+        code: roleError.code,
+      });
+    }
+    return false;
+  }
+
+  return (roleRows ?? []).some((row) => {
+    const role = (row as { roles?: { name?: unknown } | null }).roles;
+    return String(role?.name || '').toUpperCase() === 'ADMIN';
+  });
+}
+
+/**
+ * Explains why an admin request was rejected, without leaking identity data.
+ * Route handlers use the result to return `not_authenticated` versus
+ * `admin_role_required`, so the UI can tell the owner what to fix instead of a
+ * bare 401.
+ */
+export async function explainAdminDenial(
+  req?: Request | null,
+): Promise<'not_authenticated' | 'admin_role_required' | 'unknown'> {
+  try {
+    const authorization = req?.headers.get('authorization');
+    const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
+
+    if (token) {
+      const supabaseUrl =
+        process.env.NEXT_PUBLIC_SUPABASE_URL ||
+        process.env.SUPABASE_URL;
+      const anonKey =
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+        process.env.SUPABASE_KEY;
+
+      if (supabaseUrl && anonKey) {
+        const authClient = createSupabaseClient(supabaseUrl, anonKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+          },
+        });
+        const {
+          data: { user },
+        } = await authClient.auth.getUser(token);
+
+        if (user) return 'admin_role_required';
+        return 'not_authenticated';
+      }
+    }
+
+    const cookieUser = await loadCurrentUser();
+    return cookieUser ? 'admin_role_required' : 'not_authenticated';
+  } catch {
+    return 'unknown';
+  }
 }
 
 /**
@@ -345,7 +459,13 @@ export async function requireAdminFromRequest(
       throw new Error('Failed to verify administrator role.');
     }
 
-    if (profile?.role !== 'ADMIN') {
+    const bearerRole =
+      String(profile?.role || '').toUpperCase() === 'ADMIN' ||
+      (!profile && (await isAdminByRoleTables(user.id)))
+        ? 'ADMIN'
+        : 'USER';
+
+    if (bearerRole !== 'ADMIN') {
       logAuthDenied('bearer-role', req);
       throw new AuthenticationError('Unauthorized: Admin access required');
     }

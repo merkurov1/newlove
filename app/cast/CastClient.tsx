@@ -19,6 +19,7 @@ import TempleTopBar from '@/components/TempleTopBar';
 import useTempleIdentity from '@/hooks/useTempleIdentity';
 import { createClient } from '@/lib/supabase/client';
 import {
+  clearRitualDraft,
   readRitualDraft,
   writeRitualDraft,
 } from '@/lib/temple/ritualDraft';
@@ -194,7 +195,16 @@ const CAST_COPY: Record<
     archiveBody: string;
     saved: string;
     secure: string;
+    emailLinkedNoDelivery: string;
+    emailDeliveryFailed: string;
     returnToTemple: string;
+    newReading: string;
+    skip: string;
+    retainLabel: string;
+    retainHint: string;
+    pendingTitle: string;
+    pendingBody: string;
+    restoreAnswers: string;
     genericError: string;
     emailError: string;
     labels: {
@@ -213,12 +223,12 @@ const CAST_COPY: Record<
     languageGroup: 'Reading language',
     disclosureTitle: 'Before you begin',
     disclosure:
-      'Your answers are sent to an external AI model (DeepSeek) to generate this reflection. The result is stored privately in the Temple Cast archive; signed-in readings keep the answers in your account, while anonymous readings do not retain raw answers. Adding an email links the result to you. Only the archetype and a display name may appear in the public Temple trace — never your answers. This is an interpretive ritual, not a clinical diagnosis.',
+      'Your answers are sent for analysis to DeepSeek directly, or through the OpenRouter gateway if the direct route is unavailable. Only the answers and a language flag are sent; your email, account id and IP are not part of that request. The result is stored privately. Raw answers are kept only when you are signed in and explicitly choose to keep them; otherwise only the reading is stored. Adding an email links this reading to you and sends one copy — the email is never shown publicly. Only the archetype and an optional display name may appear in the public Temple trace. The reading is an AI interpretation, not a measurement of your personality and not a clinical diagnosis.',
     questionCounter: (step) =>
       `Question ${String(step).padStart(2, '0')} / 10`,
     stageLabel: 'The Cast',
     shortDisclosure:
-      'Answers are sent to DeepSeek AI and stored privately. Only the archetype may appear publicly. This is not a diagnosis.',
+      'Answers are sent to DeepSeek (direct, or via OpenRouter as a fallback) and stored privately. Only the archetype may appear publicly. This is an AI interpretation, not a diagnosis.',
     placeholder: 'Answer honestly...',
     enterHint: '[ PRESS ENTER TO SEND ]',
     next: 'NEXT',
@@ -237,10 +247,24 @@ const CAST_COPY: Record<
     interpretation: 'Archetype interpretation · not a clinical diagnosis',
     archiveTitle: 'Keep this reading',
     archiveBody:
-      'Enter an email to keep this reading and receive a copy.',
-    saved: '✓ Reading secured to your email',
+      'Enter an email to link this reading to you and receive one copy of the result. Your answers are not included in that email.',
+    saved: '✓ Reading linked and the copy was sent to your email',
     secure: 'Secure',
+    emailLinkedNoDelivery:
+      'The reading is linked to your email, but this server has email delivery disabled, so no copy was sent.',
+    emailDeliveryFailed:
+      'The reading is linked to your email, but the provider could not deliver the message.',
     returnToTemple: 'Return to the Temple',
+    newReading: 'Start a new reading',
+    skip: 'Not applicable',
+    retainLabel: 'Keep my answers in my account',
+    retainHint:
+      'Optional. If you leave this off, only the reading is stored and the answers are discarded after analysis.',
+    pendingTitle: 'The reading is unfinished',
+    pendingBody:
+      'A previous analysis did not finish. Your answers are still on this device — you can retry without answering again.',
+    restoreAnswers:
+      'Answers restored from this session. You can retry the analysis.',
     genericError: 'The reading could not be completed. Please try again.',
     emailError: 'This reading could not be linked to that email.',
     labels: {
@@ -258,12 +282,12 @@ const CAST_COPY: Record<
     languageGroup: 'Язык прочтения',
     disclosureTitle: 'Прежде чем начать',
     disclosure:
-      'Ответы отправляются внешней ИИ-модели (DeepSeek), чтобы создать это отражение. Результат хранится приватно в архиве Каста; у авторизованных чтений ответы остаются в аккаунте, а анонимные чтения не сохраняют сырые ответы. Если добавить email, результат привяжется к вам. В публичной хронике могут появиться только архетип и отображаемое имя — никогда ваши ответы. Это интерпретирующий ритуал, а не клинический диагноз.',
+      'Ответы отправляются на анализ напрямую в DeepSeek или через шлюз OpenRouter, если прямой маршрут недоступен. Передаются только ответы и язык; email, идентификатор аккаунта и IP в этом запросе не участвуют. Результат хранится приватно. Сырые ответы сохраняются только если вы вошли в аккаунт и явно выбрали их сохранение; иначе сохраняется только прочтение. Если добавить email, прочтение привяжется к вам и вам придёт одна копия результата — email никогда не публикуется. В публичной хронике могут появиться только архетип и отображаемое имя. Это интерпретация ИИ, а не измерение личности и не клинический диагноз.',
     questionCounter: (step) =>
       `Вопрос ${String(step).padStart(2, '0')} / 10`,
     stageLabel: 'Каст',
     shortDisclosure:
-      'Ответы отправляются ИИ DeepSeek и хранятся приватно. Публично может появиться только архетип. Это не диагноз.',
+      'Ответы отправляются в DeepSeek (напрямую или через OpenRouter как резерв) и хранятся приватно. Публично может появиться только архетип. Это интерпретация ИИ, а не диагноз.',
     placeholder: 'Пишите честно...',
     enterHint: '[ ENTER — ОТПРАВИТЬ ]',
     next: 'ДАЛЕЕ',
@@ -282,10 +306,24 @@ const CAST_COPY: Record<
     interpretation: 'Интерпретация архетипа · не клинический диагноз',
     archiveTitle: 'Сохранить прочтение',
     archiveBody:
-      'Введите email, чтобы сохранить прочтение и получить копию.',
-    saved: '✓ Прочтение привязано к вашему email',
+      'Введите email, чтобы привязать прочтение к вам и получить одну копию результата. Ответы в письмо не включаются.',
+    saved: '✓ Прочтение привязано, копия отправлена на email',
     secure: 'Сохранить',
+    emailLinkedNoDelivery:
+      'Прочтение привязано к email, но отправка писем на этом сервере отключена — копия не отправлена.',
+    emailDeliveryFailed:
+      'Прочтение привязано к email, но провайдер не смог доставить письмо.',
     returnToTemple: 'Вернуться в Храм',
+    newReading: 'Начать новое прочтение',
+    skip: 'Не применимо',
+    retainLabel: 'Сохранить мои ответы в аккаунте',
+    retainHint:
+      'Необязательно. Если не включать, сохранится только прочтение, а ответы будут удалены после анализа.',
+    pendingTitle: 'Прочтение не завершено',
+    pendingBody:
+      'Предыдущий анализ не завершился. Ответы всё ещё на этом устройстве — можно повторить без повторных ответов.',
+    restoreAnswers:
+      'Ответы восстановлены из этой сессии. Можно повторить анализ.',
     genericError: 'Прочтение не завершилось. Попробуйте ещё раз.',
     emailError: 'Не удалось привязать прочтение к этому email.',
     labels: {
@@ -339,7 +377,12 @@ interface CastResponse {
   agencyIndex?: number;
   recordId?: string;
   captureToken?: string;
+  captureExpiresAt?: string;
+  status?: string;
+  replayed?: boolean;
   error?: string;
+  code?: string;
+  retryAfter?: number;
 }
 
 type CastDraft = {
@@ -351,7 +394,12 @@ type CastDraft = {
   archetype: Archetype | '';
   recordId: string | null;
   captureToken: string | null;
+  captureExpiresAt: string | null;
   emailSent: boolean;
+  emailDelivered: boolean;
+  idempotencyKey: string | null;
+  analysisStatus: 'idle' | 'pending' | 'complete' | 'failed';
+  retainAnswers: boolean;
 };
 
 function isValidArchetype(
@@ -514,7 +562,24 @@ export default function CastClient({
   const [captureToken, setCaptureToken] =
     useState<string | null>(null);
 
+  const [captureExpiresAt, setCaptureExpiresAt] =
+    useState<string | null>(null);
+
   const [emailSent, setEmailSent] =
+    useState(false);
+
+  const [emailDelivered, setEmailDelivered] =
+    useState(false);
+
+  const [idempotencyKey, setIdempotencyKey] =
+    useState<string | null>(null);
+
+  const [analysisStatus, setAnalysisStatus] =
+    useState<'idle' | 'pending' | 'complete' | 'failed'>(
+      'idle'
+    );
+
+  const [retainAnswers, setRetainAnswers] =
     useState(false);
 
   const [emailLoading, setEmailLoading] =
@@ -580,7 +645,24 @@ export default function CastClient({
       if (typeof draft.captureToken === 'string') {
         setCaptureToken(draft.captureToken);
       }
+      if (typeof draft.captureExpiresAt === 'string') {
+        setCaptureExpiresAt(draft.captureExpiresAt);
+      }
       setEmailSent(Boolean(draft.emailSent));
+      setEmailDelivered(Boolean(draft.emailDelivered));
+      if (typeof draft.idempotencyKey === 'string') {
+        setIdempotencyKey(draft.idempotencyKey);
+      }
+      if (
+        draft.analysisStatus === 'pending' ||
+        draft.analysisStatus === 'complete' ||
+        draft.analysisStatus === 'failed'
+      ) {
+        setAnalysisStatus(draft.analysisStatus);
+      }
+      if (draft.retainAnswers === true) {
+        setRetainAnswers(true);
+      }
     }
 
     setDraftReady(true);
@@ -589,28 +671,44 @@ export default function CastClient({
   useEffect(() => {
     if (!draftReady) return;
 
+    /*
+     * Once the reading is complete the answers are no longer needed on this
+     * device: the result and the capture token are enough to resume. Keeping
+     * them would leave the most sensitive text in sessionStorage for the rest
+     * of the tab's lifetime.
+     */
     writeRitualDraft<CastDraft>(CAST_DRAFT_KEY, {
       language,
       currentStep,
-      answers,
-      currentAnswer,
+      answers: analysisData ? [] : answers,
+      currentAnswer: analysisData ? '' : currentAnswer,
       analysisData,
       archetype,
       recordId,
       captureToken,
+      captureExpiresAt,
       emailSent,
+      emailDelivered,
+      idempotencyKey,
+      analysisStatus,
+      retainAnswers,
     });
   }, [
     analysisData,
+    analysisStatus,
     answers,
     archetype,
+    captureExpiresAt,
     captureToken,
     currentAnswer,
     currentStep,
     draftReady,
+    emailDelivered,
     emailSent,
+    idempotencyKey,
     language,
     recordId,
+    retainAnswers,
   ]);
 
   const questions =
@@ -697,10 +795,14 @@ export default function CastClient({
     setArchetype('');
     setRecordId(null);
     setCaptureToken(null);
+    setCaptureExpiresAt(null);
     setShowStamp(false);
     setEmail('');
     setEmailSent(false);
+    setEmailDelivered(false);
     setEmailError('');
+    setIdempotencyKey(null);
+    setAnalysisStatus('idle');
   }
 
   function formatAnalysisText(
@@ -737,6 +839,18 @@ export default function CastClient({
     ].join('\n');
   }
 
+  function makeIdempotencyKey(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID().replace(/-/g, '');
+    }
+
+    // Fallback for very old WebViews. The server only requires 16–128 safe
+    // characters, not cryptographic strength.
+    return `k${Date.now().toString(36)}${Math.random()
+      .toString(36)
+      .slice(2, 12)}`;
+  }
+
   async function runAnalysis(
     finalAnswers: string[]
   ) {
@@ -747,7 +861,15 @@ export default function CastClient({
     setArchetype('');
     setRecordId(null);
     setCaptureToken(null);
+    setCaptureExpiresAt(null);
     setShowStamp(false);
+    setAnalysisStatus('pending');
+
+    // One submission identity survives a retry: a repeated click or a retried
+    // request can never create a second record or a second AI call.
+    const key = idempotencyKey || makeIdempotencyKey();
+
+    if (!idempotencyKey) setIdempotencyKey(key);
 
     try {
       const {
@@ -761,9 +883,11 @@ export default function CastClient({
         '/api/cast',
         {
           method: 'POST',
+          credentials: 'same-origin',
           headers: {
             'Content-Type':
               'application/json',
+            'X-Idempotency-Key': key,
             ...(token
               ? {
                   Authorization:
@@ -775,6 +899,8 @@ export default function CastClient({
             answers: finalAnswers,
             language,
             show_identity: readPublicIdentityPreference(),
+            retain_answers: Boolean(user && retainAnswers),
+            idempotencyKey: key,
           }),
         }
       );
@@ -790,6 +916,20 @@ export default function CastClient({
       }
 
       if (!res.ok) {
+        if (res.status === 429) {
+          throw new Error(
+            language === 'ru'
+              ? `Слишком много прочтений. Повторите через ${Math.max(
+                  1,
+                  Math.ceil((Number(data.retryAfter) || 60) / 60)
+                )} мин.`
+              : `Too many readings. Try again in ${Math.max(
+                  1,
+                  Math.ceil((Number(data.retryAfter) || 60) / 60)
+                )} min.`
+          );
+        }
+
         throw new Error(
           data.error ||
             'The reading could not be completed.'
@@ -837,12 +977,17 @@ export default function CastClient({
       setCaptureToken(
         data.captureToken
       );
+      if (typeof data.captureExpiresAt === 'string') {
+        setCaptureExpiresAt(data.captureExpiresAt);
+      }
+      setAnalysisStatus('complete');
     } catch (err) {
       console.error(
         '[Cast] Analysis failed:',
         err
       );
 
+      setAnalysisStatus('failed');
       setError(
         castErrorMessage(
           err instanceof Error ? err.message : null,
@@ -892,7 +1037,53 @@ export default function CastClient({
       return;
     }
 
+    // The idempotency key is deliberately reused: if the previous attempt
+    // actually reached the database, this call returns that reading instead of
+    // paying for a second analysis.
     await runAnalysis(answers);
+  }
+
+  function handleStartNewReading() {
+    clearRitualDraft(CAST_DRAFT_KEY);
+
+    setLanguage(null);
+    setCurrentStep(0);
+    setAnswers([]);
+    setCurrentAnswer('');
+    setAnalysisData(null);
+    setDisplayedText('');
+    setArchetype('');
+    setShowStamp(false);
+    setError('');
+    setLoading(false);
+    setEmail('');
+    setEmailSent(false);
+    setEmailDelivered(false);
+    setEmailError('');
+    setRecordId(null);
+    setCaptureToken(null);
+    setCaptureExpiresAt(null);
+    setIdempotencyKey(null);
+    setAnalysisStatus('idle');
+    setRetainAnswers(false);
+  }
+
+  function handleSkip() {
+    if (loading || currentStep > 10) return;
+
+    const marker = language === 'ru' ? 'Не применимо' : 'Not applicable';
+    const newAnswers = [...answers, marker];
+
+    setAnswers(newAnswers);
+    setCurrentAnswer('');
+
+    if (currentStep < 10) {
+      setCurrentStep(currentStep + 1);
+      return;
+    }
+
+    setCurrentStep(11);
+    void runAnalysis(newAnswers);
   }
 
   function handleKeyDown(
@@ -947,7 +1138,7 @@ export default function CastClient({
         .json()
         .catch(() => null);
 
-      if (!res.ok) {
+      if (!res.ok && !data?.success) {
         throw new Error(
           data?.error ||
             'This reading could not be linked to that email.'
@@ -955,7 +1146,18 @@ export default function CastClient({
       }
 
       setEmailSent(true);
+      setEmailDelivered(data?.emailDelivered === true);
+      setEmailError(
+        data?.emailDelivered === true
+          ? ''
+          : data?.code === 'email_delivery_not_configured'
+            ? copy.emailLinkedNoDelivery
+            : data?.code === 'email_delivery_failed'
+              ? copy.emailDeliveryFailed
+              : ''
+      );
       setCaptureToken(null);
+      setCaptureExpiresAt(null);
     } catch (err) {
       console.error(
         '[Cast] Email capture failed:',
@@ -1057,27 +1259,47 @@ export default function CastClient({
               </h3>
 
               <p className={`mt-2 text-[11px] leading-relaxed ${ui.body}`}>
-                Your answers are sent to an external AI model (DeepSeek) to
-                generate this reflection. The result is stored privately in the
-                Temple Cast archive; signed-in readings keep the answers in your
-                account, while anonymous readings do not retain raw answers.
-                Adding an email links the result to you. Only the archetype and
-                a display name may appear in the public Temple trace — never
-                your answers. This is an interpretive ritual, not a clinical
-                diagnosis.
+                {CAST_COPY.en.disclosure}
               </p>
 
               <p
                 lang="ru"
                 className={`mt-2 text-[10px] leading-relaxed ${ui.muted}`}
               >
-                Ответы отправляются внешней ИИ-модели DeepSeek. Результат
-                хранится приватно; у авторизованных чтений ответы остаются в
-                аккаунте, а анонимные чтения не сохраняют сырые ответы. В
-                публичной хронике появляются только архетип и отображаемое имя,
-                но не ответы. Это не клинический диагноз.
+                {CAST_COPY.ru.disclosure}
               </p>
             </section>
+
+            {user && (
+              <label
+                className={`mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 text-left ${
+                  isModal
+                    ? 'border-stone-700/80 bg-stone-950/40'
+                    : 'border-stone-300/80 bg-white/50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={retainAnswers}
+                  onChange={event =>
+                    setRetainAnswers(event.target.checked)
+                  }
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-amber-600"
+                />
+
+                <span>
+                  <span
+                    className={`block font-mono text-[9px] uppercase tracking-[0.18em] ${ui.accentSoft}`}
+                  >
+                    {copy.retainLabel}
+                  </span>
+
+                  <span className={`mt-1 block text-[10px] leading-relaxed ${ui.muted}`}>
+                    {copy.retainHint}
+                  </span>
+                </span>
+              </label>
+            )}
 
             <div
               role="group"
@@ -1193,21 +1415,32 @@ export default function CastClient({
                   {copy.enterHint}
                 </span>
 
-                <button
-                  type="button"
-                  onClick={() =>
-                    void handleNext()
-                  }
-                  disabled={
-                    !isAnswerValid ||
-                    loading
-                  }
-                  className={`order-1 min-h-[44px] w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:order-2 sm:w-auto sm:py-4 ${ui.primaryButton}`}
-                >
-                  {currentStep === 10
-                    ? copy.analyze
-                    : copy.next}
-                </button>
+                <div className="order-1 flex w-full flex-col gap-2 sm:order-2 sm:w-auto sm:flex-row sm:items-center">
+                  <button
+                    type="button"
+                    onClick={handleSkip}
+                    disabled={loading}
+                    className={`min-h-[44px] w-full cursor-pointer rounded-full border px-6 py-3 font-serif text-[11px] uppercase tracking-[0.14em] transition-all disabled:cursor-not-allowed sm:w-auto ${ui.secondaryButton}`}
+                  >
+                    {copy.skip}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void handleNext()
+                    }
+                    disabled={
+                      !isAnswerValid ||
+                      loading
+                    }
+                    className={`min-h-[44px] w-full cursor-pointer rounded-full border px-8 py-3 font-serif text-xs font-medium uppercase tracking-[0.18em] shadow-md backdrop-blur-md transition-all disabled:cursor-not-allowed sm:w-auto sm:py-4 ${ui.primaryButton}`}
+                  >
+                    {currentStep === 10
+                      ? copy.analyze
+                      : copy.next}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1281,6 +1514,41 @@ export default function CastClient({
                     aria-hidden="true"
                   />
 
+                  {copy.retry}
+                </button>
+              </div>
+            </div>
+          ) : !analysisData &&
+            answers.length === 10 &&
+            analysisStatus === 'pending' ? (
+            <div className="flex min-h-[50vh] items-center justify-center text-center">
+              <div
+                className={`w-full max-w-lg rounded-[28px] border p-8 ${ui.panel}`}
+                role="alert"
+              >
+                <AlertTriangle
+                  size={24}
+                  aria-hidden="true"
+                  className={`mx-auto mb-5 ${ui.accent}`}
+                />
+
+                <div
+                  className={`mb-4 font-mono text-[10px] uppercase tracking-[0.25em] ${ui.accent}`}
+                >
+                  {copy.pendingTitle}
+                </div>
+
+                <p className={`mb-7 text-sm leading-relaxed ${ui.muted}`}>
+                  {copy.pendingBody}
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => void handleRetry()}
+                  disabled={loading}
+                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all disabled:cursor-not-allowed ${ui.secondaryButton}`}
+                >
+                  <RefreshCw size={14} aria-hidden="true" />
                   {copy.retry}
                 </button>
               </div>
@@ -1359,10 +1627,19 @@ export default function CastClient({
 
                     {emailSent ? (
                       <div
-                        className={`py-3 font-mono text-[10px] uppercase tracking-[0.18em] ${ui.accent}`}
+                        className={`space-y-2 py-3 font-mono text-[10px] uppercase leading-relaxed tracking-[0.18em] ${ui.accent}`}
                         role="status"
                       >
-                        {copy.saved}
+                        <div>
+                          {emailDelivered
+                            ? copy.saved
+                            : copy.emailLinkedNoDelivery}
+                        </div>
+                        {!emailDelivered && emailError && (
+                          <div className={`normal-case tracking-normal ${ui.errorText}`}>
+                            {emailError}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <>
@@ -1415,10 +1692,18 @@ export default function CastClient({
                   </div>
                 )}
 
-              <div className="mt-8 text-center">
+              <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleStartNewReading}
+                  className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
+                >
+                  {copy.newReading}
+                </button>
+
                 <Link
                   href="/temple"
-                  className={`inline-block min-h-[44px] rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
+                  className={`inline-flex min-h-[44px] items-center justify-center rounded-full border px-6 py-3 font-serif text-xs uppercase tracking-[0.18em] transition-all ${ui.secondaryButton}`}
                 >
                   {copy.returnToTemple}
                 </Link>

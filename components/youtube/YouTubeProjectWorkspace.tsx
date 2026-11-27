@@ -4,6 +4,35 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { createClient } from '@/lib/supabase/client';
+
+/**
+ * Admin API calls must carry both the Supabase cookie session and, when one is
+ * available, the access token as a Bearer credential. The route accepts either;
+ * sending both removes a class of "works in the page, 401 in the API" failures
+ * (for example when a WebView or a cross-domain preview drops cookies).
+ */
+async function authorizedFetch(input: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+
+  try {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+  } catch {
+    // A missing browser client must not block the cookie-session path.
+  }
+
+  return fetch(input, {
+    ...init,
+    headers,
+    credentials: 'same-origin',
+    cache: init.cache ?? 'no-store',
+  });
+}
+
 type Connection = {
   id: string;
   googleAccountEmail: string;
@@ -242,8 +271,18 @@ function describeStatusError(error: unknown): StatusError {
     const code = typeof candidate.code === 'string' ? candidate.code : null;
 
     if (httpStatus !== null || code) {
+      const actionable =
+        code === 'not_authenticated'
+          ? 'Сессия администратора не найдена. Войдите заново и повторите.'
+          : code === 'admin_role_required'
+            ? 'Вы вошли, но у этой учётной записи нет роли ADMIN. Проверьте users.role для своего профиля.'
+            : null;
+
       return {
-        message: candidate.message || 'Не удалось прочитать состояние YouTube.',
+        message:
+          actionable ||
+          candidate.message ||
+          'Не удалось прочитать состояние YouTube.',
         code,
         httpStatus,
       };
@@ -275,6 +314,13 @@ function formatStatusError(error: StatusError): string {
   ].filter(Boolean);
 
   return `${error.message}${details.length > 0 ? ` (${details.join(', ')})` : ''}`;
+}
+
+function reconnectUrl(connectUrl: string, email: string): string {
+  const separator = connectUrl.includes('?') ? '&' : '?';
+  return `${connectUrl}${separator}login_hint=${encodeURIComponent(
+    email
+  )}&select_account=true`;
 }
 
 export default function YouTubeProjectWorkspace({
@@ -342,9 +388,8 @@ export default function YouTubeProjectWorkspace({
     setStatusError(null);
 
     try {
-      const response = await fetch(
-        `/api/admin/youtube/channels?project=${encodeURIComponent(project)}`,
-        { cache: 'no-store' }
+      const response = await authorizedFetch(
+        `/api/admin/youtube/channels?project=${encodeURIComponent(project)}`
       );
       const payload = (await response.json().catch(() => ({}))) as StatusPayload;
 
@@ -418,7 +463,7 @@ export default function YouTubeProjectWorkspace({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch('/api/admin/youtube/channels', {
+      const response = await authorizedFetch('/api/admin/youtube/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -468,9 +513,9 @@ export default function YouTubeProjectWorkspace({
           end: period.end,
           ...(fresh ? { fresh: '1' } : {}),
         });
-        const response = await fetch(`/api/admin/youtube/channels/analytics?${params.toString()}`, {
-          cache: 'no-store',
-        });
+        const response = await authorizedFetch(
+          `/api/admin/youtube/channels/analytics?${params.toString()}`
+        );
         const payload = (await response.json().catch(() => ({}))) as {
           report?: AnalyticsReport;
           message?: string;
@@ -510,9 +555,9 @@ export default function YouTubeProjectWorkspace({
       try {
         const params = new URLSearchParams({ project, pageSize: '25' });
         if (token) params.set('pageToken', token);
-        const response = await fetch(`/api/admin/youtube/channels/videos?${params.toString()}`, {
-          cache: 'no-store',
-        });
+        const response = await authorizedFetch(
+          `/api/admin/youtube/channels/videos?${params.toString()}`
+        );
         const payload = (await response.json().catch(() => ({}))) as {
           page?: CatalogPage;
           message?: string;
@@ -574,9 +619,8 @@ export default function YouTubeProjectWorkspace({
     setConfirmation(null);
     setLastSaved(null);
     try {
-      const response = await fetch(
-        `/api/admin/youtube/channels/videos/${encodeURIComponent(videoId)}?project=${encodeURIComponent(project)}`,
-        { cache: 'no-store' }
+      const response = await authorizedFetch(
+        `/api/admin/youtube/channels/videos/${encodeURIComponent(videoId)}?project=${encodeURIComponent(project)}`
       );
       const payload = (await response.json().catch(() => ({}))) as {
         video?: VideoDetail;
@@ -616,7 +660,7 @@ export default function YouTubeProjectWorkspace({
         description: form.description,
         tags: inputToTags(form.tags),
       };
-      const response = await fetch(
+      const response = await authorizedFetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(video.videoId)}?project=${encodeURIComponent(project)}`,
         {
           method: 'POST',
@@ -677,7 +721,7 @@ export default function YouTubeProjectWorkspace({
         description: form.description,
         tags: inputToTags(form.tags),
       };
-      const response = await fetch(
+      const response = await authorizedFetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(video.videoId)}?project=${encodeURIComponent(project)}`,
         {
           method: 'POST',
@@ -865,6 +909,9 @@ export default function YouTubeProjectWorkspace({
                 <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
                 {connection.scopes.length} scopes
                 {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                {connection.lastErrorMessage ? (
+                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
+                ) : null}
                 <div className="pw-analytics-card-actions">
                   <button
                     type="button"
@@ -876,6 +923,14 @@ export default function YouTubeProjectWorkspace({
                   >
                     Обновить каналы
                   </button>
+                  {connection.status !== 'connected' ? (
+                    <a
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      href={reconnectUrl(connectUrl, connection.googleAccountEmail)}
+                    >
+                      Переподключить этот аккаунт
+                    </a>
+                  ) : null}
                   <button
                     type="button"
                     className="pw-analytics-button pw-analytics-button--quiet"

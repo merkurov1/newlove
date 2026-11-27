@@ -88,7 +88,7 @@ const CAST_RESPONSE = {
 
 const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
   if (String(input).includes('/api/cast/capture')) {
-    return jsonResponse({ success: true });
+    return jsonResponse({ success: true, emailDelivered: true });
   }
 
   return jsonResponse(CAST_RESPONSE);
@@ -189,12 +189,15 @@ describe('Cast language selector', () => {
 
     expect(disclosure).toBeVisible();
     expect(disclosure).toHaveTextContent(
-      /answers are sent to an external AI model/i
+      /sent for analysis to DeepSeek directly/i
     );
+    expect(disclosure).toHaveTextContent(/OpenRouter/i);
     expect(disclosure).toHaveTextContent(/stored privately/i);
-    expect(disclosure).toHaveTextContent(/anonymous readings do not retain raw answers/i);
+    expect(disclosure).toHaveTextContent(
+      /Raw answers are kept only when you are signed in/i
+    );
     expect(disclosure).toHaveTextContent(/public Temple trace/i);
-    expect(disclosure).toHaveTextContent(/never your answers/i);
+    expect(disclosure).toHaveTextContent(/not a measurement of your personality/i);
     expect(disclosure).toHaveTextContent(/not a clinical diagnosis/i);
 
     // The disclosure is on the initial screen, before a language is chosen.
@@ -351,17 +354,28 @@ describe('Cast analysis, result and email capture', () => {
     await flushPromises();
     await flushPromises();
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/cast',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({
-          answers: Array.from({ length: 10 }, (_, index) => `Answer number ${index + 1}`),
-          language: 'en',
-          show_identity: false,
-        }),
-      })
+    const call = fetchMock.mock.calls.find(
+      ([input]) => String(input) === '/api/cast'
     );
+
+    expect(call).toBeTruthy();
+
+    const [url, init] = call as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body));
+
+    expect(url).toBe('/api/cast');
+    expect(init.method).toBe('POST');
+    expect(init.credentials).toBe('same-origin');
+    expect(body).toMatchObject({
+      answers: Array.from({ length: 10 }, (_, index) => `Answer number ${index + 1}`),
+      language: 'en',
+      show_identity: false,
+      retain_answers: false,
+    });
+    expect(body.idempotencyKey).toMatch(/^[A-Za-z0-9_-]{16,128}$/);
+    expect(
+      (init.headers as Record<string, string>)['X-Idempotency-Key']
+    ).toBe(body.idempotencyKey);
 
     await finishTyping();
 
@@ -411,7 +425,9 @@ describe('Cast analysis, result and email capture', () => {
       })
     );
 
-    expect(screen.getByText(/Reading secured to your email/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Reading linked and the copy was sent to your email/i)
+    ).toBeInTheDocument();
   });
 
   it('shows a retry path when the analysis fails', async () => {

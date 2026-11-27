@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 jest.mock('@/lib/serverAuth', () => ({
   requireAdminFromRequest: jest.fn(),
   getServerSupabaseClient: jest.fn(() => ({})),
+  explainAdminDenial: jest.fn(async () => 'not_authenticated'),
 }));
 
 jest.mock('@/lib/youtube/channels', () => ({
@@ -59,14 +60,19 @@ afterAll(() => {
 });
 
 describe('GET /api/admin/youtube/channels/connect', () => {
-  it('rejects visitors', async () => {
+  it('redirects a visitor back with an explicit admin diagnostics reason', async () => {
     serverAuth.requireAdminFromRequest.mockRejectedValueOnce(new Error('Unauthorized'));
 
     const response = await GET(
       new Request('https://www.merkurov.love/api/admin/youtube/channels/connect?project=art-engine')
     );
 
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(307);
+
+    const location = new URL(response.headers.get('location') || '');
+    expect(location.pathname).toBe('/admin/pierrot/youtube');
+    expect(location.searchParams.get('youtube_channels')).toBe('error');
+    expect(location.searchParams.get('reason')).toBe('not_authenticated');
   });
 
   it('builds a dedicated state-protected consent URL with least-privilege scopes', async () => {

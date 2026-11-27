@@ -43,8 +43,17 @@ the completed result, the archetype stamp and the secured-email state.
 - Selecting English or Русский enters the existing ten-question protocol and
   keeps the same `/api/cast` and `/api/cast/capture` payloads.
 - The session draft restores answers, the active question, the completed
-  analysis, the archetype, the record id and the capture token. Switching from
-  the standalone page to the modal keeps `Query 02 / 10`.
+  analysis, the archetype, the record id, the capture token and the analysis
+  status. Switching from the standalone page to the modal keeps
+  `Query 02 / 10`.
+- A reload during analysis restores a pending state with a retry control rather
+  than an empty final step. Retry reuses the submission's idempotency key, so it
+  cannot create a duplicate record or a second AI request.
+- After a successful reading the draft drops the raw answers and keeps only the
+  result and the capture token. “Start a new reading” clears the draft.
+- The email panel states exactly what happened: copy sent, linked but delivery
+  disabled, or linked but provider failure. It never claims a delivery that did
+  not occur.
 - The result renders the Agency Index, archetype scores, analysis text and the
   `[ARCHETYPE]` stamp. The stamp reveals even when `tailwindcss-animate` is not
   loaded.

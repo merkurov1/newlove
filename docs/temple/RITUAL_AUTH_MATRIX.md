@@ -22,6 +22,21 @@ claim that a database migration was applied to production.
 6. A claimed display name is only a label. It never selects a cooldown row,
    grants a role, links accounts or authorizes a mutation.
 
+## 1a. Cast privacy and delivery contract (2026-11-27)
+
+- `status` is server-owned: `identified` only for a verified Supabase session,
+  otherwise `anonymous`. Client body fields (`status`, `user_id`, `author`) are
+  ignored.
+- Raw answers are stored only for a verified owner with
+  `retention_consent = true`. Anonymous and Telegram protocols store `{}`.
+- A repeated submit with the same idempotency key returns the stored reading
+  without a second model call or a second row.
+- Capture tokens expire after `CAST_CAPTURE_TTL_SECONDS` (default 7 days) and
+  are consumed once through `capture_consumed_at`.
+- Email delivery is real (Resend); the UI reports “sent” only when the provider
+  accepted the message. See `docs/temple/CAST_RUNTIME_RUNBOOK.md` and
+  `docs/temple/CAST_PRIVACY_CLEANUP.md`.
+
 ## 2. Server identity resolution
 
 Single implementation: `lib/temple/identity.ts` (`resolveTempleIdentity`).
@@ -57,7 +72,7 @@ HttpOnly `temple_session` cookie. No Google prompt is involved.
 | Let It Go | `/heartandangel/letitgo` (modal) | none | best-effort `POST /api/temple_logs` on leaving the scene | same as Calm | same as Calm | same as Calm | same as Calm | Works without Google | Works without sign-in | Works; anonymous label only |
 | Vigil spark | `/vigil` (modal) | `useTempleIdentity`; native MainButton in Telegram (legacy BottomButton fallback), in-scene button otherwise | `POST /api/vigil/claim` | `resolveTempleIdentity` (Telegram session or Supabase bearer) | `tg:<id>` or `sb:<uuid>` | 24 h per namespace key; `POST` 20/min/IP; `GET` 60/min/IP; `GET /api/vigil/state` 120/min/IP | `vigil_spark_claims` private (RLS on, no policies, service role only); `vigil_hearts` public read, server write only; `temple_log` server write only | One native action when a native button is acquired; an in-scene fallback appears if the SDK is late, unsupported or still owned by another route | Supabase session sparks with the in-scene button | Can witness the flame; spark returns 401 |
 | Absolution | `/absolution` (modal) | name field required for the local ceremony | best-effort `POST /api/temple_logs` as an anonymous completion-only event | server write allowlist in `/api/temple_logs` | never public | trace rate limit 20/min/IP | certificate stays in the browser; public trace contains no name, burden or confession text; legacy rows redacted on read | Works without Google | Works without sign-in; editable display name stays local | Works; public trace is always `Anonymous` |
-| Cast | `/cast` (modal) | disclosure precedes the first question; answers only; no account required | `POST /api/cast`; optional `POST /api/cast/capture` with signed capture token | `resolveTempleIdentity` in `/api/cast` | `tg:<id>` or `sb:<uuid>`; anonymous has none | trace limiter as above; capture token is HMAC-bound to record id + creation time | signed-in answers and every analysis stay in the private `casts` table; anonymous protocols do not retain raw answers; only the completed ritual appears in `temple_log` | Participates without Google; verified Telegram name and no invented UUID | Supabase user recorded with UUID/email | Participates anonymously after seeing the disclosure |
+| Cast | `/cast` (modal) | disclosure precedes the first question; answers only; no account required; optional “keep my answers” consent for signed-in readers | `POST /api/cast`; optional `POST /api/cast/capture` with signed capture token | `resolveTempleIdentity` in `/api/cast` | `tg:<id>` or `sb:<uuid>`; anonymous has none | shared Postgres limiter 6/15 min for analysis, 6/h for capture; idempotency key deduplicates submit + AI call; capture token is HMAC-bound to record id + creation time + expiry + nonce, expires in 7 days and is consumed once | only the analysis/archetype is stored for anonymous and Telegram identities; a Supabase owner keeps answers only with explicit consent; only the completed ritual appears in `temple_log` | Participates without Google; verified Telegram name and no invented UUID; `status = anonymous` | Supabase user recorded with UUID/email and `status = identified`; answers only with consent | Participates anonymously after seeing the disclosure; no answers stored |
 | Tribute / Support | `/tribute`, `/temple/support` | amount validation is client-side for UX | `POST /api/tribute/checkout`; `GET /api/tribute/verify`; `POST /api/stripe/webhook` | none by design: guest and signed-in donors use the same payment flow | none | verify 30/min/IP; Stripe owns payment anti-abuse | `tributes` writes only after server-side Stripe retrieval or verified webhook; `temple_log` TRIBUTE signal is server-only | Opens the same hosted Stripe Checkout; no Google prompt | Same hosted Stripe Checkout | Same hosted Stripe Checkout; no registration |
 | Shared group Vigil | `/vigil` from a Telegram group | none | `POST /api/telegram/group-vigil` (`join` / `leave` / `status`) | `verifyGroupVigilContext` from signed `initData` | Telegram group id + signed `chat_instance`; participant is Telegram numeric id | 30/min/IP | `telegram_group_vigil_*` private (RLS on, no policies, service role only) | Works only inside Telegram; group context is never taken from a client body field | Not available | Not available (no Telegram group context) |
 | Whisper capture | `/temple/whispers` | owner UI | `POST /api/whispers`; `POST /api/whispers/reply` | `requireAdminFromRequest` | Supabase admin UUID or allowlisted Telegram admin | 10/min and 20/min/IP | `whispers` private; service role only | Allowlisted Telegram admin only | Supabase admin only | Rejected 401 |
@@ -76,8 +91,8 @@ written through that public trace endpoint.
 | `/api/vigil/state` | GET | Public read-only aggregate |
 | `/api/vigil/claim` | GET | Public status; `authenticated: false` without a verified identity |
 | `/api/vigil/claim` | POST | Requires verified Temple identity; atomic 24 h claim |
-| `/api/cast` | POST | Public; verified identity is recorded when present |
-| `/api/cast/capture` | POST | Requires the HMAC capture token for the exact record |
+| `/api/cast` | POST | Public; verified identity determines `status`/`user_id`; shared rate limit; `X-Idempotency-Key` replays instead of duplicating |
+| `/api/cast/capture` | POST | Requires a live, single-use HMAC capture token for the exact record; sends one email or reports that delivery is not configured |
 | `/api/temple_logs` | GET | Public feed |
 | `/api/temple_logs` | POST | Public trace; a verified identity overrides the body author, but grants nothing |
 | `/api/telegram/group-vigil` | POST | Verified Telegram `initData` with signed group context |

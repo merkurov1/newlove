@@ -207,15 +207,22 @@ export async function fetchGoogleUserInfo(accessToken: string): Promise<GoogleUs
   }
 }
 
-export async function revokeGoogleToken(token: string): Promise<void> {
+/**
+ * Revokes a Google grant (best effort). Returns whether Google accepted the
+ * revocation so callers can report accurately; the caller always clears local
+ * state regardless.
+ */
+export async function revokeGoogleToken(token: string): Promise<boolean> {
   try {
-    await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, {
+    const response = await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       signal: AbortSignal.timeout(10_000),
     });
+
+    return response.ok;
   } catch {
-    // Revocation is best effort: the local token is deleted regardless.
+    return false;
   }
 }
 

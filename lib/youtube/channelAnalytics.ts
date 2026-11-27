@@ -17,6 +17,7 @@ import {
 import {
   loadChannelAccessToken,
   resolveProjectChannel,
+  type ResolvedProjectChannel,
   type SafeOAuthConnection,
   type YouTubeChannelRecord,
 } from './channels';
@@ -226,21 +227,12 @@ async function buildReport(input: {
   store: SupabaseClient;
   ownerId: string;
   projectSlug: string;
+  resolved: ResolvedProjectChannel;
   start: string;
   end: string;
   now: Date;
-}): Promise<ChannelAnalyticsReport | UnboundChannelAnalytics> {
-  const resolved = await resolveProjectChannel(input.store, input.ownerId, input.projectSlug);
-
-  if (!resolved) {
-    return {
-      bound: false,
-      projectSlug: input.projectSlug,
-      reason:
-        'Проект ещё не привязан к YouTube-каналу. Подключите Google-аккаунт и выберите канал.',
-    };
-  }
-
+}): Promise<ChannelAnalyticsReport> {
+  const { resolved } = input;
   const { accessToken, channel } = await loadChannelAccessToken(input.store, {
     ownerId: input.ownerId,
     channelRecordId: resolved.channel.id,
@@ -501,7 +493,29 @@ export async function getProjectChannelAnalytics(input: {
     });
   }
 
-  const key = JSON.stringify({ owner: input.ownerId, project: input.projectSlug, start, end });
+  // Resolve the binding before looking in the cache so a rebound project can
+  // never receive another channel's cached report.
+  const resolved = await resolveProjectChannel(input.store, input.ownerId, input.projectSlug);
+
+  if (!resolved) {
+    return {
+      bound: false,
+      projectSlug: input.projectSlug,
+      reason:
+        'Проект ещё не привязан к YouTube-каналу. Подключите Google-аккаунт и выберите канал.',
+    };
+  }
+
+  const key = JSON.stringify({
+    owner: input.ownerId,
+    project: input.projectSlug,
+    binding: resolved.binding.id,
+    channelRecord: resolved.channel.id,
+    channel: resolved.channel.channelId,
+    connection: resolved.channel.connectionId,
+    start,
+    end,
+  });
   const now = input.now ?? new Date();
 
   if (!input.fresh) {
@@ -520,12 +534,13 @@ export async function getProjectChannelAnalytics(input: {
     store: input.store,
     ownerId: input.ownerId,
     projectSlug: input.projectSlug,
+    resolved,
     start,
     end,
     now,
   });
 
-  if (report.bound) cache.set(key, report);
+  cache.set(key, report);
   return report;
 }
 
