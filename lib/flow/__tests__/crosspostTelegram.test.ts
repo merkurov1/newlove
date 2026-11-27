@@ -139,6 +139,45 @@ describe('Telegram crosspost composition and links', () => {
     expect(calls[0].text).not.toContain('>Source</a>');
   });
 
+  it('does not promote the first link preview title into an article heading', async () => {
+    global.fetch = jest.fn(async () => telegramResponse(18)) as never;
+
+    await crosspostFlowItem({
+      id: 'flow-article-1',
+      title: null,
+      body_md: 'Журнал. История вопроса.\n\nАвторский текст о проекте.',
+      source_url: 'https://t.me/PierrotAi_bot',
+      slug: 'test-slug',
+      lang: 'ru',
+      type: 'article',
+      metadata: {
+        link_previews: [
+          {
+            url: 'https://t.me/PierrotAi_bot',
+            title: 'Pierrot',
+            site_name: 'Telegram',
+          },
+        ],
+      },
+    });
+
+    const calls = telegramCalls('sendMessage');
+    expect(calls).toHaveLength(1);
+    const text = calls[0].text as string;
+
+    expect(text).not.toContain('<b>Pierrot</b>');
+    expect(text.startsWith('Pierrot')).toBe(false);
+    expect(text).toContain('Журнал. История вопроса.');
+    expect(text).toContain('Авторский текст о проекте.');
+    expect(text).toContain(
+      '<a href="https://t.me/PierrotAi_bot">Источник</a>'
+    );
+    expect(text).toContain(flowLink());
+    expect(
+      text.match(new RegExp(FLOW_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'))
+    ).toHaveLength(1);
+  });
+
   it('allows one source preview for an external link post', async () => {
     global.fetch = jest.fn(async () => telegramResponse(15)) as never;
 

@@ -754,6 +754,69 @@ describe('Flow link preview', () => {
       expect(savedPayload?.metadata.link_previews).toHaveLength(1);
       expect(savedPayload?.metadata.links).toBeUndefined();
     });
+
+    it('does not send a link preview title as the title of a new article', async () => {
+      let savedPayload: Record<string, any> | null = null;
+      const body = `Журнал. История вопроса.\n\n${'Авторский текст о проекте. '.repeat(20)}`;
+
+      global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url === '/api/flow/items' && init?.method === 'POST') {
+          savedPayload = JSON.parse(String(init.body));
+          return apiResponse({ success: true, item: { id: 'new-article' } });
+        }
+
+        if (url.startsWith('/api/flow/parse-url')) {
+          return apiResponse({
+            url: 'https://t.me/PierrotAi_bot',
+            domain: 't.me',
+            site_name: 'Telegram',
+            title: 'Pierrot',
+            description: 'Open Graph description',
+          });
+        }
+
+        return apiResponse({});
+      }) as typeof fetch;
+
+      const { result } = renderHook(() =>
+        useNewPostModal({ open: true, onClose: jest.fn() })
+      );
+
+      await act(async () => {
+        await result.current.parseLink('https://t.me/PierrotAi_bot');
+      });
+
+      await waitFor(() => {
+        expect(result.current.links).toHaveLength(1);
+      });
+
+      act(() => {
+        result.current.setBodyMd(body);
+      });
+
+      await waitFor(() => {
+        expect(result.current.canPost).toBe(true);
+      });
+
+      await act(async () => {
+        await result.current.finish();
+      });
+
+      await waitFor(() => {
+        expect(savedPayload).not.toBeNull();
+      });
+
+      expect(savedPayload?.type).toBe('article');
+      expect(savedPayload?.title).toBeNull();
+      expect(savedPayload?.body_md).toBe(body);
+      expect(savedPayload?.source_url).toBe('https://t.me/PierrotAi_bot');
+      expect(savedPayload?.metadata.link_previews[0]).toMatchObject({
+        url: 'https://t.me/PierrotAi_bot',
+        title: 'Pierrot',
+      });
+    });
   });
 });
 

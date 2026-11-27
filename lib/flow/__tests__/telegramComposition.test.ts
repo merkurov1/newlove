@@ -289,6 +289,65 @@ describe('Telegram composition — compact link row', () => {
     expect(result.fullHtml).not.toMatch(/\|\s*\n/);
   });
 
+  it.each(['article', 'note'] as const)(
+    'does not start a %s with the Open Graph title of its first link',
+    (type) => {
+      const result = composition({
+        type,
+        title: null,
+        body_md: 'Журнал. История вопроса.\n\nАвторский текст о проекте.',
+        source_url: 'https://t.me/PierrotAi_bot',
+        metadata: {
+          link_previews: [
+            {
+              url: 'https://t.me/PierrotAi_bot',
+              title: 'Pierrot',
+              site_name: 'Telegram',
+            },
+          ],
+        },
+      });
+
+      expect(result.fullHtml).not.toContain('<b>Pierrot</b>');
+      expect(result.fullHtml.startsWith('Pierrot')).toBe(false);
+      expect(result.fullHtml).toContain('Журнал. История вопроса.');
+      expect(result.fullHtml).toContain('Авторский текст о проекте.');
+      expect(result.fullHtml).toContain(
+        `<a href="https://t.me/PierrotAi_bot">Источник</a>`
+      );
+      expect(result.fullHtml).toContain(
+        `<a href="${FLOW_URL}">[ Flow ]</a>`
+      );
+      expect(result.validation.ok).toBe(true);
+    }
+  );
+
+  it('keeps an inline first link as a link and not as a heading', () => {
+    const result = composition({
+      type: 'article',
+      title: null,
+      body_md:
+        'Журнал. История вопроса.\n\nСсылка: [Pierrot](https://t.me/PierrotAi_bot).',
+      source_url: 'https://t.me/PierrotAi_bot',
+      metadata: {
+        link_previews: [
+          { url: 'https://t.me/PierrotAi_bot', title: 'Pierrot' },
+        ],
+      },
+    });
+
+    expect(result.fullHtml).not.toContain('<b>Pierrot</b>');
+    expect(result.fullHtml).toContain('Журнал. История вопроса.');
+    expect(result.fullHtml).toContain(
+      '<a href="https://t.me/PierrotAi_bot">Pierrot</a>'
+    );
+    expect(result.fullHtml).toContain(
+      `<a href="${FLOW_URL}">[ Flow ]</a>`
+    );
+    expect(hrefCount(result.fullHtml, FLOW_URL)).toBe(1);
+    expect(result.validation.ok).toBe(true);
+  });
+
   it('starts the message with the link row when there is no body text', () => {
     const result = composition({
       body_md: '',
