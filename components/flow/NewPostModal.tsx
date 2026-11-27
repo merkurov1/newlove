@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import { Image as ImageIcon, X } from "lucide-react";
+import { Image as ImageIcon, Loader2, Wand2, X } from "lucide-react";
 import {
   ImagePreview,
   LinkPreviewCard,
@@ -54,9 +54,11 @@ function readPixelVariable(name: string): number {
 function SaveStatus({
   state,
   error,
+  notice,
 }: {
   state: SaveState;
   error?: string | null;
+  notice?: string | null;
 }) {
   if (error) {
     return (
@@ -66,6 +68,19 @@ function SaveStatus({
         role="status"
       >
         {error}
+      </span>
+    );
+  }
+
+  if (notice) {
+    return (
+      <span
+        className="block max-w-[240px] truncate text-xs text-[#9A9388] sm:max-w-[320px]"
+        title={notice}
+        role="status"
+        aria-live="polite"
+      >
+        {notice}
       </span>
     );
   }
@@ -121,14 +136,18 @@ export default function NewPostModal({
     isUploadingImage,
     isPublishing,
     isClearing,
+    isProofreading,
     isEditing,
     canClear,
     canPost,
+    canProofread,
     busy,
     fileRef,
     textareaRef,
     handlePaste,
     finish,
+    proofread,
+    proofreadStatus,
     clearDraft,
     handleClose,
   } = useNewPostModal({
@@ -284,7 +303,11 @@ export default function NewPostModal({
         {/* Minimal top row */}
         <header className="flex shrink-0 items-center justify-between pl-[max(20px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] pr-[max(20px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] pt-[max(16px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))] sm:pl-[max(28px,env(safe-area-inset-left),var(--tg-safe-area-left,0px))] sm:pr-[max(28px,env(safe-area-inset-right),var(--tg-safe-area-right,0px))] sm:pt-[max(20px,env(safe-area-inset-top),var(--tg-safe-area-top,0px))]">
           <div className="min-w-0">
-            <SaveStatus state={saveState} error={error} />
+            <SaveStatus
+              state={saveState}
+              error={error}
+              notice={proofreadStatus}
+            />
           </div>
 
           <button
@@ -532,22 +555,52 @@ export default function NewPostModal({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => void finish()}
-            disabled={!canPost || busy}
-            className="
-              min-h-11 rounded-full bg-[#37332D] px-6 py-2.5
-              text-sm text-white transition-colors
-              hover:bg-[#514B42] active:scale-[0.98]
-              focus-visible:outline-none focus-visible:ring-2
-              focus-visible:ring-[#37332D] focus-visible:ring-offset-2
-              focus-visible:ring-offset-[#FAF8F4]
-              disabled:cursor-not-allowed disabled:opacity-35
-            "
-          >
-            {isPublishing ? "Posting…" : isEditing ? "Save" : "Post"}
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+            <button
+              type="button"
+              onClick={() => void proofread()}
+              disabled={!canProofread}
+              aria-label="Proofread text"
+              aria-busy={isProofreading}
+              className="
+                flex h-11 w-11 shrink-0 items-center justify-center
+                rounded-full text-[#898277] transition-colors
+                hover:bg-black/[0.05] hover:text-[#37332D]
+                focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-[#37332D]/45 focus-visible:ring-offset-2
+                focus-visible:ring-offset-[#FAF8F4] disabled:opacity-40
+                disabled:cursor-not-allowed
+              "
+            >
+              {isProofreading ? (
+                <Loader2
+                  size={18}
+                  strokeWidth={1.6}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              ) : (
+                <Wand2 size={18} strokeWidth={1.6} aria-hidden="true" />
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void finish()}
+              disabled={!canPost || busy}
+              className="
+                min-h-11 rounded-full bg-[#37332D] px-6 py-2.5
+                text-sm text-white transition-colors
+                hover:bg-[#514B42] active:scale-[0.98]
+                focus-visible:outline-none focus-visible:ring-2
+                focus-visible:ring-[#37332D] focus-visible:ring-offset-2
+                focus-visible:ring-offset-[#FAF8F4]
+                disabled:cursor-not-allowed disabled:opacity-35
+              "
+            >
+              {isPublishing ? "Posting…" : isEditing ? "Save" : "Post"}
+            </button>
+          </div>
         </footer>
       </section>
     </div>,
