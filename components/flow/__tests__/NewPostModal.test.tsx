@@ -1,7 +1,11 @@
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import NewPostModal from '../NewPostModal';
-import { LinkPreviewCard } from '../new-post/Previews';
+import {
+  ImagePreview,
+  LinkPreviewCard,
+  YouTubePreview,
+} from '../new-post/Previews';
 import { useNewPostModal } from '../new-post/useNewPostModal';
 import {
   extractUrlsFromText,
@@ -142,9 +146,92 @@ describe('Flow link preview', () => {
       />
     );
 
-    expect(screen.getByText('example.com').className).toContain(
+    expect(screen.getByText('example.com').closest('a')?.className).toContain(
       'focus-visible:underline'
     );
+  });
+
+  it('keeps a compact, persistent receipt instead of a full preview card', () => {
+    render(
+      <LinkPreviewCard
+        url="https://example.com/article"
+        preview={{
+          url: 'https://example.com/article',
+          title: 'Example article',
+          description: 'A long description that should stay out of the composer.',
+          image: 'https://example.com/og.jpg',
+          site_name: 'Example',
+          domain: 'example.com',
+        }}
+      />
+    );
+
+    const receipt = screen.getByText('Example article').closest('[data-attachment]');
+
+    expect(receipt).toHaveAttribute('data-attachment', 'link');
+    expect(receipt).toHaveAttribute('data-preview-state', 'complete');
+    expect(receipt?.className).toContain('min-h-9');
+    expect(screen.queryByText('A long description that should stay out of the composer.')).toBeNull();
+    expect(receipt?.querySelector('img')).toBeNull();
+  });
+
+  it('tells the author when a retained URL has no preview metadata', () => {
+    const fallbackUrl = 'https://example.com/article';
+
+    render(
+      <LinkPreviewCard
+        url={fallbackUrl}
+        preview={{ url: fallbackUrl, title: fallbackUrl }}
+      />
+    );
+
+    const receipt = screen.getByText('Preview unavailable').closest('[data-attachment]');
+
+    expect(receipt).toHaveAttribute('data-preview-state', 'fallback');
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
+
+  it('renders YouTube as a small row with one-line identity, not a video card', () => {
+    render(
+      <YouTubePreview
+        metadata={{
+          video_id: 'aaaaaaaaaaa',
+          title: 'A quiet film',
+          author_name: 'Studio',
+          thumbnail_url: 'https://i.ytimg.com/vi/aaaaaaaaaaa/mqdefault.jpg',
+        }}
+        url="https://www.youtube.com/watch?v=aaaaaaaaaaa"
+      />
+    );
+
+    const receipt = screen.getByText('A quiet film').closest('[data-attachment]');
+
+    expect(receipt).toHaveAttribute('data-attachment', 'youtube');
+    expect(screen.getByText('Studio · YouTube')).toBeInTheDocument();
+    expect(receipt?.querySelector('[class*="aspect-"]')).toBeNull();
+  });
+
+  it('keeps images in a small removable thumbnail strip', () => {
+    const onRemove = jest.fn();
+
+    render(
+      <ImagePreview
+        src="https://cdn.example.com/photo.jpg"
+        alt="Selected photo"
+        onRemove={onRemove}
+      />
+    );
+
+    const thumbnail = screen.getByAltText('Selected photo').closest('[data-attachment]');
+
+    expect(thumbnail).toHaveAttribute('data-attachment', 'image');
+    expect(thumbnail?.className).toContain('h-16');
+    expect(thumbnail?.className).toContain('w-16');
+    expect(thumbnail?.className).not.toContain('aspect-');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove image' }));
+
+    expect(onRemove).toHaveBeenCalledTimes(1);
   });
 
   describe('useNewPostModal link parsing', () => {
@@ -256,6 +343,21 @@ describe('Flow link preview', () => {
       expect(result.current.links[0].url).toBe('https://example.com/article');
       expect(result.current.links[0].preview.url).toBe(
         'https://example.com/article'
+      );
+    });
+
+    it('reports an invalid destination instead of silently discarding it', async () => {
+      const { result } = renderHook(() =>
+        useNewPostModal({ open: true, onClose: jest.fn() })
+      );
+
+      await act(async () => {
+        await result.current.parseLink('not a valid destination');
+      });
+
+      expect(result.current.links).toHaveLength(0);
+      expect(result.current.error).toBe(
+        'Please enter a valid http or https URL.'
       );
     });
 
@@ -838,6 +940,82 @@ describe('Flow composer dialog accessibility', () => {
     });
 
     trigger.remove();
+  });
+
+  it('keeps exactly three permanent controls and no Clear action', async () => {
+    render(<NewPostModal open onClose={jest.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Attach images' })).toBeEnabled();
+    });
+
+    const buttons = screen.getAllByRole('button').map((button) => {
+      const label = button.getAttribute('aria-label');
+
+      return label || button.textContent?.trim() || '';
+    });
+
+    expect(buttons).toEqual(['Close composer', 'Attach images', 'Post']);
+    expect(screen.queryByRole('button', { name: /clear/i })).toBeNull();
+  });
+
+  it('removes the dark writing-field frame while keeping a restrained focus rule', async () => {
+    render(<NewPostModal open onClose={jest.fn()} />);
+
+    const textarea = screen.getByLabelText('Post text');
+    const dialog = screen.getByRole('dialog');
+
+    expect(textarea.className).not.toContain('outline-[#8A8378]');
+    expect(textarea.className).not.toContain('focus-visible:outline-2');
+    expect(textarea.className).toContain('focus:outline-none');
+    expect(textarea.className).toContain('focus-visible:outline-none');
+    expect(textarea.className).toContain('border-0');
+    expect(textarea.className).not.toMatch(/border-\[#/);
+    expect(textarea.parentElement?.className).toContain('group');
+    const focusRule = document.querySelector('[data-composer-focus-rule]');
+    expect(focusRule?.className).toContain('group-focus-within:bg-[#8A8378]');
+    expect(dialog.className).not.toMatch(/(^|\s)border(\s|$)/);
+  });
+
+  it('shows parsing in the fixed bottom row without inserting a preview block', async () => {
+    const originalFetch = global.fetch;
+    const pending = deferredResponse();
+
+    global.fetch = jest.fn(() => pending.promise) as typeof fetch;
+
+    try {
+      render(<NewPostModal open onClose={jest.fn()} />);
+
+      const textarea = await screen.findByLabelText('Post text');
+
+      fireEvent.paste(textarea, {
+        clipboardData: {
+          items: [],
+          getData: () => 'https://example.com/article',
+        },
+      });
+
+      expect(await screen.findByRole('status')).toHaveTextContent('Loading link…');
+      expect(document.querySelector('[class*="aspect-"]')).toBeNull();
+      expect(screen.getByLabelText('Post text')).toBeInTheDocument();
+      expect(screen.getByLabelText('Post text')).not.toBeDisabled();
+
+      await act(async () => {
+        pending.resolve(
+          apiResponse({
+            url: 'https://example.com/article',
+            domain: 'example.com',
+            title: 'Example article',
+          })
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('Example article')).toBeInTheDocument();
+      });
+    } finally {
+      global.fetch = originalFetch;
+    }
   });
 
   it('closes on Escape when the composer is idle', async () => {
