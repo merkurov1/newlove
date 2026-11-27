@@ -160,4 +160,49 @@ describe('GET /api/admin/youtube/channels/connect', () => {
     expect(location.searchParams.get('missing')).toContain('GOOGLE_CLIENT_ID');
     expect(oauth.probeGoogleConsentUrl).not.toHaveBeenCalled();
   });
+
+  it('returns the consent URL as JSON for the authenticated admin UI', async () => {
+    const response = await GET(
+      new Request(
+        'https://www.merkurov.love/api/admin/youtube/channels/connect?project=art-engine&format=json',
+        { headers: { accept: 'application/json' } }
+      )
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    expect(response.headers.get('cache-control')).toContain('no-store');
+    expect(response.headers.get('set-cookie')).toContain('pierrot_youtube_channels_oauth');
+
+    const body = (await response.json()) as { ok: boolean; consentUrl: string; project: string };
+    expect(body.ok).toBe(true);
+    expect(body.project).toBe('art-engine');
+    expect(new URL(body.consentUrl).hostname).toBe('accounts.google.com');
+  });
+
+  it('returns a precise JSON error instead of a redirect in JSON mode', async () => {
+    channels.checkYouTubeMultichannelSchema.mockResolvedValueOnce({
+      ready: false,
+      reason: 'missing_tables',
+      missingTables: ['youtube_channels'],
+      code: 'PGRST205',
+    });
+
+    const response = await GET(
+      new Request(
+        'https://www.merkurov.love/api/admin/youtube/channels/connect?project=art-engine&format=json',
+        { headers: { accept: 'application/json' } }
+      )
+    );
+
+    expect(response.status).toBe(502);
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: string;
+      missing: string;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe('migration_required');
+    expect(body.missing).toBe('youtube_channels');
+  });
 });

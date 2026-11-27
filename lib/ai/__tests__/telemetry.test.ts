@@ -2,6 +2,7 @@
 
 import {
   buildLlmCallRecord,
+  chatUsageFrom,
   estimateLlmCost,
   recordLlmCall,
   type LlmProviderAttempt,
@@ -364,5 +365,43 @@ describe('LLM telemetry report', () => {
     expect(totals.retries).toBe(0);
     expect(totals.fallbacks).toBe(1);
     expect(totals.messages).toBe(1);
+  });
+});
+
+describe('chat completion usage parsing', () => {
+  it('keeps an omitted usage block unknown', () => {
+    expect(chatUsageFrom(undefined)).toMatchObject({
+      inputTokens: null,
+      outputTokens: null,
+      totalTokens: null,
+      usageSource: 'unknown',
+      providerReportedCostUsd: null,
+    });
+  });
+
+  it('marks one-sided usage as partial instead of filling a zero', () => {
+    expect(chatUsageFrom({ prompt_tokens: 11 })).toMatchObject({
+      inputTokens: 11,
+      outputTokens: null,
+      totalTokens: null,
+      usageSource: 'partial',
+    });
+  });
+
+  it('reads full provider usage and a provider-reported cost', () => {
+    expect(
+      chatUsageFrom({
+        prompt_tokens: 100,
+        completion_tokens: 20,
+        total_tokens: 120,
+        cost: 0.00042,
+      })
+    ).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      totalTokens: 120,
+      usageSource: 'provider_reported',
+      providerReportedCostUsd: 0.00042,
+    });
   });
 });

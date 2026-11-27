@@ -4,6 +4,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { adminFetch, readAdminAuthSnapshot, type AdminAuthSnapshot } from '@/lib/auth/adminFetch';
+
 type Connection = {
   id: string;
   googleAccountEmail: string;
@@ -47,6 +49,7 @@ type SchemaStatus = {
 type StatusPayload = {
   schemaReady?: boolean;
   schema?: SchemaStatus;
+  viewer?: { id: string; email: string | null; role: string };
   project?: string;
   projects?: Array<{ slug: string; name: string; defaultChannelHandle: string | null }>;
   connections?: Connection[];
@@ -290,6 +293,8 @@ export default function YouTubeProjectWorkspace({
   const [statusCheckedAt, setStatusCheckedAt] = useState<string | null>(null);
   const statusRequestId = useRef(0);
   const [busy, setBusy] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [authSnapshot, setAuthSnapshot] = useState<AdminAuthSnapshot | null>(null);
   const [message, setMessage] = useState<string | null>(notice || null);
   const [error, setError] = useState<string | null>(null);
 
@@ -342,7 +347,7 @@ export default function YouTubeProjectWorkspace({
     setStatusError(null);
 
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/youtube/channels?project=${encodeURIComponent(project)}`,
         { cache: 'no-store' }
       );
@@ -390,6 +395,77 @@ export default function YouTubeProjectWorkspace({
   }, [project]);
 
   useEffect(() => {
+    let active = true;
+
+    void readAdminAuthSnapshot().then((snapshot) => {
+      if (active) setAuthSnapshot(snapshot);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  /**
+   * Starts Google consent from the admin UI.
+   *
+   * The route is called with `format=json` so the request can carry the
+   * Bearer session (a plain <a> navigation cannot). The route still sets the
+   * short-lived nonce cookie on the JSON response; the top-level navigation to
+   * Google happens only after the authenticated request has succeeded. This
+   * keeps the existing redirect flow for non-JS navigation.
+   */
+  const startConnect = useCallback(
+    async (loginHint?: string | null) => {
+      if (connectBusy) return;
+
+      setConnectBusy(true);
+      setError(null);
+
+      try {
+        const url = new URL(connectUrl, window.location.origin);
+        url.searchParams.set('format', 'json');
+        if (loginHint) url.searchParams.set('login_hint', loginHint);
+        if (loginHint) url.searchParams.set('select_account', 'true');
+
+        const response = await adminFetch(`${url.pathname}${url.search}`);
+        const payload = (await response.json().catch(() => ({}))) as {
+          ok?: boolean;
+          consentUrl?: string;
+          error?: string;
+          message?: string;
+        };
+
+        if (!response.ok || payload.ok === false) {
+          throw statusFailure(
+            payload.message || payload.error || 'Сервер не разрешил подключение Google.',
+            response.status,
+            payload.error || 'connect_failed'
+          );
+        }
+
+        if (
+          typeof payload.consentUrl === 'string' &&
+          /^https:\/\/[^\s]+$/i.test(payload.consentUrl)
+        ) {
+          window.location.assign(payload.consentUrl);
+          return;
+        }
+
+        throw statusFailure(
+          'Сервер не вернул URL согласия Google.',
+          response.status,
+          'consent_url_missing'
+        );
+      } catch (connectError) {
+        setError(formatStatusError(describeStatusError(connectError)));
+        setConnectBusy(false);
+      }
+    },
+    [connectBusy, connectUrl]
+  );
+
+  useEffect(() => {
     setStatus(null);
     setStatusError(null);
     setStatusCheckedAt(null);
@@ -418,7 +494,7 @@ export default function YouTubeProjectWorkspace({
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch('/api/admin/youtube/channels', {
+      const response = await adminFetch('/api/admin/youtube/channels', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -468,9 +544,12 @@ export default function YouTubeProjectWorkspace({
           end: period.end,
           ...(fresh ? { fresh: '1' } : {}),
         });
-        const response = await fetch(`/api/admin/youtube/channels/analytics?${params.toString()}`, {
-          cache: 'no-store',
-        });
+        const response = await adminFetch(
+          `/api/admin/youtube/channels/analytics?${params.toString()}`,
+          {
+            cache: 'no-store',
+          }
+        );
         const payload = (await response.json().catch(() => ({}))) as {
           report?: AnalyticsReport;
           message?: string;
@@ -510,9 +589,12 @@ export default function YouTubeProjectWorkspace({
       try {
         const params = new URLSearchParams({ project, pageSize: '25' });
         if (token) params.set('pageToken', token);
-        const response = await fetch(`/api/admin/youtube/channels/videos?${params.toString()}`, {
-          cache: 'no-store',
-        });
+        const response = await adminFetch(
+          `/api/admin/youtube/channels/videos?${params.toString()}`,
+          {
+            cache: 'no-store',
+          }
+        );
         const payload = (await response.json().catch(() => ({}))) as {
           page?: CatalogPage;
           message?: string;
@@ -574,7 +656,7 @@ export default function YouTubeProjectWorkspace({
     setConfirmation(null);
     setLastSaved(null);
     try {
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(videoId)}?project=${encodeURIComponent(project)}`,
         { cache: 'no-store' }
       );
@@ -616,7 +698,7 @@ export default function YouTubeProjectWorkspace({
         description: form.description,
         tags: inputToTags(form.tags),
       };
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(video.videoId)}?project=${encodeURIComponent(project)}`,
         {
           method: 'POST',
@@ -677,7 +759,7 @@ export default function YouTubeProjectWorkspace({
         description: form.description,
         tags: inputToTags(form.tags),
       };
-      const response = await fetch(
+      const response = await adminFetch(
         `/api/admin/youtube/channels/videos/${encodeURIComponent(video.videoId)}?project=${encodeURIComponent(project)}`,
         {
           method: 'POST',
@@ -764,10 +846,30 @@ export default function YouTubeProjectWorkspace({
           нескольким проектам. Токены хранятся только на сервере и не возвращаются в браузер.
         </p>
 
+        <p className="pw-analytics-hint">
+          Администратор:{' '}
+          <strong>{status?.viewer?.email || authSnapshot?.email || 'сессия не определена'}</strong>
+          {authSnapshot
+            ? authSnapshot.hasSession
+              ? authSnapshot.expiresAtMs
+                ? ` · сессия действует до ${formatDate(
+                    new Date(authSnapshot.expiresAtMs).toISOString()
+                  )}`
+                : ' · сессия найдена'
+              : ' · браузерная сессия не найдена'
+            : null}
+        </p>
+
         <div className="pw-analytics-card-actions">
-          <a className="pw-analytics-button" href={connectUrl}>
-            Подключить Google-аккаунт
-          </a>
+          <button
+            type="button"
+            className="pw-analytics-button"
+            disabled={connectBusy || busy}
+            aria-busy={connectBusy}
+            onClick={() => void startConnect()}
+          >
+            {connectBusy ? 'Открываю Google…' : 'Подключить Google-аккаунт'}
+          </button>
           <button
             type="button"
             className="pw-analytics-button pw-analytics-button--quiet"
@@ -788,6 +890,12 @@ export default function YouTubeProjectWorkspace({
         {statusError && (
           <div className="pw-analytics-error" role="alert">
             <p>{formatStatusError(statusError)}</p>
+            {statusError.httpStatus === 401 ? (
+              <p className="pw-analytics-hint">
+                Сервер не подтвердил сессию администратора. Войдите заново и вернитесь на эту
+                страницу; токены Google при этом не затрагиваются.
+              </p>
+            ) : null}
             <div className="pw-analytics-card-actions">
               <button
                 type="button"
@@ -797,6 +905,14 @@ export default function YouTubeProjectWorkspace({
               >
                 {statusLoading ? 'Повторяю…' : 'Повторить'}
               </button>
+              {statusError.httpStatus === 401 ? (
+                <a
+                  className="pw-analytics-button pw-analytics-button--quiet"
+                  href={`/login?next=${encodeURIComponent('/admin/pierrot/youtube')}`}
+                >
+                  Войти заново
+                </a>
+              ) : null}
             </div>
           </div>
         )}
@@ -865,6 +981,9 @@ export default function YouTubeProjectWorkspace({
                 <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
                 {connection.scopes.length} scopes
                 {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                {connection.lastErrorMessage ? (
+                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
+                ) : null}
                 <div className="pw-analytics-card-actions">
                   <button
                     type="button"
@@ -876,6 +995,16 @@ export default function YouTubeProjectWorkspace({
                   >
                     Обновить каналы
                   </button>
+                  {connection.status !== 'connected' ? (
+                    <button
+                      type="button"
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      disabled={connectBusy || busy}
+                      onClick={() => void startConnect(connection.googleAccountEmail)}
+                    >
+                      Переподключить этот аккаунт
+                    </button>
+                  ) : null}
                   <button
                     type="button"
                     className="pw-analytics-button pw-analytics-button--quiet"

@@ -28,12 +28,38 @@ function noStore(response: NextResponse): NextResponse {
   return response;
 }
 
+function wantsJson(request: Request): boolean {
+  const url = new URL(request.url);
+  const format = (url.searchParams.get('format') || '').toLowerCase();
+  const accept = (request.headers.get('accept') || '').toLowerCase();
+
+  return format === 'json' || accept.includes('application/json');
+}
+
 function fail(
   request: Request,
   reason: string,
   project: string,
   extra: Record<string, string> = {}
 ) {
+  if (wantsJson(request)) {
+    return noStore(
+      NextResponse.json(
+        {
+          ok: false,
+          error: reason.slice(0, 120),
+          project,
+          ...Object.fromEntries(
+            Object.entries(extra)
+              .filter(([, value]) => Boolean(value))
+              .map(([key, value]) => [key, value.slice(0, 240)])
+          ),
+        },
+        { status: 502 }
+      )
+    );
+  }
+
   const url = new URL('/admin/pierrot/youtube', request.url);
   url.searchParams.set('youtube_channels', 'error');
   url.searchParams.set('reason', reason.slice(0, 120));
@@ -124,7 +150,26 @@ export async function GET(request: Request) {
     return fail(request, probe.reason || 'oauth_preflight_failed', project);
   }
 
-  const response = NextResponse.redirect(consentUrl);
+  // JSON mode lets the admin UI authenticate with a Bearer session and then
+  // perform the top-level navigation to Google itself. A plain browser
+  // navigation keeps the redirect behaviour below.
+  const response = wantsJson(request)
+    ? NextResponse.json(
+        {
+          ok: true,
+          project,
+          consentUrl,
+          redirectUri: getYouTubeChannelsRedirectUri(),
+        },
+        {
+          headers: {
+            'Cache-Control': 'no-store, max-age=0, must-revalidate',
+            'X-Robots-Tag': 'noindex, nofollow',
+          },
+        }
+      )
+    : NextResponse.redirect(consentUrl);
+
   response.cookies.set(STATE_COOKIE, nonce, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',

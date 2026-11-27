@@ -82,6 +82,37 @@ export function isYouTubeConfigured(): boolean {
 
 export { getYouTubeChannelsRedirectUri, getYouTubeManagementRedirectUri };
 
+const YOUTUBE_FULL_SCOPE = 'https://www.googleapis.com/auth/youtube';
+const YOUTUBE_ANALYTICS_MONETARY_READONLY_SCOPE =
+  'https://www.googleapis.com/auth/yt-analytics-monetary.readonly';
+
+/**
+ * Google returns the broadest granted scope rather than every narrower alias.
+ * A previous `youtube` or `youtube.force-ssl` grant therefore satisfies
+ * read-only and upload operations even when `youtube.readonly` is not listed.
+ */
+const SCOPE_ALIASES: Record<string, readonly string[]> = {
+  [YOUTUBE_READONLY_SCOPE]: [YOUTUBE_READONLY_SCOPE, YOUTUBE_FULL_SCOPE, YOUTUBE_FORCE_SSL_SCOPE],
+  [YOUTUBE_UPLOAD_SCOPE]: [YOUTUBE_UPLOAD_SCOPE, YOUTUBE_FULL_SCOPE, YOUTUBE_FORCE_SSL_SCOPE],
+  [YOUTUBE_ANALYTICS_READONLY_SCOPE]: [
+    YOUTUBE_ANALYTICS_READONLY_SCOPE,
+    YOUTUBE_ANALYTICS_MONETARY_READONLY_SCOPE,
+  ],
+  [YOUTUBE_FORCE_SSL_SCOPE]: [YOUTUBE_FORCE_SSL_SCOPE, YOUTUBE_FULL_SCOPE],
+};
+
+export function youtubeScopeSatisfies(granted: readonly string[], required: string): boolean {
+  const accepted = SCOPE_ALIASES[required] ?? [required];
+  return accepted.some((scope) => granted.includes(scope));
+}
+
+export function missingYouTubeScopes(
+  granted: readonly string[],
+  required: readonly string[]
+): string[] {
+  return required.filter((scope) => !youtubeScopeSatisfies(granted, scope));
+}
+
 /** Capability-level scope requirements, kept beside the API operations. */
 export const YOUTUBE_MANAGEMENT_SCOPE_BY_CAPABILITY = {
   channel: YOUTUBE_READONLY_SCOPE,
