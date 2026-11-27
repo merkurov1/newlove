@@ -677,4 +677,109 @@ describe('editorial composition', () => {
     if (originalKey === undefined) delete process.env.DEEPSEEK_API_KEY;
     else process.env.DEEPSEEK_API_KEY = originalKey;
   });
+
+  it('feeds textual metadata from every type into the column and drops image payloads', async () => {
+    process.env.DEEPSEEK_API_KEY = 'test-key';
+    delete process.env.GEMINI_API_KEY;
+    mockCreate.mockReset();
+
+    const imageUrl = 'https://cdn.example.com/photo.jpg';
+    const items = [
+      item({
+        id: 'photo-with-text',
+        type: 'photo',
+        title: '',
+        body_md: '',
+        metadata: {
+          public_url: imageUrl,
+          images: [{ url: imageUrl, alt: 'A nested image description' }],
+          alt: 'A quiet street at dawn',
+          caption: 'Morning light on the facades.',
+          imported_note: 'An imported textual note.',
+        },
+      }),
+      item({
+        id: 'imported-audio',
+        type: 'audio',
+        title: '',
+        body_md: '',
+        metadata: {
+          transcript: 'An audio transcript with actual words.',
+          show_notes: 'The show notes for the episode.',
+        },
+      }),
+    ];
+
+    const entries = new Map(items.map((source) => [source.id, entryFor(source)]));
+    const analyses = new Map<string, IssueAI>();
+    const candidates = new Map(
+      items.map((source) => {
+        const entry = entryFor(source);
+        const analysis = heuristicAnalysis(source);
+        analyses.set(source.id, analysis);
+        return [source.id, buildCandidate(entry, analysis, end)];
+      })
+    );
+
+    const composition = buildEditorialComposition({
+      lang: 'ru',
+      period: { start: start.toISOString(), end: end.toISOString() },
+      records: items,
+      editionIds: new Set(items.map((source) => source.id)),
+      entries,
+      analyses,
+      candidates,
+      windowEnd: end,
+    });
+
+    const prompts: string[] = [];
+
+    mockCreate.mockImplementation(async (request: any) => {
+      const system = String(request?.messages?.[0]?.content || '');
+      prompts.push(String(request?.messages?.[1]?.content || ''));
+
+      if (system.includes('research assistant')) {
+        return {
+          choices: [{ message: { content: JSON.stringify({ summary: 'Chunk summary.' }) } }],
+        };
+      }
+
+      return {
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                summary: 'Общий сюжет',
+                paragraphs: ['Первый абзац.', 'Второй абзац.', 'Третий абзац.'],
+              }),
+            },
+          },
+        ],
+      };
+    });
+
+    const { generateEditorialColumn } = await import('../deepseek');
+    const column = await generateEditorialColumn({
+      composition,
+      entries,
+      analyses,
+      lang: 'ru',
+      period: { start: start.toISOString(), end: end.toISOString() },
+    });
+
+    expect(column).not.toBeNull();
+
+    const joined = prompts.join('\n');
+
+    expect(joined).toContain('A quiet street at dawn');
+    expect(joined).toContain('Morning light on the facades.');
+    expect(joined).toContain('A nested image description');
+    expect(joined).toContain('An imported textual note.');
+    expect(joined).toContain('An audio transcript with actual words.');
+    expect(joined).toContain('The show notes for the episode.');
+    expect(joined).not.toContain(imageUrl);
+
+    if (originalKey === undefined) delete process.env.DEEPSEEK_API_KEY;
+    else process.env.DEEPSEEK_API_KEY = originalKey;
+  });
 });

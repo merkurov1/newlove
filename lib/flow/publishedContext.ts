@@ -6,6 +6,7 @@ import {
   flowAiContextGeneratingPayload,
   flowAiContextReadyPayload,
 } from './aiContext';
+import { hasTextContent } from './text';
 import { isFlowAiRagEnabled } from '@/lib/knowledge/rag/flowRetrieval';
 
 export type PublishedFlowItem = {
@@ -45,7 +46,13 @@ export async function ensurePublishedFlowContext(
     item.status !== 'published' ||
     item.visibility !== 'public' ||
     item.ai_allowed === false ||
-    item.type === 'photo'
+    // Type is not a reason to skip: a photo caption or an imported record
+    // can carry text. Only items without any text are omitted.
+    !hasTextContent({
+      title: item.title,
+      body_md: item.body_md,
+      metadata: item.metadata,
+    })
   ) {
     return { status: 'skipped' };
   }

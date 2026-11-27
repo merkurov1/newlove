@@ -10,6 +10,7 @@ import {
 } from './composition';
 import { buildCandidate, candidateFromItem, isHeuristicAnalysis, selectIssueContent } from './editorial';
 import { buildSourceIndex, getLinkPresentation } from './metadata';
+import { extractTextFragments, hasTextContent } from '@/lib/flow/text';
 import { DEFAULT_ISSUE_TEMPLATE, normalizeIssueTemplate } from './template';
 import type {
   FlowItem,
@@ -38,7 +39,7 @@ const safeDate = (value: unknown): Date | null => {
 };
 
 const itemText = (item: FlowItem) =>
-  [item.title, item.body_md].map(clean).filter(Boolean).join('\n\n');
+  extractTextFragments(item).join('\n\n');
 
 /**
  * Metrics keep their original eligibility rule: a published record with a
@@ -57,20 +58,24 @@ const itemIsSelectable = (item: FlowItem): boolean => {
 
   const metadata = item.metadata || {};
 
-  switch (item.type) {
-    case 'link': {
-      const link = getLinkPresentation(metadata);
-      return Boolean(link.title || link.description);
-    }
-    case 'video':
-      // Every published video belongs to the issue. A missing transcript,
-      // thumbnail or AI analysis must never make it unselectable.
-      return true;
-    case 'photo':
-      return Boolean(clean(metadata.public_url) || clean(metadata.alt) || clean(metadata.caption));
-    default:
-      return Boolean(clean(metadata.title) || clean(metadata.description));
+  // Every published video belongs to the issue. A missing transcript,
+  // thumbnail or AI analysis must never make it unselectable.
+  if (item.type === 'video') return true;
+
+  // A photo may be selected by its visual material even when it has no text.
+  if (item.type === 'photo') {
+    return Boolean(
+      clean(metadata.public_url) ||
+        clean(metadata.alt) ||
+        clean(metadata.caption) ||
+        hasTextContent(item)
+    );
   }
+
+  // Selection follows actual text, not the item's declared type. A link whose
+  // only text is in a preview, or a future/imported type with a text field,
+  // remains selectable.
+  return hasTextContent(item);
 };
 
 const itemUrl = (item: FlowItem): string | null => {

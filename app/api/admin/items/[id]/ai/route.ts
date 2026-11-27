@@ -128,18 +128,9 @@ export async function POST(
       );
     }
 
-    // Photos have no meaningful text analysis. Keep the endpoint idempotent:
-    // remove any stale row instead of calling the model.
-    if (item.type === 'photo') {
-      await supabase.from('flow_ai_context').delete().eq('item_id', id);
-      invalidateFlowCache();
-
-      return NextResponse.json({
-        success: true,
-        skipped: true,
-        message: 'AI context is not generated for photo items.',
-      });
-    }
+    // Item type is not a reason to skip: every type may carry text (for
+    // example a photo caption). generateFlowContext returns null only when the
+    // record has no textual content at all.
 
     // Admins may prepare context before publishing. Public pages only read a
     // ready row for a published/public item, and the public RLS policy enforces
@@ -176,8 +167,8 @@ export async function POST(
         });
 
       if (!result) {
-        // generateFlowContext returns null only for an intentional skip
-        // (photo). Provider failures now throw and are handled below.
+        // generateFlowContext returns null only when the record has no text
+        // to analyse. Provider failures throw and are handled below.
         await supabase
           .from('flow_ai_context')
           .delete()
@@ -188,7 +179,7 @@ export async function POST(
           success: true,
           skipped: true,
           message:
-            'AI context generation was skipped for this item type.',
+            'AI context generation was skipped because the item has no text.',
         });
       }
 

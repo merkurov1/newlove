@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { generateGeminiText, isGeminiConfigured } from '@/lib/ai/gemini';
+import { extractTextFragments, extractTextParts } from '@/lib/flow/text';
 import {
   ANALYSIS_VERSION,
   AnalysisResponseSchema,
@@ -368,19 +369,18 @@ function narrativeMaterial(
 ): Record<string, unknown>[] {
   return items
     .filter((item) => item.aiAllowed === true)
-    .filter((item) =>
-      [item.title, item.body, item.description, item.caption].some(
-        (value) => clean(value).length > 0
-      )
-    )
-    .slice(0, 18)
+    .filter((item) => extractTextFragments(item).length > 0)
     .map((item) => {
       const analysis = analyses.get(item.id);
+      // Every text field of the entry feeds the narrative, not only the first
+      // non-empty one. The title is removed from the excerpt to avoid
+      // spending context on the same words twice.
+      const parts = extractTextParts(item, item.title, 12_000);
 
       return {
         type: item.type,
-        title: clean(item.title).slice(0, 220),
-        excerpt: clean(item.body || item.description || item.caption).slice(0, 700),
+        title: parts.title.slice(0, 220),
+        excerpt: parts.body.replace(/\s+/g, ' ').slice(0, 12_000),
         publishedAt: item.publishedAt,
         topic: clean(analysis?.topic),
         summary: clean(analysis?.summary),
@@ -555,18 +555,19 @@ function columnMaterials(
     if (!entry || entry.aiAllowed !== true) continue;
 
     const analysis = analyses.get(id);
-    const excerpt = clean(
-      entry.body || entry.description || entry.caption || entry.alt || ''
-    );
+    // Read all textual fragments of the material regardless of type. The
+    // title is excluded from the excerpt so the same words are not sent twice.
+    const parts = extractTextParts(entry, entry.title, 12_000);
+    const excerpt = parts.body.replace(/\s+/g, ' ').slice(0, 12_000);
 
     // A material with no visible text still exists, but there is nothing to
     // send. It is counted in the prompt without exposing its content.
-    if (!clean(entry.title) && !excerpt) continue;
+    if (!parts.title.trim() && !excerpt) continue;
 
     materials.push({
       type: entry.type,
-      title: clean(entry.title).slice(0, 220),
-      excerpt: excerpt.replace(/\s+/g, ' ').slice(0, 500),
+      title: parts.title.slice(0, 220),
+      excerpt,
       topic: clean(analysis?.topic).slice(0, 120),
       summary: clean(analysis?.summary).slice(0, 400),
       thesis: clean(analysis?.thesis).slice(0, 400),
