@@ -853,4 +853,84 @@ describe('Flow composer dialog accessibility', () => {
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('ignores the non-pixel --tg-viewport-height CSS default instead of collapsing to 100px', () => {
+    document.documentElement.style.setProperty('--tg-viewport-height', '100dvh');
+
+    try {
+      render(<NewPostModal open onClose={jest.fn()} />);
+
+      const dialog = screen.getByRole('dialog');
+
+      expect(dialog.style.getPropertyValue('--pi-composer-height')).toBe(
+        `${window.innerHeight}px`
+      );
+      expect(dialog.style.getPropertyValue('--pi-composer-height')).not.toBe('100px');
+    } finally {
+      document.documentElement.style.removeProperty('--tg-viewport-height');
+    }
+  });
+
+  it('follows a real Telegram pixel viewport height', () => {
+    const telegramHeight = Math.max(1, Math.floor(window.innerHeight / 2));
+
+    document.documentElement.style.setProperty(
+      '--tg-viewport-height',
+      `${telegramHeight}px`
+    );
+
+    try {
+      render(<NewPostModal open onClose={jest.fn()} />);
+
+      expect(
+        screen.getByRole('dialog').style.getPropertyValue('--pi-composer-height')
+      ).toBe(`${telegramHeight}px`);
+    } finally {
+      document.documentElement.style.removeProperty('--tg-viewport-height');
+    }
+  });
+
+  it('tracks visual viewport resizes and keyboard pans', () => {
+    const listeners = new Map<string, Set<() => void>>();
+    const viewport = {
+      height: 600,
+      offsetTop: 0,
+      addEventListener: (type: string, listener: () => void) => {
+        const bucket = listeners.get(type) ?? new Set<() => void>();
+
+        bucket.add(listener);
+        listeners.set(type, bucket);
+      },
+      removeEventListener: (type: string, listener: () => void) => {
+        listeners.get(type)?.delete(listener);
+      },
+    };
+
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: viewport,
+    });
+
+    try {
+      render(<NewPostModal open onClose={jest.fn()} />);
+
+      const dialog = screen.getByRole('dialog');
+
+      expect(dialog.style.getPropertyValue('--pi-composer-height')).toBe('600px');
+      expect(dialog.style.getPropertyValue('--pi-composer-offset')).toBe('0px');
+
+      viewport.height = 420;
+      viewport.offsetTop = 48;
+
+      act(() => {
+        listeners.get('resize')?.forEach((listener) => listener());
+        listeners.get('scroll')?.forEach((listener) => listener());
+      });
+
+      expect(dialog.style.getPropertyValue('--pi-composer-height')).toBe('420px');
+      expect(dialog.style.getPropertyValue('--pi-composer-offset')).toBe('48px');
+    } finally {
+      delete (window as { visualViewport?: unknown }).visualViewport;
+    }
+  });
 });

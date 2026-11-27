@@ -35,6 +35,22 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
   );
 }
 
+/**
+ * Read a numeric CSS variable only when it is a real pixel length.
+ * `--tg-viewport-height` defaults to `100dvh` in `app/main.css`, and
+ * `parseFloat('100dvh')` silently yields `100`, which would clamp the
+ * composer to a 100px strip outside Telegram. Non-px values must be ignored.
+ */
+function readPixelVariable(name: string): number {
+  const value = window
+    .getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+  const match = /^(-?\d+(?:\.\d+)?)px$/i.exec(value);
+
+  return match ? Number.parseFloat(match[1]) : 0;
+}
+
 function SaveStatus({
   state,
   error,
@@ -151,16 +167,14 @@ export default function NewPostModal({
 
       const viewportHeight =
         window.visualViewport?.height || window.innerHeight;
-      const telegramHeight = Number.parseFloat(
-        window.getComputedStyle(document.documentElement).getPropertyValue(
-          '--tg-viewport-height',
-        ),
-      );
+      const telegramHeight = readPixelVariable('--tg-viewport-height');
       const height = Math.round(
-        Number.isFinite(telegramHeight) && telegramHeight > 0
+        telegramHeight > 0
           ? Math.min(telegramHeight, viewportHeight)
           : viewportHeight,
       );
+
+      if (!Number.isFinite(height) || height <= 0) return;
 
       panel.style.setProperty('--pi-composer-height', `${height}px`);
       panel.style.setProperty(
@@ -173,12 +187,16 @@ export default function NewPostModal({
 
     const visualViewport = window.visualViewport;
     visualViewport?.addEventListener('resize', syncViewportHeight);
+    // Safari pans the visual viewport while the keyboard animates without
+    // always firing `resize`; the offset must follow that pan as well.
+    visualViewport?.addEventListener('scroll', syncViewportHeight);
     window.addEventListener('resize', syncViewportHeight);
 
     return () => {
       document.body.style.overflow = previousOverflow;
       window.cancelAnimationFrame(frame);
       visualViewport?.removeEventListener('resize', syncViewportHeight);
+      visualViewport?.removeEventListener('scroll', syncViewportHeight);
       window.removeEventListener('resize', syncViewportHeight);
 
       const restoreTarget = restoreFocusRef.current;
