@@ -231,7 +231,6 @@ async function readComposerMetrics(page: Page) {
     if (!dialog) throw new Error('composer dialog missing');
 
     const textarea = dialog.querySelector<HTMLTextAreaElement>('textarea[aria-label="Post text"]');
-    const focusRule = dialog.querySelector<HTMLElement>('[data-composer-focus-rule]');
     const footer = dialog.querySelector<HTMLElement>('footer');
     const header = dialog.querySelector<HTMLElement>('header');
 
@@ -251,7 +250,6 @@ async function readComposerMetrics(page: Page) {
     };
 
     const style = getComputedStyle(textarea);
-    const focusRuleStyle = focusRule ? getComputedStyle(focusRule) : null;
 
     return {
       dialog: rect(dialog),
@@ -270,11 +268,6 @@ async function readComposerMetrics(page: Page) {
         boxShadow: style.boxShadow,
         fontSize: style.fontSize,
       },
-      focusRuleStyle: {
-        backgroundColor: focusRuleStyle?.backgroundColor ?? '',
-        width: focusRuleStyle?.width ?? '',
-        height: focusRuleStyle?.height ?? '',
-      },
       viewport: {
         width: window.innerWidth,
         height: window.innerHeight,
@@ -283,6 +276,7 @@ async function readComposerMetrics(page: Page) {
         visualTop: window.visualViewport?.offsetTop ?? 0,
       },
       documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      hasFocusRule: Boolean(dialog.querySelector('[data-composer-focus-rule]')),
     };
   });
 }
@@ -310,10 +304,8 @@ test.describe('Flow composer editorial surface', () => {
       expect(metrics.textareaStyle.outlineColor).not.toBe('rgb(138, 131, 120)');
       expect(metrics.textareaStyle.outlineColor).toBe('rgba(0, 0, 0, 0)');
       expect(metrics.textareaStyle.backgroundImage).toBe('none');
-      expect(metrics.focusRuleStyle.backgroundColor).toBe('rgb(138, 131, 120)');
-      expect(metrics.focusRuleStyle.height).toBe('2px');
-      expect(metrics.focusRuleStyle.width).toBe('32px');
       expect(metrics.textareaStyle.fontSize).toBe(viewport.width >= 640 ? '20px' : '18px');
+      expect(metrics.hasFocusRule).toBe(false);
       expect(metrics.footer.bottom).toBeLessThanOrEqual(viewport.height + 1);
       expect(metrics.header.bottom).toBeLessThanOrEqual(metrics.textarea.top + 1);
       expect(metrics.documentOverflow).toBeLessThanOrEqual(1);

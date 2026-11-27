@@ -2,6 +2,7 @@
 
 import { normalizeFlowItem } from '@/lib/flow/content';
 import { composeTelegramPublication } from '@/lib/flow/telegramComposition';
+import { buildTelegramMiniAppUrl } from '@/lib/telegram/miniAppLinks';
 
 type TelegramPreviewItem = {
   id: string;
@@ -33,7 +34,11 @@ export default function TelegramPreview({ item }: { item: TelegramPreviewItem })
     source_url: item.source_url ?? null,
     metadata: item.metadata ?? {},
   });
-  const composition = composeTelegramPublication(content);
+  const composition = composeTelegramPublication(content, {
+    flowUrl: buildTelegramMiniAppUrl(
+      item.slug ? `/flow/${encodeURIComponent(item.slug)}` : '/flow'
+    ),
+  });
 
   return (
     <section className="rounded-xl border p-4">

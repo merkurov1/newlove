@@ -37,6 +37,35 @@ const SIMPLE_PATH_TO_PARAM: Record<string, string> = {
 
 const FLOW_SLUG = /^[\p{L}\p{N}][\p{L}\p{N}-]{0,119}$/u;
 
+/**
+ * Browser-safe base64url. The Mini App resolver also runs in the client bundle
+ * (`TelegramMiniApp`), so it cannot depend on Node's `Buffer`.
+ */
+function encodeBase64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function decodeBase64Url(value: string): string | null {
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(
+      normalized.length + ((4 - (normalized.length % 4)) % 4),
+      '='
+    );
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
 export function resolveTelegramStartParam(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
 
@@ -48,15 +77,11 @@ export function resolveTelegramStartParam(raw: unknown): string | null {
   if (simple) return simple;
 
   if (value.startsWith('flow__')) {
-    try {
-      const decoded = Buffer.from(value.slice('flow__'.length), 'base64url')
-        .toString('utf8')
-        .trim();
+    const decoded = decodeBase64Url(value.slice('flow__'.length))?.trim();
 
-      return FLOW_SLUG.test(decoded) ? `/flow/${encodeURIComponent(decoded)}` : null;
-    } catch {
-      return null;
-    }
+    return decoded && FLOW_SLUG.test(decoded)
+      ? `/flow/${encodeURIComponent(decoded)}`
+      : null;
   }
 
   if (value.startsWith('flow_')) {
@@ -91,5 +116,5 @@ export function buildTelegramStartParam(path: string): string | null {
 
   if (!FLOW_SLUG.test(slug)) return null;
 
-  return `flow__${Buffer.from(slug, 'utf8').toString('base64url')}`;
+  return `flow__${encodeBase64Url(slug)}`;
 }

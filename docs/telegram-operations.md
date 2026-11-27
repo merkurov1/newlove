@@ -17,6 +17,7 @@ Optional:
 
 ```env
 TELEGRAM_MINI_APP_URL=https://www.merkurov.love/lobby
+TELEGRAM_MINI_APP_BOT_USERNAME=... # without @; enables startapp links in Flow crossposts
 OPENAI_API_KEY=...                 # existing provider; voice transcription only
 TELEGRAM_BOT_WEBHOOK_ENFORCE_SECRET=1  # only if /api/bot has its own bot token
 TEMPLE_BOT_TOKEN=...              # existing love_temple_bot; Mini App auth + Vigil channel post
@@ -28,6 +29,10 @@ server-confirmed spark. It uses the Temple bot and the Heart & Angel channel;
 when `TEMPLE_CHANNEL_ID` is unset, the public `@heartandangel` channel is used.
 A missing token/channel or a Telegram failure never changes the Vigil result.
 There is no retry loop and no extra bot command.
+
+When `TELEGRAM_MINI_APP_BOT_USERNAME` is set, the Flow link in a Telegram
+crosspost opens the exact publication inside the Mini App. Without it, the
+crosspost keeps the canonical web URL as a safe fallback.
 
 Never add bot tokens or webhook secrets as `NEXT_PUBLIC_*`.
 
