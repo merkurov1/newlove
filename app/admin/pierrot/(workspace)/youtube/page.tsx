@@ -59,10 +59,13 @@ function youtubeChannelsNotice(params: SearchParams): string | null {
   if (!status) return null;
 
   if (status === 'connected') {
-    const account = one(params, 'account');
+    // The account email is deliberately not placed in the redirect URL: it
+    // would be written to access logs and browser history. The connection
+    // list below shows the verified identity from the database instead.
     const channels = one(params, 'channels');
-    return `Google-аккаунт ${account || ''} подключён. Найдено каналов: ${
-      channels || '—'
+    const truncated = one(params, 'truncated') === '1';
+    return `Google-аккаунт подключён. Найдено каналов: ${channels || '—'}${
+      truncated ? ' (достигнут предел страниц, список может быть неполным)' : ''
     }. Выберите канал и привяжите его к проекту.`;
   }
 

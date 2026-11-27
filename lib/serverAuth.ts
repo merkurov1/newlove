@@ -321,42 +321,46 @@ export async function requireAdminFromRequest(
     } = await authClient.auth.getUser(token);
 
     if (error || !user) {
-      logAuthDenied('bearer', req);
-      throw new AuthenticationError('Unauthorized');
+      // An expired or stale browser token must not mask a still-valid
+      // Supabase cookie session. Fall through to step 4 instead of returning
+      // 401 immediately; the browser helper refreshes the token, but a race
+      // (for example a rotation between `getSession` and this request) would
+      // otherwise fail an authenticated owner. No denial is logged here: the
+      // request may still succeed through the cookie path.
+    } else {
+      // Read the role with a server-side client.
+      const serviceClient = getServerSupabaseClient({
+        useServiceRole: true,
+      });
+
+      const { data: profile, error: profileError } = await serviceClient
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (profileError) {
+        console.error(
+          '[serverAuth] Bearer profile lookup failed:',
+          profileError,
+        );
+
+        throw new Error('Failed to verify administrator role.');
+      }
+
+      if (profile?.role !== 'ADMIN') {
+        logAuthDenied('bearer-role', req);
+        throw new AuthenticationError('Unauthorized: Admin access required');
+      }
+
+      return {
+        id: user.id,
+        email: user.email,
+        role: 'ADMIN',
+        profile,
+        user,
+      };
     }
-
-    // Read the role with a server-side client.
-    const serviceClient = getServerSupabaseClient({
-      useServiceRole: true,
-    });
-
-    const { data: profile, error: profileError } = await serviceClient
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error(
-        '[serverAuth] Bearer profile lookup failed:',
-        profileError,
-      );
-
-      throw new Error('Failed to verify administrator role.');
-    }
-
-    if (profile?.role !== 'ADMIN') {
-      logAuthDenied('bearer-role', req);
-      throw new AuthenticationError('Unauthorized: Admin access required');
-    }
-
-    return {
-      id: user.id,
-      email: user.email,
-      role: 'ADMIN',
-      profile,
-      user,
-    };
   }
 
   // 4. Standard browser session.

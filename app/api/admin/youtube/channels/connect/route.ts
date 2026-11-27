@@ -36,18 +36,50 @@ function wantsJson(request: Request): boolean {
   return format === 'json' || accept.includes('application/json');
 }
 
+const FAILURE_MESSAGES: Record<string, string> = {
+  google_oauth_not_configured:
+    'Google OAuth не настроен: проверьте GOOGLE_CLIENT_ID и GOOGLE_CLIENT_SECRET.',
+  server_configuration_error:
+    'Серверная конфигурация Supabase неполна: проверьте URL проекта и ключ service role.',
+  migration_required:
+    'Аддитивная миграция multi-channel YouTube не применена или PostgREST не видит её таблицы.',
+  redirect_uri_mismatch:
+    'Redirect URI не зарегистрирован в Google Cloud OAuth client. Добавьте URI, показанный в диагностике.',
+  invalid_client:
+    'Google отклонил client id/secret. Проверьте, что используется тот же OAuth client.',
+  oauth_configuration_error: 'Google отклонил параметры OAuth (scope, redirect URI или client).',
+  oauth_preflight_failed:
+    'Предварительная проверка Google OAuth не прошла. Повторите попытку после проверки конфигурации.',
+  access_denied: 'Доступ отменён в Google или ограничен политикой организации.',
+};
+
+function failureMessage(reason: string): string {
+  return (
+    FAILURE_MESSAGES[reason] || 'Не удалось начать подключение Google. Код ошибки показан ниже.'
+  );
+}
+
 function fail(
   request: Request,
   reason: string,
   project: string,
   extra: Record<string, string> = {}
 ) {
+  // Safe diagnostics: a reason code and the project, never a code, token,
+  // client secret or Google account email.
+  console.warn('[youtube-channels-connect] failed', {
+    reason: reason.slice(0, 120),
+    project,
+    ...(extra.missing ? { missing: extra.missing.slice(0, 240) } : {}),
+  });
+
   if (wantsJson(request)) {
     return noStore(
       NextResponse.json(
         {
           ok: false,
           error: reason.slice(0, 120),
+          message: failureMessage(reason),
           project,
           ...Object.fromEntries(
             Object.entries(extra)

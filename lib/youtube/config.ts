@@ -9,9 +9,12 @@ import {
   YOUTUBE_READONLY_SCOPE,
   YOUTUBE_UPLOAD_SCOPE,
   getAnalyticsTimezone,
+  getGoogleOAuthConfig,
+  getSiteUrl,
   getYouTubeChannelsRedirectUri,
   getYouTubeManagementRedirectUri,
 } from '@/lib/analytics/website/config';
+import { analyticsEncryptionKeySource } from '@/lib/analytics/website/tokenCrypto';
 
 assertServerOnly('lib/youtube/config');
 
@@ -81,6 +84,59 @@ export function isYouTubeConfigured(): boolean {
 }
 
 export { getYouTubeChannelsRedirectUri, getYouTubeManagementRedirectUri };
+
+/**
+ * Safe, non-secret OAuth configuration snapshot for the owner diagnostics
+ * panel.
+ *
+ * It exposes only booleans, environment variable *names* and redirect URIs
+ * that must be registered in Google Cloud anyway. Client IDs, client secrets,
+ * tokens and encryption keys never leave the server.
+ */
+export type YouTubeOAuthConfigDiagnostics = {
+  googleOAuthConfigured: boolean;
+  googleOAuthMissingEnvNames: string[];
+  siteUrl: string;
+  channelsRedirectUri: string;
+  managementRedirectUri: string;
+  usesDedicatedChannelsRedirectUri: boolean;
+  channelsRedirectUriMatchesSite: boolean;
+  managementRedirectUriMatchesSite: boolean;
+  tokenEncryptionKeySource: 'dedicated' | 'derived';
+  syncSecretConfigured: boolean;
+  serviceRoleConfigured: boolean;
+};
+
+function uriMatchesSite(uri: string): boolean {
+  try {
+    return new URL(uri).origin === new URL(getSiteUrl()).origin;
+  } catch {
+    return false;
+  }
+}
+
+export function getYouTubeOAuthConfigDiagnostics(): YouTubeOAuthConfigDiagnostics {
+  const oauth = getGoogleOAuthConfig();
+  const channelsRedirectUri = getYouTubeChannelsRedirectUri();
+  const managementRedirectUri = getYouTubeManagementRedirectUri();
+
+  return {
+    googleOAuthConfigured: oauth.configured,
+    googleOAuthMissingEnvNames: [...oauth.missing],
+    siteUrl: getSiteUrl(),
+    channelsRedirectUri,
+    managementRedirectUri,
+    usesDedicatedChannelsRedirectUri: Boolean(env('YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI')),
+    channelsRedirectUriMatchesSite: uriMatchesSite(channelsRedirectUri),
+    managementRedirectUriMatchesSite: uriMatchesSite(managementRedirectUri),
+    tokenEncryptionKeySource: analyticsEncryptionKeySource(),
+    // Only presence is reported; the value itself is never returned.
+    syncSecretConfigured: Boolean(
+      env('ANALYTICS_SYNC_SECRET') || env('CRON_SECRET') || env('SUPABASE_SERVICE_ROLE_KEY')
+    ),
+    serviceRoleConfigured: Boolean(env('SUPABASE_SERVICE_ROLE_KEY')),
+  };
+}
 
 const YOUTUBE_FULL_SCOPE = 'https://www.googleapis.com/auth/youtube';
 const YOUTUBE_ANALYTICS_MONETARY_READONLY_SCOPE =

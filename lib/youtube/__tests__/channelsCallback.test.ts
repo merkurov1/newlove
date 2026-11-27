@@ -168,7 +168,9 @@ describe('YouTube multi-channel OAuth callback', () => {
 
     expect(target.pathname).toBe('/admin/pierrot/youtube');
     expect(target.searchParams.get('youtube_channels')).toBe('connected');
-    expect(target.searchParams.get('account')).toBe('owner@example.com');
+    // The account email stays in the database/UI and must never be written to
+    // access logs, browser history or Referer headers.
+    expect(target.searchParams.get('account')).toBeNull();
     expect(target.searchParams.get('channels')).toBe('1');
     expect(target.searchParams.get('project')).toBe('art-engine');
 
@@ -315,7 +317,7 @@ describe('YouTube multi-channel OAuth callback', () => {
 
     expect(target.searchParams.get('youtube_channels')).toBe('channels_failed');
     expect(target.searchParams.get('reason')).toBe('quota_exceeded');
-    expect(target.searchParams.get('account')).toBe('owner@example.com');
+    expect(target.searchParams.get('account')).toBeNull();
     expect(target.searchParams.get('project')).toBe('art-engine');
     expect(channels.saveOAuthConnection).toHaveBeenCalled();
     expect(channels.replaceConnectionChannels).not.toHaveBeenCalled();
@@ -337,5 +339,87 @@ describe('YouTube multi-channel OAuth callback', () => {
     expect(target.searchParams.get('reason')).toBe('invalid_grant');
     expect(channels.saveOAuthConnection).not.toHaveBeenCalled();
     expect(channels.replaceConnectionChannels).not.toHaveBeenCalled();
+  });
+
+  it('marks discovery incomplete when Google paginates past the page cap', async () => {
+    youtubeApi.listMyChannels.mockResolvedValueOnce({
+      channels: [
+        {
+          channelId: 'UC_art',
+          title: 'Merkurov Art',
+          handle: '@merkurov-art',
+          uploadsPlaylistId: 'UU_art',
+          thumbnailUrl: null,
+          hiddenSubscriberCount: false,
+          subscriberCount: 10,
+          viewCount: 100,
+          videoCount: 2,
+        },
+      ],
+      truncated: true,
+    });
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+    const target = location(response);
+
+    expect(target.searchParams.get('youtube_channels')).toBe('connected');
+    expect(target.searchParams.get('truncated')).toBe('1');
+    // A truncated page chain must not be treated as proof that omitted
+    // channels lost access.
+    expect(channels.replaceConnectionChannels).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        complete: false,
+        channels: expect.any(Array),
+      })
+    );
+  });
+
+  it('refuses to invent an account email when Google returns only a subject', async () => {
+    oauth.fetchGoogleUserInfo.mockResolvedValueOnce({
+      email: null,
+      name: 'Owner',
+      subject: 'google-1',
+    });
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'authorization-code' })
+    );
+    const target = location(response);
+
+    expect(target.searchParams.get('youtube_channels')).toBe('error');
+    expect(target.searchParams.get('reason')).toBe('google_identity_unavailable');
+    expect(channels.saveOAuthConnection).not.toHaveBeenCalled();
+    expect(target.toString()).not.toContain('google.invalid');
+  });
+
+  it('logs only safe callback diagnostics, never codes, tokens or email', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    oauth.exchangeGoogleCode.mockRejectedValueOnce(
+      Object.assign(new Error('invalid_grant'), { code: 'invalid_grant' })
+    );
+
+    try {
+      await handleYouTubeChannelsCallback(callbackRequest({ code: 'authorization-code' }));
+
+      expect(warn).toHaveBeenCalledWith(
+        '[youtube-channels-callback] failed',
+        expect.objectContaining({
+          stage: 'token_exchange',
+          reason: 'invalid_grant',
+          project: 'art-engine',
+        })
+      );
+
+      const logged = JSON.stringify(warn.mock.calls);
+      expect(logged).not.toContain('authorization-code');
+      expect(logged).not.toContain('owner@example.com');
+      expect(logged).not.toContain('refresh-token-secret');
+      expect(logged).not.toContain('access-token-secret');
+    } finally {
+      warn.mockRestore();
+    }
   });
 });

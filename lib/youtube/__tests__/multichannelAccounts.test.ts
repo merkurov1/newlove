@@ -328,6 +328,56 @@ describe('two independent Google accounts and shared channels', () => {
     expect(artRoute?.connection.googleAccountEmail).toBe('merckurov@gmail.com');
   });
 
+  it('does not mark omitted channels unavailable when discovery was truncated', async () => {
+    const fake = createStore();
+    const a = await connect(fake.store, ACCOUNT_A, [
+      channel('UC_art', '@merkurov-art', 'Merkurov Art'),
+      channel('UC_brand', '@merkurov-brand', 'Merkurov Brand'),
+    ]);
+
+    const truncated = await replaceConnectionChannels(fake.store, {
+      connectionId: a.connection.id,
+      ownerId: 'owner-1',
+      channels: [channel('UC_art', '@merkurov-art', 'Merkurov Art')],
+      complete: false,
+    });
+
+    expect(truncated.find((item) => item.channelId === 'UC_brand')?.status).toBe('active');
+
+    const complete = await replaceConnectionChannels(fake.store, {
+      connectionId: a.connection.id,
+      ownerId: 'owner-1',
+      channels: [channel('UC_art', '@merkurov-art', 'Merkurov Art')],
+      complete: true,
+    });
+
+    expect(complete.find((item) => item.channelId === 'UC_brand')?.status).toBe('unavailable');
+  });
+
+  it('reports an unavailable bound channel instead of silently serving it', async () => {
+    const fake = createStore();
+    const a = await connect(fake.store, ACCOUNT_A, [
+      channel('UC_art', '@merkurov-art', 'Merkurov Art'),
+    ]);
+    const art = a.channels.find((item) => item.channelId === 'UC_art')!;
+
+    await bindChannelToProject(fake.store, {
+      ownerId: 'owner-1',
+      projectSlug: 'art-engine',
+      channelRecordId: art.id,
+    });
+
+    const stored = fake.rows('youtube_channels').find((row) => row.channel_id === 'UC_art') as
+      | Row
+      | undefined;
+    expect(stored).toBeTruthy();
+    stored!.status = 'unavailable';
+
+    await expect(resolveProjectChannel(fake.store, 'owner-1', 'art-engine')).rejects.toMatchObject({
+      code: 'needs_reauthorization',
+    });
+  });
+
   it('connects B then A with the same result and does not overwrite grant A', async () => {
     const fake = createStore();
     const b = await connect(fake.store, ACCOUNT_B, [

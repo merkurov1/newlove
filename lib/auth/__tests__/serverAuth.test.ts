@@ -1,8 +1,12 @@
 /** @jest-environment node */
 
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('@/lib/supabase/server', () => ({
+  createClient: jest.fn(),
+}));
+
+jest.mock('@supabase/supabase-js', () => ({
   createClient: jest.fn(),
 }));
 
@@ -20,6 +24,9 @@ jest.mock('@/lib/logger', () => ({
 const supabaseServer = require('@/lib/supabase/server') as {
   createClient: jest.Mock;
 };
+const supabaseJs = require('@supabase/supabase-js') as {
+  createClient: jest.Mock;
+};
 const logger = require('@/lib/logger') as {
   logSecurityEvent: jest.Mock;
 };
@@ -34,9 +41,7 @@ const {
   getCurrentUser: () => Promise<unknown>;
   isAuthenticationError: (error: unknown) => boolean;
   requireAdmin: () => Promise<{ id: string; role: string }>;
-  requireAdminFromRequest: (
-    request?: Request
-  ) => Promise<{ id: string; role: string }>;
+  requireAdminFromRequest: (request?: Request) => Promise<{ id: string; role: string }>;
 };
 
 type ClientOptions = {
@@ -66,9 +71,40 @@ function client({
   };
 }
 
+function bearerAuthClient(user: { id: string; email?: string } | null, error: unknown = null) {
+  return {
+    auth: {
+      getUser: jest.fn(async () => ({ data: { user }, error })),
+    },
+  };
+}
+
+function serviceProfileClient(profile: Record<string, unknown> | null) {
+  return {
+    from: jest.fn(() => ({
+      select: () => ({
+        eq: () => ({
+          maybeSingle: async () => ({ data: profile, error: null }),
+        }),
+      }),
+    })),
+  };
+}
+
+const originalEnv = { ...process.env };
+
 describe('serverAuth error classification', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env = { ...originalEnv };
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://project.supabase.co';
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'publishable-test-key';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-test-key';
+    delete process.env.ADMIN_API_SECRET;
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   it('resolves an authenticated owner', async () => {
@@ -174,6 +210,85 @@ describe('serverAuth error classification', () => {
     }
   });
 
+  it('accepts a valid ADMIN Bearer token without reading the cookie session', async () => {
+    supabaseJs.createClient
+      .mockReturnValueOnce(bearerAuthClient({ id: 'owner-1', email: 'owner@example.com' }))
+      .mockReturnValueOnce(serviceProfileClient({ id: 'owner-1', role: 'ADMIN' }));
+
+    const request = new Request('http://localhost/api/admin/youtube/channels', {
+      headers: { authorization: 'Bearer valid-token' },
+    });
+
+    await expect(requireAdminFromRequest(request)).resolves.toMatchObject({
+      id: 'owner-1',
+      role: 'ADMIN',
+    });
+    expect(supabaseServer.createClient).not.toHaveBeenCalled();
+  });
+
+  it('falls back to a valid cookie session when a stale Bearer token is sent', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseJs.createClient.mockReturnValueOnce(
+      bearerAuthClient(null, { message: 'invalid JWT: expired' })
+    );
+    supabaseServer.createClient.mockResolvedValueOnce(
+      client({
+        user: { id: 'owner-1', email: 'owner@example.com' },
+        profile: { id: 'owner-1', role: 'ADMIN' },
+      })
+    );
+
+    try {
+      const request = new Request('http://localhost/api/admin/youtube/channels', {
+        headers: { authorization: 'Bearer expired-token' },
+      });
+
+      await expect(requireAdminFromRequest(request)).resolves.toMatchObject({
+        id: 'owner-1',
+        role: 'ADMIN',
+      });
+      // A stale Bearer that falls back to a valid cookie is not a denial.
+      expect(logger.logSecurityEvent).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('does not let a valid non-admin Bearer token borrow the cookie session', async () => {
+    supabaseJs.createClient
+      .mockReturnValueOnce(bearerAuthClient({ id: 'reader-1' }))
+      .mockReturnValueOnce(serviceProfileClient({ id: 'reader-1', role: 'USER' }));
+
+    const request = new Request('http://localhost/api/admin/youtube/channels', {
+      headers: { authorization: 'Bearer reader-token' },
+    });
+
+    const error = await requireAdminFromRequest(request).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(AuthenticationError);
+    expect(isAuthenticationError(error)).toBe(true);
+    expect(supabaseServer.createClient).not.toHaveBeenCalled();
+  });
+
+  it('does not grant access when both the Bearer token and cookie session are invalid', async () => {
+    supabaseJs.createClient.mockReturnValueOnce(
+      bearerAuthClient(null, { message: 'invalid JWT: expired' })
+    );
+    supabaseServer.createClient.mockResolvedValueOnce(
+      client({ authError: { message: 'Auth session missing!' } })
+    );
+
+    const request = new Request('http://localhost/api/admin/youtube/channels', {
+      headers: { authorization: 'Bearer expired-token' },
+    });
+
+    const error = await requireAdminFromRequest(request).catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(AuthenticationError);
+    expect(isAuthenticationError(error)).toBe(true);
+  });
+
   it('does not grant admin access for an invalid admin secret', async () => {
     const previous = process.env.ADMIN_API_SECRET;
     process.env.ADMIN_API_SECRET = 'super-secret-value';
@@ -187,9 +302,7 @@ describe('serverAuth error classification', () => {
         headers: { 'x-admin-secret': 'wrong-secret-value' },
       });
 
-      const error = await requireAdminFromRequest(request).catch(
-        (caught) => caught
-      );
+      const error = await requireAdminFromRequest(request).catch((caught) => caught);
 
       expect(error).toBeInstanceOf(AuthenticationError);
       expect(isAuthenticationError(error)).toBe(true);

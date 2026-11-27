@@ -154,6 +154,32 @@ describe('multi-channel YouTube owner API', () => {
       'UC_art',
       'UC_unframed',
     ]);
+    expect(body.config.redirectUri).toEqual(expect.any(String));
+    expect(body.config.diagnostics).toMatchObject({
+      googleOAuthConfigured: expect.any(Boolean),
+      googleOAuthMissingEnvNames: expect.any(Array),
+      channelsRedirectUri: expect.any(String),
+      managementRedirectUri: expect.any(String),
+      serviceRoleConfigured: expect.any(Boolean),
+      syncSecretConfigured: expect.any(Boolean),
+      tokenEncryptionKeySource: expect.stringMatching(/^(dedicated|derived)$/),
+    });
+    // Diagnostics expose only names/booleans/URIs, never credentials.
+    expect(Object.keys(body.config.diagnostics).sort()).toEqual(
+      [
+        'channelsRedirectUri',
+        'channelsRedirectUriMatchesSite',
+        'googleOAuthConfigured',
+        'googleOAuthMissingEnvNames',
+        'managementRedirectUri',
+        'managementRedirectUriMatchesSite',
+        'serviceRoleConfigured',
+        'siteUrl',
+        'syncSecretConfigured',
+        'tokenEncryptionKeySource',
+        'usesDedicatedChannelsRedirectUri',
+      ].sort()
+    );
     expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
   });
 
@@ -254,7 +280,11 @@ describe('multi-channel YouTube owner API', () => {
     });
     expect(channels.replaceConnectionChannels).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ connectionId: 'connection-1', ownerId: 'owner-1' })
+      expect.objectContaining({
+        connectionId: 'connection-1',
+        ownerId: 'owner-1',
+        complete: true,
+      })
     );
   });
 });

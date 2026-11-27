@@ -20,6 +20,7 @@ import {
 import {
   YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   getYouTubeChannelsRedirectUri,
+  getYouTubeOAuthConfigDiagnostics,
 } from '@/lib/youtube/config';
 import { YouTubeError } from '@/lib/youtube/types';
 
@@ -128,6 +129,7 @@ export async function GET(request: Request) {
         scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
         redirectUri: getYouTubeChannelsRedirectUri(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
+        diagnostics: getYouTubeOAuthConfigDiagnostics(),
       },
       message:
         `Аддитивная миграция multi-channel YouTube ещё не применена или недоступна.${missing} ` +
@@ -172,6 +174,7 @@ export async function GET(request: Request) {
         scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
         redirectUri: getYouTubeChannelsRedirectUri(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
+        diagnostics: getYouTubeOAuthConfigDiagnostics(),
       },
     });
   } catch (error) {
@@ -289,6 +292,7 @@ export async function POST(request: Request) {
         connectionId,
         ownerId: user.id,
         channels: discovered.channels,
+        complete: !discovered.truncated,
       });
 
       return json({

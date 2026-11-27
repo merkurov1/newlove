@@ -416,10 +416,21 @@ export type DiscoveredChannelInput = {
  * Upserts every channel returned by the OAuth grant and marks channels that
  * disappeared from the grant as unavailable. A channel that moved to another
  * Google account is moved to the latest connection instead of duplicated.
+ *
+ * `complete` must be false when discovery stopped at the page limit. A
+ * truncated list is not evidence that the missing channels lost access, so
+ * reconciliation is skipped in that case. Otherwise a large Brand Account
+ * portfolio would be marked `unavailable` (and lose usable bindings) merely
+ * because the API returned 500 channels instead of 501.
  */
 export async function replaceConnectionChannels(
   store: SupabaseClient,
-  input: { connectionId: string; ownerId: string; channels: DiscoveredChannelInput[] }
+  input: {
+    connectionId: string;
+    ownerId: string;
+    channels: DiscoveredChannelInput[];
+    complete?: boolean;
+  }
 ): Promise<YouTubeChannelRecord[]> {
   const now = new Date().toISOString();
   const discovered = input.channels.filter((channel) => channel.channelId);
@@ -457,6 +468,12 @@ export async function replaceConnectionChannels(
       }
       throw new Error('youtube_channels: could not save discovered channels.');
     }
+  }
+
+  // A truncated page chain cannot prove that an omitted channel was revoked.
+  // Keep the previous rows active until a complete discovery run succeeds.
+  if (input.complete === false) {
+    return listYouTubeChannels(store, input.ownerId);
   }
 
   const { data: existing, error: listError } = await store
@@ -643,7 +660,14 @@ export async function resolveProjectChannel(
     .eq('is_active', true)
     .maybeSingle();
 
-  if (bindingError || !bindingRow) return null;
+  // A database/permission failure must not be reported to the owner as
+  // "project is not bound": that would silently hide a broken schema, RLS or
+  // service-role configuration behind the normal empty state.
+  if (bindingError && !isMissingYouTubeSchema(bindingError)) {
+    throw new Error('youtube_project_bindings: could not resolve the project binding.');
+  }
+
+  if (!bindingRow) return null;
 
   const binding = mapBinding(bindingRow as unknown as Record<string, unknown>);
   const { data: channelRow, error: channelError } = await store
@@ -653,9 +677,23 @@ export async function resolveProjectChannel(
     .eq('owner_id', ownerId)
     .maybeSingle();
 
-  if (channelError || !channelRow) return null;
+  if (channelError && !isMissingYouTubeSchema(channelError)) {
+    throw new Error('youtube_channels: could not resolve the bound channel.');
+  }
+
+  if (!channelRow) return null;
 
   const channel = mapChannel(channelRow as unknown as Record<string, unknown>);
+
+  if (channel.status !== 'active') {
+    throw new YouTubeError({
+      code: 'needs_reauthorization',
+      message:
+        'The bound YouTube channel is no longer available to its Google account. Refresh the account channels or reconnect it.',
+      stage: 'binding',
+    });
+  }
+
   const { data: connectionRow, error: connectionError } = await store
     .from('youtube_oauth_connections')
     .select(SAFE_CONNECTION_COLUMNS)
@@ -663,7 +701,11 @@ export async function resolveProjectChannel(
     .eq('owner_id', ownerId)
     .maybeSingle();
 
-  if (connectionError || !connectionRow) return null;
+  if (connectionError && !isMissingYouTubeSchema(connectionError)) {
+    throw new Error('youtube_oauth_connections: could not resolve the bound connection.');
+  }
+
+  if (!connectionRow) return null;
 
   return {
     binding,

@@ -16,11 +16,16 @@
 --   youtube_channels, youtube_project_bindings and the audit log never contain
 --   tokens. RLS is enabled and anon/authenticated access is revoked.
 --
+-- owner_id is the Supabase auth user UUID in production (migration version
+-- 20261126140616). Code passes `user.id` through unchanged. This prepared
+-- definition matches that production shape so a fresh environment does not
+-- drift; it is NOT re-applied to production.
+--
 -- Rollback: migrations/rollback/2026-12-15_youtube_multichannel_rollback.sql
 
 CREATE TABLE IF NOT EXISTS public.youtube_oauth_connections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id text NOT NULL,
+  owner_id uuid NOT NULL,
   google_account_id text,
   google_account_email text NOT NULL,
   google_account_name text,
@@ -46,7 +51,7 @@ CREATE TABLE IF NOT EXISTS public.youtube_channels (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   connection_id uuid NOT NULL
     REFERENCES public.youtube_oauth_connections(id) ON DELETE CASCADE,
-  owner_id text NOT NULL,
+  owner_id uuid NOT NULL,
   channel_id text NOT NULL,
   title text,
   handle text,
@@ -71,7 +76,7 @@ CREATE INDEX IF NOT EXISTS youtube_channels_owner_idx
 
 CREATE TABLE IF NOT EXISTS public.youtube_project_bindings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id text NOT NULL,
+  owner_id uuid NOT NULL,
   project_slug text NOT NULL,
   channel_record_id uuid NOT NULL
     REFERENCES public.youtube_channels(id) ON DELETE CASCADE,

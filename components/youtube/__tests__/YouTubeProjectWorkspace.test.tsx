@@ -68,6 +68,19 @@ function statusPayload(project: string) {
       connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       redirectUri: 'https://example.test/api/auth/youtube-channels/callback',
       scopes: ['https://www.googleapis.com/auth/youtube.readonly'],
+      diagnostics: {
+        googleOAuthConfigured: true,
+        googleOAuthMissingEnvNames: [],
+        siteUrl: 'https://example.test',
+        channelsRedirectUri: 'https://example.test/api/auth/youtube-channels/callback',
+        managementRedirectUri: 'https://example.test/api/auth/youtube-management/callback',
+        usesDedicatedChannelsRedirectUri: true,
+        channelsRedirectUriMatchesSite: true,
+        managementRedirectUriMatchesSite: true,
+        tokenEncryptionKeySource: 'dedicated',
+        syncSecretConfigured: true,
+        serviceRoleConfigured: true,
+      },
     },
   };
 }
@@ -129,6 +142,8 @@ describe('YouTube project workspace state refresh', () => {
       expect(screen.getByRole('button', { name: 'Обновить состояние' })).toBeEnabled();
     });
     expect(screen.getByText(/Состояние обновлено:/)).toBeInTheDocument();
+    expect(screen.getByText('Диагностика OAuth (без секретов)')).toBeInTheDocument();
+    expect(screen.getByText(/Google OAuth:/)).toBeInTheDocument();
   });
 
   it('surfaces the HTTP status and safe error code when the state fetch fails, with retry', async () => {

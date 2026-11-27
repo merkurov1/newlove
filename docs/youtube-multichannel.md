@@ -5,6 +5,40 @@ is already present in production. Code and tests live in this PR; production
 OAuth consent still requires the owner to sign in interactively. No production
 migration is re-applied and no real metadata write is performed by this change.
 
+## Production schema audit (2026-11-26)
+
+Verified against the production project, without applying or editing a
+migration:
+
+- `youtube_oauth_connections`, `youtube_channels` and
+  `youtube_project_bindings` exist, have RLS enabled and expose `owner_id` as
+  **UUID** in all three tables. The code passes the Supabase `user.id` UUID
+  through unchanged and compares it as a string; no cast or schema change is
+  required.
+- The expected indexes exist. The three tables and
+  `youtube_management_audit` contained zero rows at audit time, so there is no
+  persisted production OAuth connection yet.
+- Production code and tests must therefore never claim a successful live
+  connection from the consent redirect alone: only a connection row, channel
+  rows and the project binding count as evidence.
+
+### Safe configuration diagnostics
+
+`GET /api/admin/youtube/channels` returns `config.diagnostics`. It contains
+only booleans, environment variable **names**, redirect URIs and the token-key
+mode. It never returns the Google client secret, a token, an encryption key or
+the account email. The owner workspace renders the same block, so an operator
+can confirm on production:
+
+- whether `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` are present (missing names
+  only);
+- which callback is used (`/api/auth/youtube-management/callback` by default,
+  or the dedicated `/api/auth/youtube-channels/callback`);
+- that both redirect URIs have the same origin as `NEXT_PUBLIC_SITE_URL`;
+- whether a dedicated token-encryption key, sync secret and service role key
+  are configured;
+- the callback has failed stage/reason entries in Vercel logs without PII.
+
 ## What already existed (audit)
 
 The repository already had a working single-channel YouTube stack:
@@ -24,12 +58,12 @@ The repository already had a working single-channel YouTube stack:
 
 Two callback URIs already existed and remain separate:
 
-| Flow | Callback | Default |
-| --- | --- | --- |
-| Analytics/Google (GA4, GSC, legacy YouTube) | `/api/auth/google-analytics/callback` | `ANALYTICS_GOOGLE_REDIRECT_URI` |
-| Incremental YouTube management | `/api/auth/youtube-management/callback` | `YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI` |
-| New multi-channel OAuth (default) | reuses `/api/auth/youtube-management/callback` | same as management |
-| New multi-channel OAuth (optional dedicated) | `/api/auth/youtube-channels/callback` | `YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI` |
+| Flow                                         | Callback                                       | Default                                  |
+| -------------------------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| Analytics/Google (GA4, GSC, legacy YouTube)  | `/api/auth/google-analytics/callback`          | `ANALYTICS_GOOGLE_REDIRECT_URI`          |
+| Incremental YouTube management               | `/api/auth/youtube-management/callback`        | `YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI` |
+| New multi-channel OAuth (default)            | reuses `/api/auth/youtube-management/callback` | same as management                       |
+| New multi-channel OAuth (optional dedicated) | `/api/auth/youtube-channels/callback`          | `YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI`   |
 
 The legacy analytics flow actually uses the first URI unless overridden. The
 new multi-channel flow reuses the already-registered management callback by
@@ -69,8 +103,14 @@ read-only fallback for historical analytics. Rollback:
 4. The callback handler verifies signature, uid, expiry and cookie nonce,
    exchanges the code with the redirect URI that was actually used, seals the
    refresh token and calls `channels.list?mine=true` with pagination.
-5. All returned channels are stored. The owner explicitly selects one and
-   binds it to a project. Nothing is auto-bound.
+5. All returned channels are stored, including Brand Accounts and every page.
+   If discovery reaches its page cap, previously stored channels are kept
+   active: a truncated list is not evidence that they lost access. The owner
+   explicitly selects one and binds it to a project. Nothing is auto-bound.
+6. Failure stages are logged as `[youtube-channels-callback] failed` with only
+   `stage`, a bounded `reason` code and the project. Authorization codes,
+   signed state, tokens and Google account emails are never logged or put in
+   the redirect URL.
 
 Refresh tokens are opened only inside `lib/youtube/channels.ts`. Access tokens
 are cached in-process until shortly before expiry. Rotated refresh tokens are
@@ -89,9 +129,9 @@ the sealed token, marks channels disconnected and deactivates bindings.
 - Top videos (25) and a daily series come from bounded Analytics queries.
 - At most four Analytics queries and one Data API title lookup per report.
 - In-process cache keyed by owner + project + active binding + channel record
-  + connection + period. Rebinding a project therefore cannot serve another
-  channel's cached report. Default TTL 300 seconds
-  (`YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS`); `fresh=1` bypasses it.
+  - connection + period. Rebinding a project therefore cannot serve another
+    channel's cached report. Default TTL 300 seconds
+    (`YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS`); `fresh=1` bypasses it.
 - The response includes period, timezone, fetched-at timestamp, API sources,
   reporting-delay note and limitations.
 

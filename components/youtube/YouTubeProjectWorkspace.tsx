@@ -46,6 +46,20 @@ type SchemaStatus = {
   code?: string | null;
 };
 
+type OAuthConfigDiagnostics = {
+  googleOAuthConfigured: boolean;
+  googleOAuthMissingEnvNames: string[];
+  siteUrl: string;
+  channelsRedirectUri: string;
+  managementRedirectUri: string;
+  usesDedicatedChannelsRedirectUri: boolean;
+  channelsRedirectUriMatchesSite: boolean;
+  managementRedirectUriMatchesSite: boolean;
+  tokenEncryptionKeySource: 'dedicated' | 'derived';
+  syncSecretConfigured: boolean;
+  serviceRoleConfigured: boolean;
+};
+
 type StatusPayload = {
   schemaReady?: boolean;
   schema?: SchemaStatus;
@@ -57,7 +71,12 @@ type StatusPayload = {
   bindings?: Binding[];
   activeByProject?: Record<string, { binding: Binding; channel: Channel } | undefined>;
   active?: { binding: Binding; channel: Channel; connection: Connection | null } | null;
-  config?: { connectUrl: string; redirectUri: string; scopes: string[] };
+  config?: {
+    connectUrl: string;
+    redirectUri: string;
+    scopes: string[];
+    diagnostics?: OAuthConfigDiagnostics;
+  };
   message?: string;
   error?: string;
   code?: string;
@@ -930,6 +949,47 @@ export default function YouTubeProjectWorkspace({
           <p className="pw-analytics-hint">
             Redirect URI для Google Cloud: <code>{status.config.redirectUri}</code>
           </p>
+        )}
+
+        {status?.config?.diagnostics && (
+          <div className="pw-analytics-config">
+            <h3>Диагностика OAuth (без секретов)</h3>
+            {!status.config.diagnostics.googleOAuthConfigured && (
+              <p className="pw-analytics-error" role="alert">
+                Google OAuth не настроен. Отсутствуют переменные:{' '}
+                <code>
+                  {status.config.diagnostics.googleOAuthMissingEnvNames.join(', ') || 'неизвестно'}
+                </code>
+              </p>
+            )}
+            <p className="pw-analytics-hint">
+              Google OAuth:{' '}
+              {status.config.diagnostics.googleOAuthConfigured ? 'настроен' : 'не настроен'} ·
+              Callback:{' '}
+              {status.config.diagnostics.usesDedicatedChannelsRedirectUri
+                ? 'отдельный /api/auth/youtube-channels/callback'
+                : 'общий /api/auth/youtube-management/callback'}{' '}
+              · шифрование токена:{' '}
+              {status.config.diagnostics.tokenEncryptionKeySource === 'dedicated'
+                ? 'отдельный ключ'
+                : 'производный от service role'}
+            </p>
+            <p className="pw-analytics-hint">
+              Management callback: <code>{status.config.diagnostics.managementRedirectUri}</code>
+            </p>
+            <p className="pw-analytics-hint">
+              Service role: {status.config.diagnostics.serviceRoleConfigured ? 'есть' : 'нет'} ·{' '}
+              sync secret: {status.config.diagnostics.syncSecretConfigured ? 'есть' : 'нет'}
+            </p>
+            {(!status.config.diagnostics.channelsRedirectUriMatchesSite ||
+              !status.config.diagnostics.managementRedirectUriMatchesSite) && (
+              <p className="pw-analytics-error" role="alert">
+                Redirect URI указывает на другой origin, чем {status.config.diagnostics.siteUrl}.
+                Google отклонит такое подключение; проверьте NEXT_PUBLIC_SITE_URL и
+                YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI.
+              </p>
+            )}
+          </div>
         )}
 
         {active && (
