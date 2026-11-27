@@ -992,13 +992,37 @@ export function normalizeFlowItem(
     visibleLinks
   );
 
-  const candidateTitle =
-    meaningfulText(item.title, 300) ??
-    visibleLinks.find((link) => link.title)?.title ??
-    videos.find((video) => video.title)?.title ??
+  // A stored title is the author's title only when it was written manually.
+  // Titles previously generated from a link preview (title_source: 'link'),
+  // a video, an image or the body must be recalculated instead of becoming
+  // "manual" just because they were persisted in items.title.
+  const storedTitleSource =
+    readString(metadata.title_source)?.toLowerCase() ?? null;
+  const storedTitle = meaningfulText(item.title, 300);
+  const storedTitleIsManual =
+    Boolean(storedTitle) &&
+    (storedTitleSource === null || storedTitleSource === 'manual');
+
+  // Link preview metadata is a property of the destination, not of the Flow
+  // item. Only a link-type publication may use it as its own title; an
+  // article or note always opens with the author's text.
+  const linkTitle =
+    rawType === 'link'
+      ? visibleLinks.find((link) => link.title)?.title ??
+        (storedTitleSource === 'link' ? storedTitle : null)
+      : null;
+  const videoTitle = videos.find((video) => video.title)?.title ?? null;
+  const imageTitle =
     images.find((image) => image.alt || image.caption)?.alt ??
     images.find((image) => image.caption)?.caption ??
     meaningfulText(metadata.alt ?? metadata.caption, 300) ??
+    null;
+
+  const candidateTitle =
+    (storedTitleIsManual ? storedTitle : null) ??
+    linkTitle ??
+    videoTitle ??
+    imageTitle ??
     firstMeaningfulLine(bodyText) ??
     firstSentence(bodyText) ??
     null;
@@ -1006,15 +1030,11 @@ export function normalizeFlowItem(
   let title = candidateTitle;
   let titleSource: FlowTitleSource;
 
-  if (meaningfulText(item.title, 300)) titleSource = 'manual';
-  else if (visibleLinks.find((link) => link.title)) titleSource = 'link';
-  else if (videos.find((video) => video.title)) titleSource = 'youtube';
-  else if (
-    images.find((image) => image.alt || image.caption) ||
-    meaningfulText(metadata.alt ?? metadata.caption, 300)
-  ) {
-    titleSource = 'image';
-  } else if (firstMeaningfulLine(bodyText)) titleSource = 'body';
+  if (storedTitleIsManual) titleSource = 'manual';
+  else if (linkTitle) titleSource = 'link';
+  else if (videoTitle) titleSource = 'youtube';
+  else if (imageTitle) titleSource = 'image';
+  else if (firstMeaningfulLine(bodyText)) titleSource = 'body';
   else if (firstSentence(bodyText)) titleSource = 'generated';
   else titleSource = 'fallback';
 

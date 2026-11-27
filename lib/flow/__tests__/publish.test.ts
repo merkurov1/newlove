@@ -108,6 +108,34 @@ describe('shared Flow publication service', () => {
     expect(store.inserted[0].published_at).toBeTruthy();
   });
 
+  it('does not store the first link preview title as an article title', async () => {
+    const store = fakeStore();
+    const preview = {
+      url: 'https://t.me/PierrotAi_bot',
+      title: 'Pierrot',
+      site_name: 'Telegram',
+    };
+
+    const result = await createFlowItem(store.client, {
+      title: null,
+      body_md: 'Журнал. История вопроса.\n\nАвторский текст о проекте.',
+      type: 'article',
+      source_url: preview.url,
+      status: 'published',
+      visibility: 'public',
+      metadata: { link_previews: [preview] },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(store.inserted[0].title).toBe('Журнал. История вопроса.');
+    expect(store.inserted[0].source_url).toBe(preview.url);
+    expect(store.inserted[0].metadata).toMatchObject({
+      title_source: 'body',
+      generated_title: 'Журнал. История вопроса.',
+      link_previews: [preview],
+    });
+  });
+
   it('preserves the EN language for a photo item', async () => {
     const store = fakeStore();
 

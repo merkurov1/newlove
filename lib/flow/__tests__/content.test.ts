@@ -180,9 +180,13 @@ describe('Content Resolver — title rules', () => {
     expect(content.titleSource).toBe('manual');
   });
 
-  it('uses a link preview title, then a YouTube title, then the first body line', () => {
+  it('uses a link preview title only for a link publication, then YouTube and the first body line', () => {
     const preview = normalizeFlowItem(
-      item({ metadata: { link_previews: [{ url: 'https://example.com', title: 'Link title' }] } })
+      item({
+        type: 'link',
+        source_url: 'https://example.com',
+        metadata: { link_previews: [{ url: 'https://example.com', title: 'Link title' }] },
+      })
     );
     expect(preview.title).toBe('Link title');
     expect(preview.titleSource).toBe('link');
@@ -201,6 +205,96 @@ describe('Content Resolver — title rules', () => {
     );
     expect(body.title).toBe('Первая строка заметки.');
     expect(body.titleSource).toBe('body');
+  });
+
+  it('never uses a link preview title as the title of an article or note', () => {
+    const preview = {
+      url: 'https://t.me/PierrotAi_bot',
+      title: 'Pierrot',
+      site_name: 'Telegram',
+    };
+
+    const article = normalizeFlowItem(
+      item({
+        type: 'article',
+        body_md: 'Журнал. История вопроса.\n\nАвторский текст о проекте.',
+        source_url: preview.url,
+        metadata: {
+          link_previews: [
+            preview,
+            {
+              url: 'https://example.com/research',
+              title: 'Research page',
+              site_name: 'Example',
+            },
+          ],
+        },
+      })
+    );
+
+    expect(article.title).toBe('Журнал. История вопроса.');
+    expect(article.titleSource).toBe('body');
+    expect(article.showTitle).toBe(false);
+    expect(article.sourceUrl).toBe(preview.url);
+    expect(article.links).toHaveLength(2);
+    expect(article.links[0].url).toBe(preview.url);
+    expect(article.links[0].title).toBe('Pierrot');
+    expect(article.links[1].url).toBe('https://example.com/research');
+    expect(article.links[1].title).toBe('Research page');
+
+    const note = normalizeFlowItem(
+      item({
+        type: 'note',
+        body_md: 'Заметка о ссылке.',
+        metadata: {
+          link_previews: [
+            { url: 'https://example.com/news', title: 'Open Graph headline' },
+          ],
+        },
+      })
+    );
+
+    expect(note.title).toBe('Заметка о ссылке.');
+    expect(note.titleSource).toBe('body');
+    expect(note.links[0].title).toBe('Open Graph headline');
+  });
+
+  it('ignores a persisted generated link title for an article but keeps a manual title', () => {
+    const generated = normalizeFlowItem(
+      item({
+        title: 'Pierrot',
+        type: 'article',
+        body_md: 'Журнал. История вопроса.\n\nАвторский текст.',
+        source_url: 'https://t.me/PierrotAi_bot',
+        metadata: {
+          title_source: 'link',
+          link_previews: [
+            { url: 'https://t.me/PierrotAi_bot', title: 'Pierrot' },
+          ],
+        },
+      })
+    );
+
+    expect(generated.title).toBe('Журнал. История вопроса.');
+    expect(generated.titleSource).toBe('body');
+
+    const manual = normalizeFlowItem(
+      item({
+        title: 'Журнал. История вопроса.',
+        type: 'article',
+        body_md: 'Авторский текст.',
+        source_url: 'https://t.me/PierrotAi_bot',
+        metadata: {
+          title_source: 'manual',
+          link_previews: [
+            { url: 'https://t.me/PierrotAi_bot', title: 'Pierrot' },
+          ],
+        },
+      })
+    );
+
+    expect(manual.title).toBe('Журнал. История вопроса.');
+    expect(manual.titleSource).toBe('manual');
   });
 
   it('rejects filenames, URLs, dates and generic placeholders as titles', () => {

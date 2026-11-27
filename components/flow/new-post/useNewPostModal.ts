@@ -937,11 +937,19 @@ export function useNewPostModal({
         titleSource === 'youtube' ||
         titleSource === 'image';
 
+      // Link preview titles belong to the destination. They may title a
+      // link-type publication, but they must never become the title of an
+      // article, note, photo or quote. For those the server derives the title
+      // from the author's text (or the existing fallback rules).
       const postTitle = isEditing
         ? titleWasGenerated
           ? null
           : title.trim() || null
-        : linkPreviews[0]?.title || youtubeMetadata?.title || null;
+        : determinedType === "link"
+          ? linkPreviews[0]?.title || null
+          : determinedType === "video"
+            ? youtubeMetadata?.title || null
+            : null;
 
       // A new post carries the language of the edition that opened the
       // composer. Photos have no body text to detect from, so this context is
