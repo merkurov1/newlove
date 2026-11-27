@@ -54,6 +54,7 @@ export default function VigilExperience({
     lifetimeTotal,
     analyticsAvailable,
     isLighting,
+    isAuthenticating,
     isOnCooldown,
     cooldownLabel,
     rateLimitMsg,
@@ -71,9 +72,15 @@ export default function VigilExperience({
     useState<HeartBreathingPhase>('Inhale');
 
   const nativeActionAvailable = useTelegramBottomButton({
-    text: isOnCooldown ? `SPARK RETURNS IN ${cooldownLabel}` : 'SEND SPARK',
+    text: isAuthenticating
+      ? 'CONNECTING TELEGRAM…'
+      : isOnCooldown
+        ? `SPARK RETURNS IN ${cooldownLabel}`
+        : 'SEND SPARK',
     visible: isTelegram,
-    enabled: Boolean(userName) && !isLighting && !isOnCooldown,
+    // A guest can use the native action too: it starts the Telegram identity
+    // exchange and, when that succeeds, the same tap continues to the claim.
+    enabled: !isLighting && !isOnCooldown && !isAuthenticating && !authExpired,
     onClick: () => {
       hapticImpact('vigil');
       void triggerRitual();
@@ -103,27 +110,21 @@ export default function VigilExperience({
     '--heart-aura-scale': heartAuraScale.toFixed(3),
   } as CSSProperties;
 
-  const identityPreparing =
-    identity.status === 'detecting' ||
-    identity.status === 'telegram-verifying';
-  const identityAwaitingLaunch = identity.status === 'telegram-init-pending';
-
+  // Send Spark stays the single primary action for guests and registered
+  // visitors. A guest tap starts the existing auth/registration flow instead
+  // of being disabled; only an in-flight or unavailable action is disabled.
   const actionLabel = isLighting
     ? 'Sending your spark…'
-    : authExpired
+    : isAuthenticating
       ? identity.isTelegram
-        ? 'Reopen the Mini App to send a spark'
-        : 'Sign in again to send a spark'
-      : isOnCooldown
-        ? `Spark returns in ${cooldownLabel}`
-        : !userName
-          ? identityAwaitingLaunch
-            ? 'Waiting for your Telegram name…'
-            : identityPreparing || identity.isLoading
-              ? 'Preparing your identity…'
-              : identity.isTelegram
-                ? 'We could not confirm your name'
-                : 'Sign in to send a spark'
+        ? 'Connecting Telegram…'
+        : 'Opening sign in…'
+      : authExpired
+        ? identity.isTelegram
+          ? 'Reopen the Mini App to send a spark'
+          : 'Sign in again to send a spark'
+        : isOnCooldown
+          ? `Spark returns in ${cooldownLabel}`
           : 'Send Spark';
 
   useEffect(() => {
@@ -312,18 +313,22 @@ export default function VigilExperience({
             <button
               type="button"
               onClick={(event) => void triggerRitual(event)}
-              disabled={isLighting || !userName || isOnCooldown || authExpired}
-              aria-busy={isLighting}
+              disabled={
+                isLighting || isAuthenticating || isOnCooldown || authExpired
+              }
+              aria-busy={isLighting || isAuthenticating}
               aria-label={actionLabel}
               className={styles.sparkButton}
               data-state={
                 isLighting
                   ? 'lighting'
-                  : isOnCooldown
-                    ? 'cooldown'
-                    : authExpired
-                      ? 'expired'
-                      : 'ready'
+                  : isAuthenticating
+                    ? 'authenticating'
+                    : isOnCooldown
+                      ? 'cooldown'
+                      : authExpired
+                        ? 'expired'
+                        : 'ready'
               }
               data-vigil-action="in-scene"
             >

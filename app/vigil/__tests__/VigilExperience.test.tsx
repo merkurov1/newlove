@@ -4,10 +4,12 @@ import VigilExperience from '../VigilExperience';
 import { resolveVigilFlame } from '@/lib/vigil/flame';
 import { TEMPLE_HOME_ASSETS } from '@/lib/temple/homeAssets';
 
+const push = jest.fn();
+
 jest.mock('next/navigation', () => ({
   usePathname: () => '/vigil',
   useRouter: () => ({
-    push: jest.fn(),
+    push,
     back: jest.fn(),
     replace: jest.fn(),
     refresh: jest.fn(),
@@ -206,6 +208,8 @@ const fetchMock = jest.fn();
 
 beforeEach(() => {
   jest.clearAllMocks();
+  push.mockReset();
+  window.localStorage.clear();
   useIsTelegramModule.default.mockReturnValue(false);
   identityModule.default.mockReturnValue(identity());
   supportersModule.useVigilSupporters.mockReturnValue(snapshot());
@@ -271,9 +275,7 @@ describe('/vigil shared flame surface', () => {
       screen.getByAltText(/guardian angel keeping the candle/i)
     ).toBeInTheDocument();
     expect(screen.getByTestId('vigil-heart')).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /sign in to send a spark/i })
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^send spark$/i })).toBeEnabled();
   });
 
   it('renders Send Spark as a plain text button without candle artwork', () => {
@@ -313,7 +315,7 @@ describe('/vigil shared flame surface', () => {
     );
   });
 
-  it('keeps an explained in-scene fallback when a native button exists but identity is unresolved', () => {
+  it('keeps a usable in-scene fallback when a native button exists but identity is unresolved', () => {
     useIsTelegramModule.default.mockReturnValue(true);
     bottomButtonModule.useTelegramBottomButton.mockReturnValue(true);
     identityModule.default.mockReturnValue(
@@ -326,11 +328,9 @@ describe('/vigil shared flame surface', () => {
 
     render(<VigilExperience />);
 
-    const button = screen.getByRole('button', {
-      name: /waiting for your telegram name/i,
-    });
+    const button = screen.getByRole('button', { name: /^send spark$/i });
 
-    expect(button).toBeDisabled();
+    expect(button).toBeEnabled();
     expect(button).toHaveAttribute('data-vigil-action', 'in-scene');
   });
 
@@ -903,8 +903,8 @@ describe('/vigil shared flame surface', () => {
     expect(status).toHaveTextContent(/waiting for telegram to confirm your name/i);
     expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
     expect(
-      screen.getByRole('button', { name: /waiting for your telegram/i })
-    ).toBeDisabled();
+      screen.getByRole('button', { name: /^send spark$/i })
+    ).toBeEnabled();
   });
 
   it('shows verification progress without offering Google to Telegram users', () => {
@@ -954,6 +954,110 @@ describe('/vigil shared flame surface', () => {
     expect(screen.queryByRole('link', { name: /sign in/i })).toBeNull();
   });
 
+  it('starts the existing registration flow from Send Spark for a web guest', () => {
+    identityModule.default.mockReturnValue(identity({ status: 'anonymous' }));
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    expect(push).toHaveBeenCalledWith(
+      '/login?mode=register&next=%2Fvigil'
+    );
+    expect(window.localStorage.getItem('login_redirect_path')).toBe('/vigil');
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).includes('/api/vigil/claim') &&
+          (init as RequestInit | undefined)?.method === 'POST'
+      )
+    ).toHaveLength(0);
+  });
+
+  it('exchanges Telegram initData from Send Spark and continues the same claim', async () => {
+    useIsTelegramModule.default.mockReturnValue(true);
+    const refresh = jest.fn(async () => true);
+
+    identityModule.default.mockReturnValue(
+      identity({
+        isTelegram: true,
+        status: 'telegram-init-pending',
+        isLoading: true,
+        refresh,
+        getAuthToken: jest.fn(() => 'tg-token'),
+      })
+    );
+
+    let postedAuth: string | null = null;
+
+    fetchMock.mockImplementation(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+
+        if (url.includes('/api/vigil/claim') && init?.method === 'POST') {
+          postedAuth =
+            (init.headers as Record<string, string>)?.Authorization ?? null;
+
+          return jsonResponse({
+            ok: true,
+            record: { id: 1 },
+            cooldown: { remainingMs: 86_400_000, remainingLabel: '24h' },
+          });
+        }
+
+        return jsonResponse({});
+      }
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vigil-success')).toHaveTextContent(
+        /added to the shared heart/i
+      );
+    });
+
+    expect(refresh).toHaveBeenCalledWith({ force: true });
+    expect(postedAuth).toBe('Bearer tg-token');
+    expect(push).not.toHaveBeenCalled();
+  });
+
+  it('explains a failed Telegram guest authentication instead of a silent no-op', async () => {
+    useIsTelegramModule.default.mockReturnValue(true);
+    const refresh = jest.fn(async () => false);
+
+    identityModule.default.mockReturnValue(
+      identity({
+        isTelegram: true,
+        status: 'telegram-init-pending',
+        isLoading: true,
+        refresh,
+      })
+    );
+
+    render(<VigilExperience />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^send spark$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        /reopen this page from the telegram bot/i
+      );
+    });
+
+    expect(refresh).toHaveBeenCalledWith({ force: true });
+    expect(
+      fetchMock.mock.calls.filter(
+        ([input, init]) =>
+          String(input).includes('/api/vigil/claim') &&
+          (init as RequestInit | undefined)?.method === 'POST'
+      )
+    ).toHaveLength(0);
+    expect(push).not.toHaveBeenCalled();
+  });
+
   it('keeps the ordinary browser sign-in path for anonymous web visitors', () => {
     identityModule.default.mockReturnValue(identity({ status: 'anonymous' }));
 
@@ -978,7 +1082,7 @@ describe('/vigil shared flame surface', () => {
       '/login?next=%2Fvigil'
     );
     expect(
-      screen.getByRole('button', { name: /sign in to send a spark/i })
-    ).toBeDisabled();
+      screen.getByRole('button', { name: /^send spark$/i })
+    ).toBeEnabled();
   });
 });

@@ -1,9 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase-browser';
 import usePrefersReducedMotion from '@/components/pierrot/usePrefersReducedMotion';
 import useTempleIdentity from '@/hooks/useTempleIdentity';
+import { detectTelegramEnvironment } from '@/lib/telegram/detection';
 import {
   VIGIL_COOLDOWN_MS,
   formatVigilCooldown,
@@ -17,6 +19,12 @@ const FLAME_ID = 1;
 const CLOCK_REFRESH_MS = 30_000;
 const CLAIM_TIMEOUT_MS = 20_000;
 const TOKEN_READ_TIMEOUT_MS = 8_000;
+const AUTH_TIMEOUT_MS = 15_000;
+// Guest Send Spark starts the existing account flow and returns here. The path
+// is hard-coded (and accepted by the safe-return validator) so a guest cannot
+// be redirected anywhere else.
+const VIGIL_REGISTER_PATH = '/login?mode=register&next=%2Fvigil';
+const VIGIL_RETURN_PATH = '/vigil';
 
 /**
  * Read the browser session without letting a stalled storage/auth lock keep
@@ -87,6 +95,7 @@ function channelName(): string {
 export function useVigilController() {
   const identity = useTempleIdentity();
   const reduceMotion = usePrefersReducedMotion();
+  const router = useRouter();
 
   // The homepage and this ritual read the very same authoritative snapshot.
   const {
@@ -112,6 +121,7 @@ export function useVigilController() {
   const sparkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statusRetryRef = useRef(false);
   const sendingRef = useRef(false);
+  const authenticatingRef = useRef(false);
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [flameData, setFlameData] = useState<VigilFlameData | null>(null);
@@ -121,6 +131,7 @@ export function useVigilController() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [authExpired, setAuthExpired] = useState(false);
   const [authRetryNonce, setAuthRetryNonce] = useState(0);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [cooldownRemainingMs, setCooldownRemainingMs] = useState<number | null>(
     null
   );
@@ -422,33 +433,83 @@ export function useVigilController() {
     };
   }, [spark, measureHeartTarget]);
 
+  /**
+   * Starts the existing credential flow for a guest. Web visitors go through
+   * the established login/registration page with a safe `/vigil` return; a
+   * Telegram launch exchanges its signed initData (or restores the signed
+   * cookie) and then continues straight into the claim.
+   */
+  const startGuestAuthentication = useCallback(async (): Promise<boolean> => {
+    if (authenticatingRef.current) return false;
+
+    setSuccessMessage(null);
+    setRateLimitMsg(null);
+
+    // Read the environment synchronously as well: a guest can tap before the
+    // shared detection state has reached React. Launch hash/bridge signals are
+    // already available at that point, so a Telegram visitor is never sent to
+    // the web login page by a timing race.
+    const telegramContext =
+      identityIsTelegram || detectTelegramEnvironment().isTelegram;
+
+    if (!telegramContext) {
+      try {
+        window.localStorage.setItem('login_redirect_path', VIGIL_RETURN_PATH);
+      } catch {
+        // Private browsing can block storage; the URL already carries `next`.
+      }
+
+      router.push(VIGIL_REGISTER_PATH);
+      return false;
+    }
+
+    authenticatingRef.current = true;
+    setIsAuthenticating(true);
+
+    try {
+      const refreshed = await new Promise<boolean>((resolve) => {
+        const timer = setTimeout(() => resolve(false), AUTH_TIMEOUT_MS);
+
+        refreshIdentity({ force: true }).then(
+          (value) => {
+            clearTimeout(timer);
+            resolve(value);
+          },
+          () => {
+            clearTimeout(timer);
+            resolve(false);
+          }
+        );
+      });
+
+      if (!refreshed) {
+        setRateLimitMsg(
+          'Telegram could not confirm your identity. Reopen this page from the Telegram bot, then tap Send Spark again.'
+        );
+        return false;
+      }
+
+      // The exchange updates the signed token ref before it resolves, so the
+      // claim can continue in this same tap.
+      return true;
+    } catch {
+      setRateLimitMsg(
+        'Telegram sign-in could not be completed. Please try again.'
+      );
+      return false;
+    } finally {
+      authenticatingRef.current = false;
+      setIsAuthenticating(false);
+    }
+  }, [identityIsTelegram, refreshIdentity, router]);
+
   const triggerRitual = useCallback(
     async (event?: React.MouseEvent<HTMLButtonElement>) => {
-      if (sendingRef.current || isLighting) return;
+      if (sendingRef.current || authenticatingRef.current || isLighting) return;
 
-      if (!userName) {
-        setSuccessMessage(null);
-        setRateLimitMsg(
-          identityIsTelegram
-            ? identity.error || 'We could not confirm your Telegram name yet.'
-            : 'Please sign in to participate.'
-        );
-        return;
-      }
-
-      if (isOnCooldown) {
-        setSuccessMessage(null);
-        setRateLimitMsg(vigilCooldownMessage(cooldownRemainingMs ?? 0));
-        return;
-      }
-
-      sendingRef.current = true;
-      setIsLighting(true);
-      setRateLimitMsg(null);
-      setSuccessMessage(null);
-
-      // The spark begins exactly where the visitor acted. Keyboard activation
-      // falls back to the centre of the button.
+      // The spark begins exactly where the visitor acted. Read the synthetic
+      // event before any await: React clears `currentTarget` after the handler
+      // yields, and a guest authentication round trip happens first.
       let origin = { x: 0, y: 0 };
 
       if (event) {
@@ -461,6 +522,33 @@ export function useVigilController() {
         const rect = heartRef.current.getBoundingClientRect();
         origin = { x: rect.left, y: rect.top };
       }
+
+      // Guest Send Spark is the registration/auth entry, not a dead end:
+      // a browser is sent through the existing login/registration flow (which
+      // returns to /vigil), while a Telegram launch exchanges its signed
+      // initData or restores the server session before the claim continues.
+      let usedGuestTelegram = false;
+
+      if (!userName) {
+        const authenticated = await startGuestAuthentication();
+
+        if (!authenticated) return;
+
+        usedGuestTelegram = true;
+      }
+
+      if (isOnCooldown) {
+        setSuccessMessage(null);
+        setRateLimitMsg(vigilCooldownMessage(cooldownRemainingMs ?? 0));
+        return;
+      }
+
+      const telegramIdentity = identityIsTelegram || usedGuestTelegram;
+
+      sendingRef.current = true;
+      setIsLighting(true);
+      setRateLimitMsg(null);
+      setSuccessMessage(null);
 
       try {
         const requestClaim = async (token: string | null) => {
@@ -493,7 +581,13 @@ export function useVigilController() {
           }
         };
 
-        let token = await readBearerToken();
+        // A guest Telegram claim must use the freshly issued signed token (or
+        // the HttpOnly temple_session cookie when no bearer is returned). It
+        // must not fall back to a stale Supabase bearer, which the server
+        // resolves before the Telegram cookie.
+        let token = usedGuestTelegram
+          ? getIdentityToken()
+          : await readBearerToken();
         let { response, payload } = await requestClaim(token);
 
         if (response.status === 401) {
@@ -501,7 +595,7 @@ export function useVigilController() {
           // exactly once, then retry the claim with fresh credentials.
           let refreshedToken: string | null = null;
 
-          if (identityIsTelegram) {
+          if (telegramIdentity) {
             const refreshed = await refreshIdentity({ force: true });
 
             if (refreshed) refreshedToken = getIdentityToken();
@@ -521,7 +615,7 @@ export function useVigilController() {
         if (response.status === 401) {
           setAuthExpired(true);
           setRateLimitMsg(
-            identityIsTelegram
+            telegramIdentity
               ? 'Your Telegram session expired. Reopen the Mini App to send a spark.'
               : 'Your session expired. Sign in again to send a spark.'
           );
@@ -630,7 +724,6 @@ export function useVigilController() {
       applyCooldown,
       cooldownRemainingMs,
       getIdentityToken,
-      identity.error,
       identityIsTelegram,
       isLighting,
       isOnCooldown,
@@ -639,6 +732,7 @@ export function useVigilController() {
       refreshData,
       refreshIdentity,
       refreshSharedFlame,
+      startGuestAuthentication,
       userName,
     ]
   );
@@ -663,6 +757,7 @@ export function useVigilController() {
     analyticsSince,
     analyticsAvailable,
     isLighting,
+    isAuthenticating,
     isOnCooldown,
     cooldownLabel,
     cooldownRemainingMs,
