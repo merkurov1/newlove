@@ -1,5 +1,13 @@
 import { Bot, webhookCallback, InlineKeyboard, InputFile } from 'grammy';
 import { getServerSupabaseClient } from '@/lib/serverAuth';
+import {
+    buildLlmCallRecord,
+    chatUsageFrom,
+    createTelemetryStore,
+    logLlmCall,
+    recordLlmCall,
+    type LlmTokenUsage,
+} from '@/lib/ai/telemetry';
 import { Buffer } from 'buffer';
 
 // --- CONFIG ---
@@ -32,6 +40,62 @@ const RESEARCH_AGENT = 'deep-research-pro-preview-12-2025';
 
 // --- MEMORY ---
 const drafts: Record<number, { photo?: string; caption?: string }> = {};
+
+// Telegram is owner-only and has no fallback chain. Each reply still records
+// one telemetry row so production provider/model usage is observable. No chat
+// text, user id or answer is stored: only counts, tokens, latency and a stable
+// error code.
+let telegramTelemetryStore: ReturnType<typeof createTelemetryStore> | undefined;
+
+function telegramStore(): ReturnType<typeof createTelemetryStore> {
+    if (telegramTelemetryStore === undefined) {
+        telegramTelemetryStore = createTelemetryStore();
+    }
+    return telegramTelemetryStore;
+}
+
+async function recordTelegramReply(input: {
+    model: string;
+    ok: boolean;
+    latencyMs: number;
+    errorCode: string | null;
+    usage: LlmTokenUsage;
+    promptChars: number;
+    responseChars: number | null;
+}): Promise<void> {
+    try {
+        const record = buildLlmCallRecord({
+            context: {
+                requestId: null,
+                conversationId: null,
+                sessionId: null,
+                userId: null,
+                // The reviewed telemetry migration has no Telegram surface
+                // value yet, so the attempt is truthfully marked unknown.
+                surface: 'unknown',
+            },
+            attempt: {
+                provider: 'deepseek',
+                model: input.model,
+                attempt: 1,
+                isRetry: false,
+                fallbackFrom: null,
+                ok: input.ok,
+                latencyMs: input.latencyMs,
+                finishReason: input.ok ? 'stop' : null,
+                errorCode: input.errorCode,
+                usage: input.usage,
+                promptChars: input.promptChars,
+                responseChars: input.responseChars,
+            },
+        });
+
+        const stored = await recordLlmCall(telegramStore(), record);
+        if (!stored && !record.ok) logLlmCall(record);
+    } catch {
+        // Telemetry must never break a Telegram reply.
+    }
+}
 
 const SYSTEM_PROMPT = `Ты — Второй Мозг Антона Меркурова. Критичный, стоический, аналитический. Отвечай сжато, по делу. Используй Markdown.`;
 
@@ -223,24 +287,56 @@ bot.on('message:text', async (ctx: any) => {
     }
 
     try {
-        const res = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${DEEPSEEK_KEY}`,
-            },
-            body: JSON.stringify({
+        const startedAt = Date.now();
+        const promptChars = SYSTEM_PROMPT.length + text.length;
+        let telemetryRecorded = false;
+
+        try {
+            const res = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${DEEPSEEK_KEY}`,
+                },
+                body: JSON.stringify({
+                    model: DEEPSEEK_MODEL,
+                    messages: [
+                        { role: 'system', content: SYSTEM_PROMPT },
+                        { role: 'user', content: text },
+                    ],
+                    temperature: 0.7,
+                }),
+            });
+            const data = await res.json();
+            const aiResponse = data?.choices?.[0]?.message?.content;
+            const ok = res.ok && typeof aiResponse === 'string' && aiResponse.trim().length > 0;
+
+            await recordTelegramReply({
                 model: DEEPSEEK_MODEL,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    { role: 'user', content: text },
-                ],
-                temperature: 0.7,
-            }),
-        });
-        const data = await res.json();
-        const aiResponse = data?.choices?.[0]?.message?.content;
-        if (aiResponse) await ctx.reply(aiResponse, { parse_mode: 'Markdown' });
+                ok,
+                latencyMs: Date.now() - startedAt,
+                errorCode: ok ? null : `deepseek_http_${res.status}`,
+                usage: chatUsageFrom(data?.usage),
+                promptChars,
+                responseChars: typeof aiResponse === 'string' ? aiResponse.length : null,
+            });
+            telemetryRecorded = true;
+
+            if (aiResponse) await ctx.reply(aiResponse, { parse_mode: 'Markdown' });
+        } catch (err: any) {
+            if (!telemetryRecorded) {
+                await recordTelegramReply({
+                    model: DEEPSEEK_MODEL,
+                    ok: false,
+                    latencyMs: Date.now() - startedAt,
+                    errorCode: 'deepseek_request_failed',
+                    usage: chatUsageFrom(null),
+                    promptChars,
+                    responseChars: null,
+                });
+            }
+            await ctx.reply(`AI Error: ${err.message}`);
+        }
     } catch (err: any) { await ctx.reply(`AI Error: ${err.message}`); }
 });
 

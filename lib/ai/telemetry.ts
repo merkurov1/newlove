@@ -296,6 +296,36 @@ export function embeddingUsageFrom(value: unknown): LlmTokenUsage {
   };
 }
 
+/**
+ * Parses an OpenAI-compatible chat completion `usage` object without inventing
+ * values. Missing sides stay null and mark the row as partial/unknown.
+ */
+export function chatUsageFrom(value: unknown): LlmTokenUsage {
+  if (!value || typeof value !== 'object') return { ...UNKNOWN_USAGE };
+
+  const record = value as Record<string, unknown>;
+  const read = (key: string): number | null =>
+    typeof record[key] === 'number' && Number.isFinite(record[key])
+      ? (record[key] as number)
+      : null;
+
+  const input = read('prompt_tokens');
+  const output = read('completion_tokens');
+
+  return {
+    inputTokens: input,
+    outputTokens: output,
+    totalTokens: read('total_tokens'),
+    usageSource:
+      input === null && output === null
+        ? 'unknown'
+        : input !== null && output !== null
+          ? 'provider_reported'
+          : 'partial',
+    providerReportedCostUsd: read('cost'),
+  };
+}
+
 export type LlmCallRecord = LlmCallContext &
   LlmProviderAttempt & {
     occurredAt: string;
@@ -380,8 +410,7 @@ export async function recordLlmCall(
       is_retry: record.isRetry,
       fallback_from: record.fallbackFrom,
       ok: record.ok,
-      latency_ms:
-        record.latencyMs === null ? null : Math.max(0, Math.trunc(record.latencyMs)),
+      latency_ms: record.latencyMs === null ? null : Math.max(0, Math.trunc(record.latencyMs)),
       finish_reason: bounded(record.finishReason),
       error_code: bounded(record.errorCode),
       prompt_chars: record.promptChars,

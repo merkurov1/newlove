@@ -250,6 +250,108 @@ describe('project channel analytics', () => {
     expect(apiModule.runAnalyticsReport.mock.calls.length).toBeGreaterThan(callsAfterFirst);
   });
 
+  it('never reuses a cached report after the project is rebound to another channel', async () => {
+    const first = await getProjectChannelAnalytics({
+      store,
+      ownerId: 'owner-1',
+      projectSlug: 'unframed',
+      start: '2026-11-01',
+      end: '2026-11-30',
+    });
+    expect(first.bound).toBe(true);
+    if (first.bound) expect(first.channel.id).toBe('UC_art');
+
+    const callsAfterFirst = apiModule.runAnalyticsReport.mock.calls.length;
+    const original = channelsModule.resolveProjectChannel.getMockImplementation();
+
+    channelsModule.resolveProjectChannel.mockResolvedValue({
+      binding: {
+        id: 'binding-2',
+        projectSlug: 'unframed',
+        channelRecordId: 'channel-record-2',
+        channelId: 'UC_unframed',
+        isActive: true,
+        updatedAt: null,
+      },
+      channel: {
+        id: 'channel-record-2',
+        connectionId: 'connection-2',
+        channelId: 'UC_unframed',
+        title: 'UNFRAMED',
+        handle: '@unframed-tv',
+        uploadsPlaylistId: 'UU_unframed',
+        thumbnailUrl: null,
+        status: 'active',
+        hiddenSubscriberCount: false,
+        subscriberCount: 1,
+        viewCount: 2,
+        videoCount: 3,
+        lastSyncedAt: null,
+      },
+      connection: {
+        id: 'connection-2',
+        googleAccountId: 'google-2',
+        googleAccountEmail: 'unframed@example.com',
+        googleAccountName: 'UNFRAMED',
+        status: 'connected',
+        scopes: [],
+        connectedAt: '2026-01-01T00:00:00.000Z',
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        hasRefreshToken: true,
+      },
+    });
+    channelsModule.loadChannelAccessToken.mockResolvedValueOnce({
+      accessToken: 'access-token-b',
+      channel: {
+        id: 'channel-record-2',
+        connectionId: 'connection-2',
+        channelId: 'UC_unframed',
+        title: 'UNFRAMED',
+        handle: '@unframed-tv',
+        uploadsPlaylistId: 'UU_unframed',
+        thumbnailUrl: null,
+        status: 'active',
+        hiddenSubscriberCount: false,
+        subscriberCount: 1,
+        viewCount: 2,
+        videoCount: 3,
+        lastSyncedAt: null,
+      },
+      connection: {
+        id: 'connection-2',
+        googleAccountId: 'google-2',
+        googleAccountEmail: 'unframed@example.com',
+        googleAccountName: 'UNFRAMED',
+        status: 'connected',
+        scopes: [],
+        connectedAt: '2026-01-01T00:00:00.000Z',
+        lastCheckedAt: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        hasRefreshToken: true,
+      },
+    });
+
+    const rebound = await getProjectChannelAnalytics({
+      store,
+      ownerId: 'owner-1',
+      projectSlug: 'unframed',
+      start: '2026-11-01',
+      end: '2026-11-30',
+    });
+
+    expect(rebound.bound).toBe(true);
+    if (rebound.bound) {
+      expect(rebound.channel.id).toBe('UC_unframed');
+      expect(rebound.cached).toBe(false);
+    }
+    expect(apiModule.runAnalyticsReport.mock.calls.length).toBeGreaterThan(callsAfterFirst);
+
+    if (original) channelsModule.resolveProjectChannel.mockImplementation(original);
+  });
+
   it('returns an unbound state instead of inventing data for an unbound project', async () => {
     channelsModule.resolveProjectChannel.mockResolvedValueOnce(null);
 

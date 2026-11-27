@@ -7,6 +7,25 @@ jest.mock('@/lib/serverAuth', () => ({
   getServerSupabaseClient: jest.fn(() => ({})),
 }));
 
+jest.mock('@/lib/youtube/api', () => ({
+  listMyChannels: jest.fn(async () => ({
+    channels: [
+      {
+        channelId: 'UC_unframed',
+        title: 'UNFRAMED',
+        handle: '@unframed-tv',
+        uploadsPlaylistId: 'UU_unframed',
+        thumbnailUrl: null,
+        hiddenSubscriberCount: false,
+        subscriberCount: 1,
+        viewCount: 2,
+        videoCount: 3,
+      },
+    ],
+    truncated: false,
+  })),
+}));
+
 jest.mock('@/lib/youtube/channels', () => ({
   YOUTUBE_PROJECTS: [
     { slug: 'art-engine', name: 'Art Engine', defaultChannelHandle: '@merkurov-art' },
@@ -60,7 +79,11 @@ jest.mock('@/lib/youtube/channels', () => ({
   unbindProject: jest.fn(async () => undefined),
   disconnectOAuthConnection: jest.fn(async () => ({ revoked: true })),
   loadChannelAccessToken: jest.fn(),
-  replaceConnectionChannels: jest.fn(),
+  loadConnectionAccessToken: jest.fn(async () => ({
+    accessToken: 'access-token',
+    connection: { id: 'connection-1', googleAccountEmail: 'owner@example.com' },
+  })),
+  replaceConnectionChannels: jest.fn(async () => []),
 }));
 
 const { GET, POST } = require('../route') as {
@@ -75,6 +98,8 @@ const channels = require('@/lib/youtube/channels') as {
   disconnectOAuthConnection: jest.Mock;
   checkYouTubeMultichannelSchema: jest.Mock;
   listOAuthConnections: jest.Mock;
+  loadConnectionAccessToken: jest.Mock;
+  replaceConnectionChannels: jest.Mock;
 };
 
 function post(body: Record<string, unknown>): Request {
@@ -87,7 +112,11 @@ function post(body: Record<string, unknown>): Request {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  serverAuth.requireAdminFromRequest.mockResolvedValue({ id: 'owner-1', role: 'ADMIN' });
+  serverAuth.requireAdminFromRequest.mockResolvedValue({
+    id: 'owner-1',
+    email: 'owner@example.com',
+    role: 'ADMIN',
+  });
 });
 
 describe('multi-channel YouTube owner API', () => {
@@ -109,6 +138,11 @@ describe('multi-channel YouTube owner API', () => {
 
     expect(response.status).toBe(200);
     expect(body.schemaReady).toBe(true);
+    expect(body.viewer).toEqual({
+      id: 'owner-1',
+      email: 'owner@example.com',
+      role: 'ADMIN',
+    });
     expect(body.schema).toEqual({
       ready: true,
       reason: 'ready',
@@ -202,5 +236,25 @@ describe('multi-channel YouTube owner API', () => {
       ownerId: 'owner-1',
       connectionId: 'connection-1',
     });
+  });
+
+  it('retries discovery from the connection id when no channels were saved yet', async () => {
+    channels.replaceConnectionChannels.mockResolvedValueOnce([
+      { id: 'channel-record-1', connectionId: 'connection-1', channelId: 'UC_unframed' },
+    ]);
+
+    const response = await POST(post({ action: 'refresh', connectionId: 'connection-1' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, action: 'refresh', channelCount: 1 });
+    expect(channels.loadConnectionAccessToken).toHaveBeenCalledWith(expect.anything(), {
+      ownerId: 'owner-1',
+      connectionId: 'connection-1',
+    });
+    expect(channels.replaceConnectionChannels).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ connectionId: 'connection-1', ownerId: 'owner-1' })
+    );
   });
 });

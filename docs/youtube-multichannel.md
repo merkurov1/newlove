@@ -1,7 +1,9 @@
 # YouTube multi-channel integration
 
-Status: code and additive migration prepared. No production migration or real
-metadata write is performed by this change.
+Status: additive migration `20261126140616` (youtube_multichannel_connections_and_bindings)
+is already present in production. Code and tests live in this PR; production
+OAuth consent still requires the owner to sign in interactively. No production
+migration is re-applied and no real metadata write is performed by this change.
 
 ## What already existed (audit)
 
@@ -86,7 +88,9 @@ the sealed token, marks channels disconnected and deactivates bindings.
   not support them, values stay `null` with an explicit reason — never `0`.
 - Top videos (25) and a daily series come from bounded Analytics queries.
 - At most four Analytics queries and one Data API title lookup per report.
-- In-process cache keyed by project + period. Default TTL 300 seconds
+- In-process cache keyed by owner + project + active binding + channel record
+  + connection + period. Rebinding a project therefore cannot serve another
+  channel's cached report. Default TTL 300 seconds
   (`YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS`); `fresh=1` bypasses it.
 - The response includes period, timezone, fetched-at timestamp, API sources,
   reporting-delay note and limitations.
@@ -145,7 +149,9 @@ connections, discovery and project bindings stay in the dedicated workspace.
 4. Consent screen scopes: `openid`, `email`, `youtube.readonly`,
    `yt-analytics.readonly`, `youtube.upload`.
 5. Add the owner Google account as a test user while the app is unverified.
-6. Apply `2026-12-15_youtube_multichannel.sql` in the target environment.
+6. Production already has the additive migration and UUID `owner_id` columns;
+   do not re-apply it. For a fresh non-production environment apply
+   `2026-12-15_youtube_multichannel.sql` first.
 
 Optional environment overrides:
 
@@ -157,7 +163,8 @@ YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
 
 ## Manual acceptance sequence
 
-1. Apply the additive migration in a non-production environment first.
+1. Production migration is already applied; apply the additive migration only
+   in a fresh non-production environment.
 2. Sign in as the owner, open Art Engine, click «Подключить Google-аккаунт».
 3. Choose `Merkurov@gmail.com`, grant the scopes, confirm `@merkurov-art` is
    listed and bind it to Art Engine.
@@ -176,16 +183,28 @@ YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
 
 ## Automated tests added
 
+- `lib/youtube/__tests__/multichannelAccounts.test.ts` — stateful two-account
+  integration in both connection orders, all channels, three required project
+  bindings, shared channel across two projects, refresh-token retention,
+  owner isolation and disconnect isolation.
 - `lib/youtube/__tests__/multichannelApi.test.ts` — several channels on one
-  Google account across pages.
+  Google account across pages, including Brand Accounts.
 - `lib/youtube/__tests__/multichannelChannels.test.ts` — owner isolation,
-  refresh rotation, reauthorization, revoke + token clearing.
+  refresh rotation, retry after transient error, zero-channel connection
+  refresh, refresh-token retention, reauthorization and revoke failure.
 - `app/api/admin/youtube/channels/connect/__tests__/route.test.ts` — owner-only
   connect, signed state cookie, least-privilege scopes, migration gate.
 - `app/api/admin/youtube/channels/__tests__/route.test.ts` — owner-only API,
-  no token leakage, binding one channel to two projects, disconnect.
+  no token leakage, binding one channel to two projects, discovery retry from
+  an empty connection, disconnect.
 - `lib/youtube/__tests__/channelAnalytics.test.ts` — real metrics, unavailable
-  impressions without zeros, cache/fresh behaviour, unbound project.
+  impressions without zeros, cache/fresh behaviour, rebound-channel cache
+  isolation, unbound project.
+- `lib/youtube/__tests__/channelsCallback.test.ts` — signed state/nonce,
+  scope validation (including broader-scope aliases), identity failure and
+  discovery failure diagnostics without token leakage.
+- `lib/analytics/website/__tests__/tokenCrypto.test.ts` — key rotation and
+  legacy token compatibility without exposing plaintext.
 - `lib/youtube/__tests__/videoCatalog.test.ts` — page tokens and snippet
   preservation for `videos.update`.
 - `lib/youtube/__tests__/metadata.test.ts` — analysis, no invented facts,
