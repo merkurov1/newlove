@@ -3,26 +3,16 @@
 import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Newsreader, Manrope } from 'next/font/google';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { FreeMode, Mousewheel } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/free-mode';
 import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
+import typography from '@/components/heartandangel/typography.module.css';
 
-const serif = Newsreader({
-  subsets: ['latin'],
-  weight: ['300', '400'],
-  style: ['normal', 'italic'],
-  display: 'swap',
- adjustFontFallback: false,
-});
-
-const sans = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  display: 'swap',
-});
+// Local system stacks: no next/font/google network fetch during build.
+const serif = { className: typography.serif };
+const sans = { className: typography.sans };
 
 const STORAGE = 'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public';
 

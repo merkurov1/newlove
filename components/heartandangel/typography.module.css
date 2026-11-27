@@ -1,0 +1,23 @@
+/*
+ * Local system font stacks for Heart & Angel.
+ *
+ * These replace next/font/google so no font CSS or font files are fetched
+ * from fonts.googleapis.com / fonts.gstatic.com during `next build`.
+ */
+
+.serif {
+  font-family:
+    'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, 'Times New Roman', serif;
+}
+
+.sans {
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+}

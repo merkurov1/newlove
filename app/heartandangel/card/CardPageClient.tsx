@@ -3,23 +3,13 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Newsreader, Manrope } from 'next/font/google';
 import PostcardOrderForm from '@/components/heartandangel/PostcardOrderForm';
 import { readPierrotPostcardAttribution } from '@/lib/pierrot/orderAttribution';
+import typography from '@/components/heartandangel/typography.module.css';
 
-const serif = Newsreader({
-  subsets: ['latin'],
-  weight: ['300', '400'],
-  style: ['normal', 'italic'],
-  display: 'swap',
-adjustFontFallback: false,
-});
-
-const sans = Manrope({
-  subsets: ['latin'],
-  weight: ['400', '500', '600'],
-  display: 'swap',
-});
+// Local system stacks: no next/font/google network fetch during build.
+const serif = { className: typography.serif };
+const sans = { className: typography.sans };
 
 type Postcard = {
   id: string;
