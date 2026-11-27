@@ -1,0 +1,481 @@
+/*
+ * The Cast — Sanctuary surface
+ *
+ * Every colour below resolves from the shared Temple token scope in
+ * app/temple/temple.module.css. The daylight page composes `tokens`; the
+ * ritual-modal page composes `tokensDark`, the same lamplight stone used by
+ * the Temple chronicles dialog. There is deliberately no Cast-only palette,
+ * gradient or border colour.
+ */
+
+.page {
+  composes: tokens from '../temple/temple.module.css';
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: hidden;
+  color: var(--ink);
+  color-scheme: light;
+  background: var(--page-wash);
+  background-attachment: fixed;
+  font-family: var(--font-label);
+  isolation: isolate;
+}
+
+.pageModal {
+  composes: tokensDark from '../temple/temple.module.css';
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  overflow-x: hidden;
+  color: var(--ink);
+  color-scheme: dark;
+  background: var(--page-wash);
+  font-family: var(--font-label);
+  isolation: isolate;
+}
+
+/* The same paper grain that sits under the Temple homepage. */
+.page::before,
+.pageModal::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image: var(--grain);
+  background-size: 5px 5px;
+  content: '';
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.pageModal::before {
+  opacity: 0.35;
+}
+
+.page ::selection,
+.pageModal ::selection {
+  background: var(--gold-soft);
+  color: var(--ink);
+}
+
+.masthead {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding: clamp(4.5rem, 10vh, 7rem) 1.25rem 0;
+  text-align: center;
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--font-label);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pageTitle {
+  margin: 0.55rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(2.8rem, 7vh, 4rem);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+.displayLede {
+  max-width: 28rem;
+  margin: 0.8rem auto 0;
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: clamp(1.05rem, 2vh, 1.24rem);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: 0.005em;
+  line-height: 1.55;
+}
+
+.stageBody {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 38rem;
+  margin: 0 auto;
+  padding:
+    clamp(1.5rem, 4vh, 2.5rem)
+    clamp(1rem, 4vw, 1.5rem)
+    max(3rem, env(safe-area-inset-bottom), var(--tg-safe-area-bottom, 0px));
+}
+
+.stageBodyTop {
+  justify-content: flex-start;
+}
+
+.resultStage {
+  max-width: 44rem;
+}
+
+.panel {
+  position: relative;
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  overflow: hidden;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--card);
+  box-shadow:
+    inset 0 1px 0 var(--panel-sheen),
+    var(--shadow-object);
+  text-align: center;
+}
+
+.panel::before {
+  position: absolute;
+  top: 0;
+  right: 24%;
+  left: 24%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-soft), transparent);
+  content: '';
+  pointer-events: none;
+}
+
+.panelSoft {
+  position: relative;
+  width: 100%;
+  padding: clamp(1.1rem, 2.6vw, 1.6rem);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--control);
+  box-shadow: inset 0 1px 0 var(--panel-sheen);
+}
+
+.heading {
+  margin: 1rem 0 0;
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.9rem, 4.5vh, 2.5rem);
+  font-weight: 500;
+  letter-spacing: 0.015em;
+  line-height: 1.05;
+}
+
+.rule {
+  width: 3.5rem;
+  height: 1px;
+  margin: 1.1rem auto 0;
+  background: var(--gold-soft);
+}
+
+.disclosure {
+  margin-top: 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: var(--control);
+  text-align: left;
+}
+
+.disclosureTitle {
+  margin: 0;
+  color: var(--gold);
+  font-family: var(--font-label);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.disclosureBody,
+.disclosureBodyMuted {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-family: var(--font-label);
+  font-size: 0.7rem;
+  line-height: 1.65;
+}
+
+.disclosureBodyMuted {
+  margin-top: 0.4rem;
+  color: var(--faint);
+  font-size: 0.65rem;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 3.25rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: var(--control);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.choice:hover,
+.choice:focus-visible {
+  border-color: var(--gold);
+  background: var(--control-hover);
+}
+
+.choice:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.choiceMeta {
+  color: var(--gold);
+  font-family: var(--font-label);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.questionPanel {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  background: var(--card);
+  box-shadow: inset 0 1px 0 var(--panel-sheen);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2.6vh, 1.5rem);
+  line-height: 1.5;
+}
+
+.input {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 0.3rem;
+  background: var(--input-bg);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  outline: none;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.input::placeholder {
+  color: var(--faint);
+}
+
+.input:focus-visible {
+  border-color: var(--gold);
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.input:disabled {
+  opacity: 0.55;
+}
+
+.primary,
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0.7rem 1.3rem;
+  border: 1px solid var(--line);
+  border-radius: 0.3rem;
+  background: var(--control);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.primary {
+  border-color: var(--gold-soft);
+  background: color-mix(in srgb, var(--gold) 12%, transparent);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+}
+
+.primary:hover:not(:disabled),
+.primary:focus-visible:not(:disabled) {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 20%, transparent);
+}
+
+.secondary:hover:not(:disabled),
+.secondary:focus-visible:not(:disabled) {
+  border-color: var(--gold-soft);
+  background: var(--control-hover);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.primary:disabled,
+.secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.bodyText {
+  color: var(--ink);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.faint {
+  color: var(--faint);
+}
+
+.accent {
+  color: var(--gold);
+}
+
+.divider {
+  border-color: var(--line);
+}
+
+.analysis {
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 300;
+  line-height: 2;
+}
+
+.cursor {
+  display: inline-block;
+  background: var(--gold);
+  color: var(--canvas);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.errorPanel {
+  max-width: 34rem;
+  padding: clamp(1.5rem, 4vw, 2rem);
+  text-align: center;
+}
+
+.resultPanel {
+  max-width: none;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  text-align: left;
+}
+
+.progressTrack {
+  background: var(--line);
+}
+
+.progressBar {
+  background: var(--gold);
+}
+
+.stampSurface {
+  background: var(--card-solid);
+}
+
+.stampVoid {
+  color: var(--muted);
+  border-color: var(--muted);
+}
+
+.stampNoise {
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.stampStone {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
+.stampUnframed {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+/*
+ * Phones get the same hierarchy in a shorter first screen: the language
+ * choices must be reachable without hunting, while the bilingual consent text
+ * stays fully present above them.
+ */
+@media (max-width: 640px) {
+  .masthead {
+    padding-top: clamp(3.5rem, 9vh, 5rem);
+  }
+
+  .pageTitle {
+    font-size: clamp(2.4rem, 8vh, 3rem);
+  }
+
+  .heading {
+    margin-top: 0.6rem;
+    font-size: 1.8rem;
+  }
+
+  .stageBody {
+    padding-top: 1.25rem;
+  }
+
+  .panel {
+    padding: 1.1rem;
+  }
+
+  .disclosure {
+    margin-top: 1rem;
+    padding: 0.75rem 0.8rem;
+  }
+
+  .disclosureBody {
+    font-size: 0.64rem;
+    line-height: 1.55;
+  }
+
+  .disclosureBodyMuted {
+    font-size: 0.6rem;
+    line-height: 1.5;
+  }
+}
+
