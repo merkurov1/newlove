@@ -1,0 +1,82 @@
+# Telegram Instant View template for public Flow posts on merkurov.love.
+#
+# Editor domain: merkurov.love
+# Covered URLs:  https://www.merkurov.love/flow/<public-slug>
+#
+# This file contains rules only. The Telegram template hash is created by the
+# Instant View editor and configured on the server; see README.md in this
+# directory. Never commit or invent a hash.
+
+~version: "2.1"
+
+# Only real Flow post pages. /flow, feeds, private/admin routes and 404 pages
+# do not render <article data-flow-item>, so they cannot produce an IV page.
+?path: /flow/[^/]+/?$
+!exists: //article[@data-flow-item]
+
+# Stable hooks rendered by app/flow/[slug]/page.tsx.
+$article: //article[@data-flow-item]
+$title: $article//h1[normalize-space()][1]
+
+# The Flow post's own title. The data attribute is generated from the post
+# metadata and is checked before any fallback. Link-card/preview titles live
+# inside $body and are never promoted here.
+title: $article/@data-flow-title[normalize-space()]
+title: $title
+# Fallback reads the Flow page's own Open Graph metadata, not the first linked
+# page's preview card title.
+title: /html/head/meta[@property="og:title"]/@content[normalize-space()]
+
+author: $article/@data-flow-author[normalize-space()]
+published_date: $article//time/@datetime[normalize-space()]
+description: /html/head/meta[@property="og:description"]/@content[normalize-space()]
+image_url: /html/head/meta[@property="og:image"]/@content[normalize-space()]
+site_name: /html/head/meta[@property="og:site_name"]/@content[normalize-space()]
+
+# The publication content is the hero block. Navigation, reader controls,
+# share buttons, the pager, footer and Pierrot context all live outside it.
+$body: $article//*[@data-flow-hero]
+body: $body
+
+# Compatibility fallback for older cached HTML. If neither hook exists, the
+# body stays empty and Telegram refuses to build a page instead of exposing
+# the whole site with its app chrome.
+?not_exists: $article//*[@data-flow-hero]
+$body: $article//*[has-class("flow-item__hero")]
+body: $body
+
+# Remove the few app-only fragments that could appear inside the content.
+@remove: $body//header[has-class("flow-reader__bar")]
+@remove: $body//*[has-class("flow-reader__meta")]
+@remove: $body//*[has-class("flow-reader__controls")]
+@remove: $body//footer[has-class("flow-reader__footer")]
+@remove: $body//*[has-class("flow-reader__footer")]
+@remove: $body//*[has-class("flow-reader__pager")]
+@remove: $body//*[has-class("flow-reader__sources")]
+@remove: $body//*[has-class("flow-reader__share")]
+@remove: $body//*[has-class("flow-home-screen")]
+@remove: //comment()
+@remove: //script
+@remove: //style
+
+# Flow images are wrapped in a click-through anchor. Turn each one into a
+# direct <img> so Instant View treats it as Image media, keeping the original
+# destination on the image and leaving the caption as a sibling figcaption.
+$image_links: $body//a[@data-flow-image]
+@before(<img>, \
+  src, .//img/@src, \
+  alt, .//img/@alt, \
+  href, @href \
+): $image_links
+@remove: $image_links
+
+# Drop the visible in-page heading when the article still has content, so the
+# IV header is not duplicated. A title-only post keeps its heading and remains
+# a valid page instead of getting an empty body.
+?exists: $body//*[self::p or self::figure or self::blockquote or self::ul or self::ol or self::pre or self::table or self::iframe or has-class("flow-link-card") or self::a[@href]]
+@remove: $title
+
+# The body must be an <article> before simplification.
+<article>: $body
+@simplify
+body!

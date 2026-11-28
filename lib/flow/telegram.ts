@@ -14,6 +14,7 @@ import {
   type TelegramMedia,
   type TelegramMediaBatch,
 } from './telegramComposition';
+import { buildTelegramInstantViewUrl } from '@/lib/telegram/instantView';
 import { buildTelegramMiniAppUrl } from '@/lib/telegram/miniAppLinks';
 
 export {
@@ -243,10 +244,14 @@ export async function publishTelegramContent(
     : '/flow';
   const miniAppUrl = buildTelegramMiniAppUrl(miniAppPath);
 
-  // In Telegram the publication link should open the Mini App on the exact
-  // Flow post. Outside Telegram (or before the bot username is configured) the
-  // canonical web URL stays the safe fallback.
-  const composition = composeTelegramPublication(content, { flowUrl: miniAppUrl });
+  // A verified Instant View template hash takes precedence: the canonical Flow
+  // post opens as a clean reader inside Telegram. Without a valid hash the
+  // existing Mini App / canonical web fallback is kept unchanged, so a missing
+  // or malformed hash can never produce a broken link.
+  const instantViewUrl = buildTelegramInstantViewUrl(content.canonicalUrl);
+  const flowUrl = instantViewUrl ?? miniAppUrl ?? content.canonicalUrl;
+
+  const composition = composeTelegramPublication(content, { flowUrl });
 
   if (!composition.validation.ok) {
     return {

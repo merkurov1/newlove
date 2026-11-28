@@ -569,7 +569,7 @@ function FlowHero({
   const imagesFirst = content.contentType === 'photo' && content.images.length > 0;
 
   return (
-    <div className="flow-item__hero">
+    <div className="flow-item__hero" data-flow-hero>
       {videosFirst && <VideoBlock videos={content.videos} />}
       {imagesFirst && <SmartGallery images={content.images} />}
 
@@ -679,7 +679,15 @@ export default async function FlowItemPage({ params }: PageProps) {
       />
 
       <div className="flow-post-page flow-post-page--reader min-h-screen bg-white px-5 pb-24 pt-20 text-stone-900 sm:px-8 sm:pt-24">
-        <article className="flow-item mx-auto max-w-[44rem]">
+        <article
+          className="flow-item mx-auto max-w-[44rem]"
+          data-flow-item={decodedSlug}
+          data-flow-title={metadata.title}
+          data-flow-author="Anton Merkurov"
+          data-flow-content-type={content.contentType}
+          data-flow-language={content.language}
+          data-flow-published={metadata.publishedAt ?? undefined}
+        >
           <header className="flow-reader__bar">
             <Link href="/flow" className="flow-reader__back">
               ← Flow
