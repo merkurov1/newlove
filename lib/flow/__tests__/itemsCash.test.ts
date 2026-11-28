@@ -122,6 +122,38 @@ describe('loadFlowItemsPage', () => {
     expect(result.items[0].canonicalUrl).toContain('/flow/item-1');
   });
 
+  it('serializes the saved item title instead of a linked page Open Graph title', async () => {
+    const fake = fakeSupabase([
+      row({
+        id: 'link-1',
+        title: 'Saved Flow title',
+        type: 'link',
+        source_url: 'https://example.com/news',
+        metadata: {
+          title_source: 'link',
+          generated_title: 'Open Graph headline',
+          link_previews: [
+            {
+              url: 'https://example.com/news',
+              title: 'Open Graph headline',
+              site_name: 'Example',
+            },
+          ],
+        },
+      }),
+    ]);
+    mockedCreateClient.mockReturnValue(fake.supabase);
+
+    const result = await loadFlowItemsPage(10, 0);
+    const item = result.items[0] as Record<string, any>;
+
+    expect(item.title).toBe('Saved Flow title');
+    expect(item.titleSource).toBe('manual');
+    expect(item.showTitle).toBe(true);
+    // The linked page keeps its own title inside the preview card.
+    expect(item.links[0].title).toBe('Open Graph headline');
+  });
+
   it('returns an empty page without inventing entries for an empty catalogue', async () => {
     const fake = fakeSupabase([]);
     mockedCreateClient.mockReturnValue(fake.supabase);

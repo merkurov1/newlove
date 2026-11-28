@@ -193,6 +193,66 @@ describe('Telegram Flow layout', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('renders the saved item title on the feed card, separate from a link preview', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'linked-entry',
+        title: 'Saved Flow title',
+        type: 'link',
+        contentType: 'link',
+        showTitle: true,
+        bodyText: '',
+        links: [
+          {
+            url: 'https://example.com/news',
+            title: 'Open Graph headline',
+            description: 'Linked page description',
+            image: null,
+            siteName: 'Example',
+            domain: 'example.com',
+            inBody: false,
+          },
+        ],
+      },
+    ]);
+
+    render(app());
+
+    const heading = await waitFor(() => {
+      const node = document.querySelector(
+        '[data-flow-entry-id="linked-entry"] .flow-entry__title'
+      );
+      expect(node).not.toBeNull();
+      return node;
+    });
+
+    expect(heading).toHaveTextContent('Saved Flow title');
+    expect(heading).not.toHaveTextContent('Open Graph headline');
+    expect(
+      document.querySelector('[data-flow-entry-id="linked-entry"] .flow-entry__links')
+    ).toHaveTextContent('Open Graph headline');
+  });
+
+  it('omits an empty feed title without leaving a broken heading', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'empty-title-entry',
+        title: '',
+        showTitle: false,
+        bodyText: 'Body remains visible.',
+      },
+    ]);
+
+    render(app());
+
+    expect(await screen.findByText('Body remains visible.')).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-flow-entry-id="empty-title-entry"] .flow-entry__title')
+    ).toBeNull();
+  });
+
   it('renders exactly one date marker for a calendar day with several posts', async () => {
     installFetch(false, [
       {

@@ -752,6 +752,12 @@ function firstSentence(text: string, max = 120): string | null {
   return truncateGraphemes(match?.[1] ?? clean, max);
 }
 
+function titleComparisonKey(value: string | null | undefined): string {
+  const text = readString(value);
+  if (!text) return '';
+  return text.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
 function fallbackTitle(
   type: FlowContentType,
   language: FlowLanguage,
@@ -992,16 +998,43 @@ export function normalizeFlowItem(
     visibleLinks
   );
 
-  // A stored title is the author's title only when it was written manually.
-  // Titles previously generated from a link preview (title_source: 'link'),
-  // a video, an image or the body must be recalculated instead of becoming
-  // "manual" just because they were persisted in items.title.
+  // A stored title is the author's title unless it can be traced back to a
+  // generated source. Older rows only carry `title_source`; newer rows also
+  // persist the generated value in `generated_title`, which distinguishes a
+  // title the author later edited from the source value that was written when
+  // the item was published. Recalculating an authored title made the feed card
+  // and the reader show different text (often a linked page's Open Graph
+  // title) even though `items.title` was already correct.
   const storedTitleSource =
     readString(metadata.title_source)?.toLowerCase() ?? null;
   const storedTitle = meaningfulText(item.title, 300);
-  const storedTitleIsManual =
+  const generatedTitle = meaningfulText(metadata.generated_title, 300);
+  const bodyTitleLine = firstMeaningfulLine(bodyText);
+  const bodyTitleSentence = firstSentence(bodyText);
+  const sourceTitleKeys = new Set(
+    [
+      ...previews.map((preview) => preview.title),
+      ...videos.map((video) => video.title),
+      ...images.flatMap((image) => [image.alt, image.caption]),
+      metadata.title,
+      metadata.alt,
+      metadata.caption,
+      bodyTitleLine,
+      bodyTitleSentence,
+      fallbackTitle(contentType, language, visibleLinks, videos),
+    ]
+      .map((value) => titleComparisonKey(readString(value)))
+      .filter(Boolean)
+  );
+  const storedTitleKey = titleComparisonKey(storedTitle);
+  const storedTitleIsGenerated =
     Boolean(storedTitle) &&
-    (storedTitleSource === null || storedTitleSource === 'manual');
+    storedTitleSource !== null &&
+    storedTitleSource !== 'manual' &&
+    (generatedTitle
+      ? titleComparisonKey(generatedTitle) === storedTitleKey
+      : sourceTitleKeys.has(storedTitleKey));
+  const storedTitleIsManual = Boolean(storedTitle) && !storedTitleIsGenerated;
 
   // Link preview metadata is a property of the destination, not of the Flow
   // item. Only a link-type publication may use it as its own title; an
@@ -1009,7 +1042,7 @@ export function normalizeFlowItem(
   const linkTitle =
     rawType === 'link'
       ? visibleLinks.find((link) => link.title)?.title ??
-        (storedTitleSource === 'link' ? storedTitle : null)
+        (storedTitleSource === 'link' && storedTitleIsGenerated ? storedTitle : null)
       : null;
   const videoTitle = videos.find((video) => video.title)?.title ?? null;
   const imageTitle =
@@ -1023,8 +1056,8 @@ export function normalizeFlowItem(
     linkTitle ??
     videoTitle ??
     imageTitle ??
-    firstMeaningfulLine(bodyText) ??
-    firstSentence(bodyText) ??
+    bodyTitleLine ??
+    bodyTitleSentence ??
     null;
 
   let title = candidateTitle;
@@ -1034,8 +1067,8 @@ export function normalizeFlowItem(
   else if (linkTitle) titleSource = 'link';
   else if (videoTitle) titleSource = 'youtube';
   else if (imageTitle) titleSource = 'image';
-  else if (firstMeaningfulLine(bodyText)) titleSource = 'body';
-  else if (firstSentence(bodyText)) titleSource = 'generated';
+  else if (bodyTitleLine) titleSource = 'body';
+  else if (bodyTitleSentence) titleSource = 'generated';
   else titleSource = 'fallback';
 
   if (!title) {
