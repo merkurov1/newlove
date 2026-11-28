@@ -44,6 +44,69 @@ The title rule reads the Flow post's own `data-flow-title`, then its in-article
 heading, then the Flow page's own `og:title`. It never reads a linked page's
 preview title from the link card.
 
+## Owner authorization from Admin → Integrations
+
+The worker must not attempt the editor with an anonymous request. A `401` from
+`https://instantview.telegram.org/my/` only means that the worker has no owner
+session; it is not evidence that the template is missing.
+
+The owner connects the official editor session from the site:
+
+1. Sign in to `/admin` as the owner.
+2. Open **Admin → Integrations → Telegram Instant View**.
+3. Enter the owner's phone number in international format and start the
+   connection. This only calls the official editor `/auth/request` endpoint.
+4. Confirm the login inside the official Telegram app. There are no password,
+   OTP or 2FA fields in the admin UI; Telegram handles the confirmation.
+5. The admin page polls the official `/auth/login` endpoint until the session
+   is confirmed, verifies `/my/`, then stores the cookie encrypted at rest.
+6. Use **Проверить сессию** and **Проверить шаблон и hash** to verify the
+   worker can read `/my/` and that the editor-issued `rhash` matches the
+   server-only production value.
+
+No long-lived browser or Playwright daemon is required: the official editor's
+login is a server-side phone-confirmation challenge (`/auth/request` then
+`/auth/login`), and the confirmed cookie is the only browser state that must
+persist. The app performs that challenge server-side and stores the resulting
+cookie. This is deliberately not a custom password/OTP/2FA form and not the
+Telegram Login Widget.
+
+The session is stored as ciphertext in the existing private
+`ops_runtime_settings` row `telegram_instant_view_session` (RLS enabled,
+service-role only, no anon/authenticated grants). No schema migration is
+required. The encryption key is `TELEGRAM_INSTANT_VIEW_SESSION_KEY` when set;
+otherwise it is derived from the server-only `SUPABASE_SERVICE_ROLE_KEY`. The
+cookie never enters the browser bundle, HTML, analytics, logs, GitHub Actions
+artifacts or a public API response.
+
+Disconnecting from the same page deletes the stored ciphertext immediately.
+The session survives Vercel invocations and GitHub Actions worker restarts
+because it is read from the private settings row on each run, not held in
+process memory.
+
+Server-side worker code uses the same module without any browser state:
+
+```ts
+import {
+  inspectInstantViewEditor,
+  readInstantViewSessionCookie,
+} from '@/lib/telegram/instantViewAuth';
+
+const session = await readInstantViewSessionCookie();
+if (!session) {
+  // Owner must connect from Admin → Integrations → Telegram Instant View.
+}
+
+const status = await inspectInstantViewEditor();
+// status.template.rhashPresent / hashMatchesEnv are safe booleans.
+// The cookie value is never returned to the client, logged or persisted as
+// workflow output.
+```
+
+`inspectInstantViewEditor()` reads `/my/` with the encrypted session, so the
+worker no longer receives `401` once the owner has connected. It never writes
+to the editor and never rewrites the template.
+
 ## Re-verify the template in Telegram's editor
 
 The template is already saved in the editor and the hash has already been
@@ -51,11 +114,13 @@ issued, so do not paste a different rules file over it. To re-verify after an
 SSR markup change:
 
 1. Sign in at <https://instantview.telegram.org/my/> with the owner's Telegram
-   account.
+   account, or use the owner-only admin connection above and inspect the saved
+   template without rewriting it.
 2. Open the saved `merkurov.love` template and one Flow post URL.
 3. Confirm the Rules pane matches [`merkurov.love.iv`](./merkurov.love.iv)
-   byte-for-byte. If it differs, stop: the repository copy is wrong, not the
-   saved template.
+   byte-for-byte. If it differs, stop: do not overwrite the repository copy
+   with the editor copy or the editor copy with the repository copy. Record the
+   difference and let the owner decide which copy is authoritative.
 4. Check the rendered preview and the status line. The page must be valid, with
    no warnings and no "unsupported element" errors.
 5. Repeat on the representative public posts below. Never edit the template to
@@ -116,6 +181,24 @@ Rotate it only if the template itself changes or the value is lost:
    `t.me/iv?...&rhash=...` wrapper and then the clean Instant View page.
 5. Confirm the same post still opens normally at its canonical
    `https://www.merkurov.love/flow/<slug>` URL outside Telegram.
+
+The admin inspection never returns the hash. It reports only whether the editor
+currently exposes an `rhash`, whether that value matches the server-only
+environment variable, and the last check time. A mismatch is shown to the owner;
+the UI deliberately does not call the Vercel API or rewrite the secret.
+
+Required server-side configuration for the admin session:
+
+```dotenv
+# Preferred dedicated encryption key (server-only, never NEXT_PUBLIC_*)
+TELEGRAM_INSTANT_VIEW_SESSION_KEY=<32+ byte random value>
+# Optional previous key during rotation
+TELEGRAM_INSTANT_VIEW_SESSION_KEY_PREVIOUS=<old value>
+```
+
+If the dedicated key is absent, the session is still encrypted with a key
+derived from `SUPABASE_SERVICE_ROLE_KEY`. Rotating the service role therefore
+invalidates the stored session and requires one owner reconnection.
 
 The helper validates the hash as 8–64 hexadecimal characters and only wraps a
 canonical `https://www.merkurov.love/flow/<slug>` URL. It rejects other hosts,

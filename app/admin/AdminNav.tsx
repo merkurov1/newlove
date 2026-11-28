@@ -26,6 +26,16 @@ const groups = [
     links: [{ href: '/admin/users', label: 'Пользователи и подписчики', icon: '○' }],
   },
   {
+    title: 'Integrations',
+    links: [
+      {
+        href: '/admin/integrations/telegram-instant-view',
+        label: 'Telegram Instant View',
+        icon: '◫',
+      },
+    ],
+  },
+  {
     title: 'Intelligence',
     links: [
       { href: '/admin/brain/radar', label: 'Editorial Radar', icon: '◈' },

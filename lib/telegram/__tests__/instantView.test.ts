@@ -36,9 +36,9 @@ describe('Telegram Instant View hash validation', () => {
 
   it('accepts the editor hash shape (14 lowercase hex characters)', () => {
     const editorHash = 'a1b2c3d4e5f607';
-    expect(telegramInstantViewTemplateHash({ TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH: editorHash })).toBe(
-      editorHash
-    );
+    expect(
+      telegramInstantViewTemplateHash({ TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH: editorHash })
+    ).toBe(editorHash);
   });
 
   it.each([
@@ -216,5 +216,45 @@ describe('Telegram Instant View server-only boundary', () => {
     const publisher = readFileSync(path.join(repoRoot, 'lib/flow/telegram.ts'), 'utf8');
     expect(publisher).toContain("from '@/lib/telegram/instantView'");
     expect(publisher).toMatch(/buildTelegramInstantViewUrl\(content\.canonicalUrl\)/);
+  });
+
+  it('keeps the Instant View session broker and encrypted store server-only', () => {
+    const serverModules = [
+      'lib/telegram/instantViewAuth.ts',
+      'lib/telegram/instantViewSessionCrypto.ts',
+      'lib/telegram/instantViewSessionStore.ts',
+    ];
+
+    for (const relative of serverModules) {
+      const source = readFileSync(path.join(repoRoot, relative), 'utf8');
+      expect(source).toContain('assertServerOnly');
+      expect(source).not.toContain('NEXT_PUBLIC_');
+      expect(source).not.toMatch(/console\.(?:log|info|warn|error|debug)\(/);
+    }
+
+    const clientImports = sourceFiles.filter((file) => {
+      const source = readFileSync(file, 'utf8');
+      const isClient = /^\s*(?:'use client'|"use client")/m.test(source);
+      const importsServerSession =
+        /from\s+['"][^'"]*telegram\/instantViewAuth['"]/.test(source) ||
+        /from\s+['"][^'"]*telegram\/instantViewSessionCrypto['"]/.test(source) ||
+        /from\s+['"][^'"]*telegram\/instantViewSessionStore['"]/.test(source);
+      const isTypeOnly = /import\s+type\s+[^;]*telegram\/instantViewAuth/.test(source);
+
+      return isClient && importsServerSession && !isTypeOnly;
+    });
+
+    expect(clientImports).toEqual([]);
+  });
+
+  it('does not put the editor session cookie or template hash in public status', () => {
+    const source = readFileSync(path.join(repoRoot, 'lib/telegram/instantViewAuth.ts'), 'utf8');
+
+    // The public status type exposes booleans/timestamps, never the ciphertext,
+    // cookie, temp_session or the hash value itself.
+    expect(source).toContain('rhashPresent');
+    expect(source).toContain('hashMatchesEnv');
+    expect(source).not.toMatch(/return\s*\{[^}]*\bhash\s*:/s);
+    expect(source).not.toMatch(/return\s*\{[^}]*\bcookie\s*:/s);
   });
 });
