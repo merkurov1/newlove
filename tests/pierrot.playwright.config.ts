@@ -23,6 +23,7 @@ export default defineConfig({
     'flow-telegram-reader.spec.ts',
     'flow-composer.spec.ts',
     'flow-link-cards.spec.ts',
+    'flow-pierrot-reader.spec.ts',
     'journal-redesign.spec.ts',
   ],
   timeout: 90_000,

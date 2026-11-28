@@ -6,10 +6,7 @@
  */
 export const PIERROT_COMPOSER_EXPAND_THRESHOLD = 100;
 
-/**
- * Future Pierrot avatar. Leave empty to use the typographic "P" placeholder;
- * set a public image path when the final portrait is available.
- */
+/** Self-hosted Pierrot portrait shared by the workspace and Flow reader. */
 export const PIERROT_AVATAR_SRC = '/pierrot/pierrot-avatar-512.jpg';
 
 export function shouldExpandPierrotComposer(value: string): boolean {
