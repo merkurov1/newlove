@@ -4,6 +4,11 @@
 -- STATUS: PREPARED ONLY. Additive only. Does not rewrite
 -- analytics_connections, its analytics history, or any existing snapshot.
 --
+-- DO NOT APPLY TO PRODUCTION. Production migration 20261126140616
+-- (youtube_multichannel_connections_and_bindings) is the source of truth and
+-- uses uuid owner_id. This dated reference is retained only for a fresh
+-- non-production environment and is not authoritative for the live schema.
+--
 -- Why separate tables:
 --   One Google OAuth grant can expose several channels (including Brand
 --   Accounts). One YouTube channel can be used by several projects. The legacy
