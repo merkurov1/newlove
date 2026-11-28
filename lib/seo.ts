@@ -187,6 +187,7 @@ export const PUBLIC_ROUTES = [
   '/heritage',
   '/heritage/krass',
   '/media',
+  '/portfolio',
   '/heartandangel',
   '/heartandangel/about',
   '/heartandangel/world',
@@ -277,6 +278,14 @@ export const ROUTE_COPY: Record<
     title: 'Media Archive — Interviews & Commentary | Anton Merkurov',
     description:
       'A chronological archive of interviews, expert commentary, author columns and media citations featuring Anton Merkurov, with links to originals.',
+  },
+  '/portfolio': {
+    title: 'Anton Merkurov — Selected Works | Artist Portfolio',
+    description:
+      'Selected works by Anton Merkurov: painting, drawing, objects, public space, digital environments and the Temple, the evolving universe of Heart & Angel.',
+    image:
+      'https://txvkqcitalfbjytmnawq.supabase.co/storage/v1/object/public/heartandangel/World.png',
+    imageAlt: 'Heart & Angel — the World, by Anton Merkurov',
   },
   '/heartandangel': {
     title: 'Heart & Angel — A Living Digital Mythology',

@@ -24,6 +24,7 @@ export default defineConfig({
     'flow-composer.spec.ts',
     'flow-link-cards.spec.ts',
     'journal-redesign.spec.ts',
+    'portfolio.spec.ts',
   ],
   timeout: 90_000,
   expect: { timeout: 10_000 },

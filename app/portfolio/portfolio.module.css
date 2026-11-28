@@ -1,0 +1,1904 @@
+/* /portfolio — editorial portfolio and its print edition. */
+
+.page {
+  --paper: #faf8f5;
+  --paper-deep: #f2ece2;
+  --ink: #141210;
+  --ink-soft: #2f2a24;
+  --muted: #665e53;
+  --line: rgba(20, 18, 16, 0.16);
+  --rust: #9b3d2c;
+  --sans: var(
+    --site-font-sans,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif
+  );
+  --serif: var(--site-font-serif, Garamond, Georgia, 'Baskerville', 'Times New Roman', serif);
+
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  padding-top: 3.5rem;
+}
+
+.page ::selection {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* The portfolio is a self-contained editorial surface. Its own cover index,
+ * project chapters and footer links carry navigation; the fixed site header
+ * would only add a second chrome layer over the work. */
+:global(body):has([data-portfolio-page]) :global(.site-header) {
+  display: none !important;
+}
+
+/* Keep the site chrome on the portfolio's warm paper while this route is open. */
+:global(body):has([data-portfolio-page]) {
+  background-color: #faf8f5 !important;
+}
+
+/* The shared footer's lowercase AI disclosure is intentionally quiet, but it
+ * still has to meet body-text contrast on this reading surface. */
+:global(body):has([data-portfolio-page]) :global(.site-footer) :global(.lowercase) {
+  color: #5f574c !important;
+}
+
+:global(.portfolio-save-pdf) {
+  position: fixed;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 44px;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(250, 248, 245, 0.94);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  text-transform: uppercase;
+  box-shadow: 0 10px 30px rgba(20, 18, 16, 0.08);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    opacity 180ms ease;
+}
+
+:global(.portfolio-save-pdf:hover) {
+  background: #fff;
+  border-color: rgba(20, 18, 16, 0.32);
+  opacity: 1;
+}
+
+:global(.portfolio-save-pdf:focus-visible) {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+:global(.portfolio-save-pdf svg) {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared editorial atoms                                             */
+/* ------------------------------------------------------------------ */
+
+.sectionLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.75rem;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.figure {
+  margin: 0;
+  min-width: 0;
+}
+
+.imageFrame {
+  overflow: hidden;
+  background: #e9e2d7;
+}
+
+.imageFrame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.caption {
+  margin-top: 0.7rem;
+  color: var(--muted);
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  line-height: 1.55;
+  text-transform: uppercase;
+}
+
+.bodyCopy p {
+  max-width: 43rem;
+  margin: 0 0 1.35em;
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: clamp(1.06rem, 1.35vw, 1.32rem);
+  font-weight: 400;
+  line-height: 1.64;
+}
+
+.bodyCopy p:last-child {
+  margin-bottom: 0;
+}
+
+.sectionTitle {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 4.2vw, 4.2rem);
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* Cover                                                              */
+/* ------------------------------------------------------------------ */
+
+.cover {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.92fr);
+  align-items: end;
+  gap: 4vw;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 1rem 4vw 7rem;
+}
+
+.coverText {
+  padding: 0 0 3rem;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.24em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.name {
+  margin: 1.8rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(4.2rem, 9.4vw, 10.5rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.8;
+}
+
+.name span {
+  display: block;
+}
+
+.coverTitle {
+  margin: 1.6rem 0 0;
+  color: #4b443b;
+  font-size: clamp(0.72rem, 1vw, 0.86rem);
+  font-weight: 600;
+  letter-spacing: 0.36em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.coverLede {
+  max-width: 34rem;
+  margin: 2.4rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.18rem, 1.6vw, 1.56rem);
+  font-weight: 400;
+  line-height: 1.48;
+}
+
+.coverLede em {
+  font-style: italic;
+}
+
+.formula {
+  margin: 1.35rem 0 0;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: clamp(0.95rem, 1.2vw, 1.1rem);
+  font-style: italic;
+  line-height: 1.5;
+}
+
+.coverNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1.5rem;
+  margin-top: 3rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.coverNav a {
+  border-bottom: 1px solid transparent;
+  padding-bottom: 2px;
+}
+
+.coverNav a:hover,
+.coverNav a:focus-visible {
+  border-bottom-color: currentColor;
+  opacity: 1;
+}
+
+.coverMeta {
+  margin: 2.1rem 0 0;
+  color: var(--muted);
+  font-size: 0.57rem;
+  letter-spacing: 0.16em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.coverFigure {
+  align-self: end;
+}
+
+.coverFigure .imageFrame {
+  background: #dfe8ea;
+}
+
+.coverFigure figcaption {
+  padding-right: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Statement                                                          */
+/* ------------------------------------------------------------------ */
+
+.statement {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 6rem 4vw 8rem;
+}
+
+.statementGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.3fr);
+  align-items: start;
+  gap: 5vw;
+  margin-top: 4rem;
+}
+
+.statementLead {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 4.6vw, 5.2rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 1.01;
+}
+
+.pull {
+  margin-top: 2.2rem !important;
+  border-left: 1px solid var(--line);
+  padding-left: 1.5rem;
+  color: #474138 !important;
+  font-style: italic;
+}
+
+/* ------------------------------------------------------------------ */
+/* Heart & Angel                                                      */
+/* ------------------------------------------------------------------ */
+
+.chapter {
+  background: var(--paper-deep);
+  padding: 7rem 4vw 6rem;
+}
+
+.chapterHeader,
+.chapterIntro,
+.sequence,
+.worldFigure {
+  max-width: 1500px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.chapterTitleRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  margin-top: 2.6rem;
+}
+
+.chapterTitle {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(3.6rem, 8.2vw, 9rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.86;
+}
+
+.chapterSubtitle {
+  margin: 0.8rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.2rem, 2vw, 2rem);
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.year {
+  margin: 0 0 0.4rem;
+  color: var(--muted);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.chapterLede {
+  max-width: 52rem;
+  margin: 2.2rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.35rem, 2.5vw, 2.25rem);
+  font-weight: 400;
+  line-height: 1.33;
+}
+
+.motto {
+  margin: 3rem 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 1.25rem;
+}
+
+.motto p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.35rem, 2.6vw, 2.55rem);
+  font-style: italic;
+  line-height: 1.2;
+}
+
+.chapterIntro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4vw;
+  margin-top: 4rem;
+}
+
+.chapterIntro p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.02rem, 1.35vw, 1.28rem);
+  line-height: 1.65;
+}
+
+.sequence {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin-top: 4rem;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 0;
+  list-style: none;
+}
+
+.sequence li {
+  min-width: 0;
+  border-right: 1px solid var(--line);
+  padding: 1rem 0.75rem;
+  color: #4c463d;
+  font-size: 0.57rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.sequence li:last-child {
+  border-right: 0;
+}
+
+.sequenceIndex {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--muted);
+}
+
+.worldFigure {
+  margin-top: 4rem;
+}
+
+.worldFrame {
+  overflow: hidden;
+  background: #dfe8ea;
+}
+
+.worldFrame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* Movements                                                          */
+/* ------------------------------------------------------------------ */
+
+.movement {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 7rem 4vw;
+}
+
+.movementHeader {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  align-items: start;
+  gap: 1.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}
+
+.movementIndex {
+  margin: 0;
+  color: var(--muted);
+  font-family: var(--serif);
+  font-size: 1.7rem;
+  line-height: 1;
+}
+
+.movementMedium {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.movementTitle {
+  margin: 0.35rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(2.4rem, 5vw, 5.6rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+}
+
+.imageGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.35fr);
+  align-items: start;
+  gap: 5vw;
+  margin-top: 4rem;
+}
+
+.imageGridCopy {
+  position: sticky;
+  top: 7rem;
+}
+
+.imageGridFigures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+  gap: 2rem;
+}
+
+.imageGridFigure:nth-child(1) {
+  margin-top: 5rem;
+}
+
+.imageGridFigure:nth-child(2) {
+  margin-top: 0;
+}
+
+.imageGridFigure:nth-child(3) {
+  grid-column: 1 / -1;
+  width: 70%;
+  margin: 2rem 0 0 auto;
+}
+
+.objectsIntro {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4vw;
+  margin-top: 4rem;
+}
+
+.objectStrip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.72fr) minmax(0, 0.72fr);
+  align-items: end;
+  gap: 2rem;
+  margin-top: 3rem;
+}
+
+.objectMug {
+  margin-top: 5rem;
+}
+
+.objectPostcards {
+  margin-top: 1.2rem;
+}
+
+.publicIntro {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.55fr);
+  align-items: end;
+  gap: 4vw;
+  margin-top: 4rem;
+}
+
+.streetSticker {
+  max-width: 23rem;
+}
+
+.graffitiFigure {
+  width: 100vw;
+  margin: 4rem 0 0 calc(50% - 50vw);
+}
+
+.graffitiFigure .caption {
+  padding: 0.7rem 4vw 0;
+}
+
+.digitalIntro {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 5vw;
+  margin-top: 4rem;
+}
+
+.digitalArtifacts {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.7fr);
+  align-items: end;
+  gap: 2rem;
+}
+
+.candleFigure {
+  margin-top: 5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* The Temple                                                         */
+/* ------------------------------------------------------------------ */
+
+.temple {
+  margin-top: 3rem;
+  background: var(--ink);
+  color: #f7f1e7;
+  padding: 8rem 4vw;
+}
+
+.templeHeader,
+.templeTriptych,
+.templeBody,
+.templeFoot {
+  max-width: 1500px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.temple .sectionLabel {
+  border-color: rgba(247, 241, 231, 0.28);
+  color: #bdb3a4;
+}
+
+.templeTitle {
+  margin: 2.6rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(3.6rem, 8.2vw, 9rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.86;
+}
+
+.templeSubtitle {
+  margin: 0.9rem 0 0;
+  color: #d8cec0;
+  font-family: var(--serif);
+  font-size: clamp(1.25rem, 2.1vw, 2.1rem);
+  font-style: italic;
+  line-height: 1.3;
+}
+
+.templeTriptych {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  align-items: end;
+  gap: 2rem;
+  margin-top: 4rem;
+}
+
+.templeFigure {
+  margin: 0;
+}
+
+.templeFigure0,
+.templeFigure2 {
+  margin-top: 4rem;
+}
+
+.temple .caption {
+  color: #a89e90;
+}
+
+.templeBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 6vw;
+  margin-top: 4rem;
+}
+
+.templeCopy p {
+  margin: 0 0 1.35em;
+  color: #e8e0d4;
+  font-family: var(--serif);
+  font-size: clamp(1.12rem, 1.55vw, 1.46rem);
+  line-height: 1.58;
+}
+
+.templeCopy p:last-child {
+  margin-bottom: 0;
+}
+
+.templeElements {
+  margin: 0;
+  border-top: 1px solid rgba(247, 241, 231, 0.28);
+}
+
+.templeElements > div {
+  display: grid;
+  grid-template-columns: 9.5rem minmax(0, 1fr);
+  gap: 1rem;
+  border-bottom: 1px solid rgba(247, 241, 231, 0.2);
+  padding: 1rem 0;
+}
+
+.templeElements dt {
+  color: #f7f1e7;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.templeElements dd {
+  margin: 0;
+  color: #cfc5b6;
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.templeFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.2rem 2.5rem;
+  margin-top: 4rem;
+  border-top: 1px solid rgba(247, 241, 231, 0.28);
+  padding-top: 1.4rem;
+}
+
+.templeRitualLabel {
+  margin: 0;
+  color: #a89e90;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.rituals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem 2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rituals a {
+  border-bottom: 1px solid rgba(247, 241, 231, 0.45);
+  padding-bottom: 2px;
+  color: #f7f1e7;
+  font-size: 0.65rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.templeLink {
+  margin-left: auto;
+  color: #f7f1e7;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared World                                                       */
+/* ------------------------------------------------------------------ */
+
+.sharedWorld {
+  background: #e8e1d5;
+  padding: 7rem 4vw;
+}
+
+.sharedWorldTop,
+.sharedWorldGrid {
+  max-width: 1500px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.sharedWorldTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.status {
+  margin: 0;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.56rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.sharedWorldGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 5vw;
+  margin-top: 3rem;
+}
+
+.sharedWorldTitle {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(3rem, 7vw, 7.2rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.9;
+}
+
+.sharedWorldCopy p {
+  max-width: 38rem;
+  margin: 1.3rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.08rem, 1.5vw, 1.36rem);
+  line-height: 1.6;
+}
+
+.sharedWorldComposition {
+  position: relative;
+  display: flex;
+  min-height: 24rem;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  padding-left: 2rem;
+}
+
+.sharedWorldComposition p {
+  position: relative;
+  z-index: 1;
+  margin: 0.45rem 0;
+  color: #403a32;
+  font-size: clamp(0.85rem, 1.45vw, 1.2rem);
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+.sharedWorldComposition p:nth-of-type(2) {
+  padding-left: 2.5rem;
+}
+
+.sharedWorldComposition p:nth-of-type(3) {
+  padding-left: 5rem;
+  color: var(--muted);
+}
+
+.sharedWorldOrbit {
+  position: absolute;
+  top: 50%;
+  right: -7rem;
+  width: 21rem;
+  height: 21rem;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transform: translateY(-50%);
+}
+
+/* ------------------------------------------------------------------ */
+/* Other projects                                                     */
+/* ------------------------------------------------------------------ */
+
+.otherProjects {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 7rem 4vw;
+}
+
+.projectList {
+  margin-top: 3rem;
+  border-top: 1px solid var(--line);
+}
+
+.projectRow {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr) 4rem;
+  align-items: start;
+  gap: 2rem;
+  border-bottom: 1px solid var(--line);
+  padding: 2rem 0;
+}
+
+.projectTitle {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(1.35rem, 1.7vw, 1.6rem);
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.projectBody {
+  max-width: 44rem;
+  margin: 0;
+  color: #3d3831;
+  font-family: var(--serif);
+  font-size: 1.03rem;
+  line-height: 1.6;
+}
+
+.projectLink {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 0.57rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Biography                                                          */
+/* ------------------------------------------------------------------ */
+
+.biography {
+  background: var(--paper-deep);
+  padding: 7rem 4vw;
+}
+
+.biographyGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.9fr);
+  gap: 6vw;
+  max-width: 1500px;
+  margin: 3rem auto 0;
+}
+
+.bioShort {
+  max-width: 48rem;
+  margin: 1.5rem 0 0;
+  font-family: var(--serif);
+  font-size: clamp(1.28rem, 2vw, 1.9rem);
+  line-height: 1.4;
+}
+
+.bioExtended {
+  margin-top: 2rem;
+}
+
+.bioExtended p {
+  max-width: 48rem;
+  margin: 0 0 1.3em;
+  color: #3d3831;
+  font-family: var(--serif);
+  font-size: 1.04rem;
+  line-height: 1.65;
+}
+
+.facts {
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.factRow {
+  border-bottom: 1px solid var(--line);
+  padding: 1rem 0;
+}
+
+.factRow dt {
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.factRow dd {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ */
+/* Contact                                                            */
+/* ------------------------------------------------------------------ */
+
+.contact {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 7rem 4vw 5rem;
+}
+
+.contactGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 6vw;
+  margin-top: 3rem;
+}
+
+.contactTitle {
+  max-width: 22ch;
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(2.1rem, 4.4vw, 4.5rem);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+
+.contactBody {
+  max-width: 40rem;
+  margin: 1.5rem 0 0;
+  color: #3d3831;
+  font-family: var(--serif);
+  font-size: 1.08rem;
+  line-height: 1.6;
+}
+
+.email {
+  display: inline-block;
+  margin-top: 1.6rem;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 2px;
+  font-family: var(--serif);
+  font-size: clamp(1.25rem, 2.2vw, 1.9rem);
+  line-height: 1.2;
+}
+
+.contactLinks {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.contactLinks a {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 0;
+  color: var(--ink);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.colophon {
+  margin: 5rem 0 0;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  color: var(--muted);
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive                                                         */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+  .cover {
+    grid-template-columns: 1fr;
+    padding-top: 2rem;
+  }
+
+  .coverText {
+    max-width: 60rem;
+    padding-bottom: 0;
+  }
+
+  .coverFigure {
+    width: min(100%, 42rem);
+    margin-left: auto;
+  }
+
+  .statementGrid,
+  .chapterIntro,
+  .imageGrid,
+  .objectsIntro,
+  .digitalIntro,
+  .templeBody,
+  .biographyGrid,
+  .contactGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .imageGridCopy {
+    position: static;
+  }
+
+  .imageGridFigures {
+    margin-top: 2rem;
+  }
+
+  .objectsIntro {
+    max-width: 44rem;
+  }
+
+  .digitalArtifacts {
+    margin-top: 2rem;
+  }
+
+  .templeTriptych {
+    gap: 1.2rem;
+  }
+
+  .projectRow {
+    grid-template-columns: 10rem minmax(0, 1fr) 4rem;
+  }
+}
+
+@media (max-width: 820px) {
+  .page {
+    padding-top: 2.5rem;
+  }
+
+  .cover,
+  .statement,
+  .chapter,
+  .movement,
+  .temple,
+  .sharedWorld,
+  .otherProjects,
+  .biography,
+  .contact {
+    padding-right: 5vw;
+    padding-left: 5vw;
+  }
+
+  .cover {
+    padding-top: 1rem;
+  }
+
+  .chapterTitleRow {
+    align-items: flex-start;
+    flex-direction: column-reverse;
+    gap: 1rem;
+  }
+
+  .year {
+    margin: 0;
+  }
+
+  .sequence {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .sequence li:nth-child(3) {
+    border-right: 0;
+  }
+
+  .sequence li:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .imageGridFigures {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+  }
+
+  .objectStrip {
+    grid-template-columns: 1fr 1fr;
+    gap: 1.2rem;
+  }
+
+  .objectTshirts {
+    grid-column: 1 / -1;
+  }
+
+  .objectMug {
+    margin-top: 2rem;
+  }
+
+  .objectPostcards {
+    margin-top: 0;
+  }
+
+  .publicIntro {
+    grid-template-columns: 1fr;
+  }
+
+  .streetSticker {
+    width: min(70%, 18rem);
+    margin-left: auto;
+  }
+
+  .digitalArtifacts {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .templeTriptych {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+
+  .templeFigure0,
+  .templeFigure2 {
+    margin-top: 0;
+  }
+
+  .templeFigure1 {
+    width: 80%;
+    margin: 0 auto;
+  }
+
+  .sharedWorldGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .sharedWorldComposition {
+    min-height: 18rem;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    padding: 2rem 0 0;
+  }
+
+  .projectRow {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+
+  .projectLink {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .templeLink {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 540px) {
+  .name {
+    font-size: clamp(3.6rem, 18vw, 5.4rem);
+  }
+
+  .coverNav {
+    gap: 0.5rem 1.1rem;
+  }
+
+  .imageGridFigures {
+    grid-template-columns: 1fr;
+  }
+
+  .imageGridFigure:nth-child(1) {
+    margin-top: 0;
+  }
+
+  .imageGridFigure:nth-child(3) {
+    width: 100%;
+  }
+
+  .objectStrip,
+  .digitalArtifacts {
+    grid-template-columns: 1fr;
+  }
+
+  .objectMug,
+  .objectPostcards,
+  .candleFigure {
+    margin-top: 0;
+  }
+
+  .sequence {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sequence li:nth-child(3) {
+    border-right: 1px solid var(--line);
+  }
+
+  .sequence li:nth-child(even) {
+    border-right: 0;
+  }
+
+  .sequence li:nth-child(-n + 4) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .templeElements > div {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+
+  .contactLinks a {
+    font-size: 0.55rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page *,
+  .page *::before,
+  .page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Print edition                                                      */
+/* ------------------------------------------------------------------ */
+
+@media print {
+  @page {
+    size: A4;
+    margin: 15mm 15mm 16mm;
+  }
+
+  :global(html),
+  :global(body) {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  :global(.site-header),
+  :global(.site-footer),
+  :global(.portfolio-save-pdf),
+  :global([data-print-hide]) {
+    display: none !important;
+  }
+
+  .page {
+    min-height: 0 !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+    padding: 0 !important;
+  }
+
+  .cover,
+  .statement,
+  .chapter,
+  .movement,
+  .temple,
+  .sharedWorld,
+  .otherProjects,
+  .biography,
+  .contact {
+    max-width: none !important;
+    margin-right: 0 !important;
+    margin-left: 0 !important;
+    padding-right: 0 !important;
+    padding-left: 0 !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  .cover {
+    display: flex !important;
+    min-height: 0 !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7mm;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .coverText {
+    padding: 0 !important;
+  }
+
+  .eyebrow,
+  .coverTitle,
+  .coverMeta,
+  .sectionLabel,
+  .caption,
+  .year,
+  .movementIndex,
+  .movementMedium,
+  .projectLink,
+  .colophon {
+    color: #444 !important;
+  }
+
+  .name {
+    margin-top: 5mm;
+    font-size: 44pt;
+    line-height: 0.86;
+  }
+
+  .coverTitle {
+    margin-top: 4mm;
+    font-size: 8pt;
+  }
+
+  .coverLede {
+    max-width: 135mm;
+    margin-top: 6mm;
+    font-size: 12pt;
+    line-height: 1.4;
+  }
+
+  .formula {
+    margin-top: 3mm;
+    font-size: 9pt;
+  }
+
+  .coverNav {
+    display: none !important;
+  }
+
+  .coverMeta {
+    margin-top: 4mm;
+    font-size: 7pt;
+  }
+
+  .coverFigure {
+    width: 108mm;
+    margin: 0 0 0 auto !important;
+  }
+
+  .statement,
+  .chapter,
+  .movement,
+  .temple,
+  .sharedWorld,
+  .otherProjects,
+  .biography,
+  .contact {
+    break-before: page;
+    page-break-before: always;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .statement {
+    break-before: page;
+    page-break-before: page;
+  }
+
+  .chapter {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .worldFigure {
+    break-before: auto;
+    page-break-before: auto;
+    margin-top: 6mm;
+  }
+
+  :global(#object),
+  :global(#public-space),
+  :global(#digital-environment),
+  .temple,
+  .sharedWorld,
+  .biography,
+  .contact {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .otherProjects {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .chapter,
+  .temple,
+  .sharedWorld,
+  .otherProjects,
+  .biography,
+  .contact {
+    margin-top: 0 !important;
+  }
+
+  .statementGrid,
+  .chapterIntro,
+  .imageGrid,
+  .objectsIntro,
+  .digitalIntro,
+  .templeBody,
+  .biographyGrid,
+  .contactGrid {
+    gap: 7mm;
+    margin-top: 8mm;
+  }
+
+  .statementLead {
+    max-width: 16ch;
+    font-size: 25pt;
+  }
+
+  .bodyCopy p,
+  .chapterIntro p,
+  .templeCopy p,
+  .sharedWorldCopy p,
+  .bioExtended p {
+    max-width: none;
+    margin-bottom: 4mm;
+    font-size: 10.5pt;
+    line-height: 1.5;
+  }
+
+  .pull {
+    padding-left: 6mm;
+  }
+
+  .chapter {
+    padding-top: 0 !important;
+  }
+
+  .chapterTitle,
+  .templeTitle {
+    margin-top: 7mm;
+    font-size: 36pt;
+  }
+
+  .chapterSubtitle,
+  .templeSubtitle {
+    font-size: 13pt;
+  }
+
+  .chapterLede {
+    max-width: none;
+    margin-top: 6mm;
+    font-size: 15pt;
+  }
+
+  .motto {
+    margin-top: 7mm;
+    padding-top: 4mm;
+  }
+
+  .motto p {
+    font-size: 17pt;
+  }
+
+  .sequence {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    margin-top: 6mm;
+  }
+
+  .sequence li {
+    border-right: 1px solid #bbb !important;
+    border-bottom: 1px solid #bbb !important;
+    padding: 3mm 2mm;
+    color: #222 !important;
+    font-size: 6.5pt;
+  }
+
+  .sequence li:nth-child(3n) {
+    border-right: 0 !important;
+  }
+
+  .sequence li:nth-last-child(-n + 3) {
+    border-bottom: 0 !important;
+  }
+
+  .worldFigure {
+    margin-top: 8mm;
+  }
+
+  .worldFrame {
+    background: #fff !important;
+  }
+
+  .worldFrame img,
+  .imageFrame img {
+    display: block;
+    width: auto !important;
+    max-width: 100% !important;
+    max-height: 118mm !important;
+    margin: 0 auto;
+  }
+
+  .worldFrame img {
+    max-height: 72mm !important;
+  }
+
+  .imageGridFigures img {
+    max-height: 82mm !important;
+  }
+
+  .objectStrip img {
+    max-height: 92mm !important;
+  }
+
+  .publicIntro img {
+    max-height: 72mm !important;
+  }
+
+  .graffitiFigure img {
+    max-height: 108mm !important;
+  }
+
+  .digitalArtifacts img {
+    max-height: 118mm !important;
+  }
+
+  .templeTriptych img {
+    max-height: 62mm !important;
+  }
+
+  .imageFrame {
+    background: #fff !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .figure,
+  .imageFrame,
+  .coverFigure,
+  .templeElements > div,
+  .projectRow,
+  .factRow,
+  .contactLinks a {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .caption {
+    margin-top: 2mm;
+    font-size: 6.5pt;
+    line-height: 1.4;
+  }
+
+  .movement {
+    break-before: auto;
+    page-break-before: auto;
+  }
+
+  .movementHeader {
+    padding-top: 4mm;
+  }
+
+  .movementTitle {
+    font-size: 24pt;
+  }
+
+  .imageGrid {
+    display: block !important;
+  }
+
+  .imageGridCopy {
+    position: static !important;
+  }
+
+  .imageGridFigures {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin-top: 4mm;
+  }
+
+  .imageGridFigure:nth-child(1) {
+    margin-top: 0;
+  }
+
+  .imageGridFigure:nth-child(3) {
+    width: 60%;
+    margin: 0 0 0 auto;
+  }
+
+  .objectStrip,
+  .digitalArtifacts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+    margin-top: 6mm;
+  }
+
+  .objectTshirts {
+    grid-column: 1 / -1;
+  }
+
+  .objectMug,
+  .objectPostcards,
+  .candleFigure {
+    margin-top: 0;
+  }
+
+  .publicIntro {
+    display: block !important;
+    margin-top: 6mm;
+  }
+
+  .streetSticker {
+    width: 55mm;
+    margin: 6mm 0 0 auto;
+  }
+
+  .graffitiFigure {
+    width: 100% !important;
+    margin: 6mm 0 0 !important;
+  }
+
+  .graffitiFigure .caption {
+    padding: 2mm 0 0 !important;
+  }
+
+  .temple {
+    border-top: 0;
+    padding-top: 6mm !important;
+  }
+
+  .temple .sectionLabel {
+    border-color: #999 !important;
+    color: #333 !important;
+  }
+
+  .templeTitle,
+  .templeSubtitle,
+  .templeCopy p,
+  .templeElements dt,
+  .templeElements dd,
+  .templeRitualLabel,
+  .rituals a,
+  .templeLink,
+  .temple .caption {
+    color: #000 !important;
+  }
+
+  .templeTriptych {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 4mm;
+    margin-top: 5mm;
+  }
+
+  .templeFigure0,
+  .templeFigure2 {
+    margin-top: 0 !important;
+  }
+
+  .templeFigure1 {
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  .templeBody {
+    display: block !important;
+    margin-top: 5mm;
+  }
+
+  .templeElements {
+    margin-top: 5mm;
+    border-top: 1px solid #999;
+  }
+
+  .templeElements > div {
+    grid-template-columns: 32mm minmax(0, 1fr);
+    border-bottom: 1px solid #ccc;
+    padding: 2mm 0;
+  }
+
+  .templeFoot {
+    margin-top: 4mm;
+    border-top: 1px solid #999;
+    padding-top: 3mm;
+  }
+
+  .templeLink {
+    margin-left: auto;
+  }
+
+  .sharedWorld {
+    border-top: 0;
+    padding-top: 6mm !important;
+  }
+
+  .sharedWorldGrid {
+    display: block !important;
+    margin-top: 7mm;
+  }
+
+  .sharedWorldTitle {
+    font-size: 34pt;
+  }
+
+  .sharedWorldComposition {
+    min-height: 0 !important;
+    overflow: visible !important;
+    margin-top: 7mm;
+    border-top: 1px solid #999;
+    border-left: 0;
+    padding: 4mm 0 0 !important;
+  }
+
+  .sharedWorldComposition p {
+    padding-left: 0 !important;
+    color: #000 !important;
+    font-size: 9pt;
+  }
+
+  .sharedWorldOrbit {
+    display: none !important;
+  }
+
+  .otherProjects,
+  .biography,
+  .contact {
+    padding-top: 0 !important;
+  }
+
+  .sectionTitle {
+    font-size: 26pt;
+  }
+
+  .projectList {
+    margin-top: 7mm;
+  }
+
+  .projectRow {
+    grid-template-columns: 30mm minmax(0, 1fr);
+    gap: 5mm;
+    padding: 4mm 0;
+  }
+
+  .projectTitle {
+    font-size: 12pt;
+  }
+
+  .projectBody {
+    font-size: 9.5pt;
+    line-height: 1.45;
+  }
+
+  .projectLink {
+    display: none !important;
+  }
+
+  .bioShort {
+    margin-top: 5mm;
+    font-size: 13pt;
+  }
+
+  .bioExtended {
+    margin-top: 5mm;
+  }
+
+  .facts {
+    margin-top: 7mm;
+    border-top: 1px solid #999;
+  }
+
+  .factRow {
+    padding: 3mm 0;
+  }
+
+  .factRow dt {
+    color: #444 !important;
+    font-size: 6.5pt;
+  }
+
+  .factRow dd {
+    font-size: 9.5pt;
+  }
+
+  .contactTitle {
+    max-width: none;
+    font-size: 26pt;
+  }
+
+  .contactBody {
+    font-size: 10pt;
+  }
+
+  .email {
+    font-size: 13pt;
+  }
+
+  .contactLinks {
+    margin-top: 7mm;
+    border-top: 1px solid #999;
+  }
+
+  .contactLinks a {
+    padding: 2.5mm 0;
+    color: #000 !important;
+    font-size: 7pt;
+  }
+
+  .colophon {
+    margin-top: 8mm;
+    border-top: 1px solid #999;
+    color: #444 !important;
+    font-size: 6.5pt;
+  }
+
+  .page a {
+    color: #000;
+    text-decoration: underline;
+    text-decoration-thickness: 0.4pt;
+    text-underline-offset: 2px;
+  }
+
+  .page h1,
+  .page h2,
+  .page h3 {
+    break-after: avoid-page;
+    page-break-after: avoid;
+  }
+
+  .page p,
+  .page li,
+  .page dd,
+  .page dt {
+    orphans: 3;
+    widows: 3;
+  }
+}

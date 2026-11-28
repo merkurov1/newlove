@@ -90,6 +90,12 @@ const SECTIONS: { heading: string; url: string; description: string }[] = [
       'Art-market intelligence terminal for acquisition research, liquidity analysis and curatorial dossiers.',
   },
   {
+    heading: 'Portfolio',
+    url: `${SITE_URL}/portfolio`,
+    description:
+      'Selected works by Anton Merkurov: painting, drawing, physical objects, public space, digital environments and the Temple.',
+  },
+  {
     heading: 'Heart & Angel',
     url: `${SITE_URL}/heartandangel`,
     description:
