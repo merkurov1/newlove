@@ -37,6 +37,7 @@ const serverAuth = require('@/lib/serverAuth') as {
 const auth = require('@/lib/telegram/instantViewAuth') as {
   loadInstantViewStatus: jest.Mock;
   startInstantViewLogin: jest.Mock;
+  inspectInstantViewEditor: jest.Mock;
   disconnectInstantViewSession: jest.Mock;
 };
 
@@ -44,6 +45,9 @@ const { GET: statusRoute } = require('../status/route') as {
   GET: (request: Request) => Promise<Response>;
 };
 const { POST: loginRoute } = require('../login/route') as {
+  POST: (request: Request) => Promise<Response>;
+};
+const { POST: inspectRoute } = require('../inspect/route') as {
   POST: (request: Request) => Promise<Response>;
 };
 const { POST: disconnectRoute } = require('../disconnect/route') as {
@@ -124,6 +128,41 @@ describe('Telegram Instant View admin routes', () => {
 
     expect(response.status).toBe(415);
     expect(auth.startInstantViewLogin).not.toHaveBeenCalled();
+  });
+
+  it('returns explicit verified diagnostics without the editor hash or cookie', async () => {
+    auth.inspectInstantViewEditor.mockResolvedValueOnce({
+      ...statusPayload,
+      template: {
+        templatePresent: true,
+        rhashPresent: true,
+        hashMatchesEnv: true,
+        hashStatus: 'verified',
+        serverHashConfigured: true,
+        detailStatus: 'loaded',
+        detailChecked: true,
+        templateUrl: 'https://instantview.telegram.org/my/merkurov.love',
+        checkedAt: '2026-11-28T09:05:00.000Z',
+      },
+    });
+
+    const response = await inspectRoute(post({}));
+    const body = await response.json();
+    const serialized = JSON.stringify(body);
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({
+      ok: true,
+      template: {
+        templatePresent: true,
+        rhashPresent: true,
+        hashStatus: 'verified',
+        serverHashConfigured: true,
+        detailStatus: 'loaded',
+      },
+    });
+    expect(serialized).not.toMatch(/rhash=|%3D|cookie|session=/i);
+    expect(response.headers.get('cache-control')).toContain('no-store');
   });
 
   it('disconnects only for the authenticated owner', async () => {

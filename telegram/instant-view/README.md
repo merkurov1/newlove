@@ -61,8 +61,8 @@ The owner connects the official editor session from the site:
 5. The admin page polls the official `/auth/login` endpoint until the session
    is confirmed, verifies `/my/`, then stores the cookie encrypted at rest.
 6. Use **Проверить сессию** and **Проверить шаблон и hash** to verify the
-   worker can read `/my/` and that the editor-issued `rhash` matches the
-   server-only production value.
+   worker can read `/my/`, open the saved template detail/preview page, and
+   that the editor-issued `rhash` matches the server-only production value.
 
 No long-lived browser or Playwright daemon is required: the official editor's
 login is a server-side phone-confirmation challenge (`/auth/request` then
@@ -104,8 +104,35 @@ const status = await inspectInstantViewEditor();
 ```
 
 `inspectInstantViewEditor()` reads `/my/` with the encrypted session, so the
-worker no longer receives `401` once the owner has connected. It never writes
-to the editor and never rewrites the template.
+worker no longer receives `401` once the owner has connected. If the listing
+page does not expose a hash, it follows the saved template detail/preview link
+(and one of its tracked sample URLs) and reads the real **View in Telegram**
+link. The editor encodes that link as
+`https://t.me/share/url?url=…t.me/iv…%26rhash%3D…`, so the hash is parsed from
+the nested encoded URL, not from the listing HTML. It never writes to the
+editor and never rewrites the template.
+
+The owner diagnostics distinguish four hash outcomes:
+
+| `hashStatus`          | Meaning                                                                      |
+| --------------------- | ---------------------------------------------------------------------------- |
+| `verified`            | Editor hash and server secret are identical.                                 |
+| `mismatch`            | Both values exist and differ.                                                |
+| `missing_server_hash` | The editor issued a hash, but the server variable is not configured.         |
+| `unknown`             | The editor hash could not be read. This is **never** reported as a mismatch. |
+
+`detailStatus` additionally reports whether the template detail/preview page
+was `loaded`, `unavailable` (network/editor failure) or `unauthenticated`
+(the detail page rejected the session). A missing hash on a listing page is not
+evidence that the production secret is wrong.
+
+If `hashStatus` is `mismatch`, the owner must copy the exact `rhash` from the
+editor's **View in Telegram** link and update only
+`TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH` in Vercel → Project → Settings →
+Environment Variables, then redeploy. If it is `missing_server_hash`, add the
+same variable. If it is `unknown`, do not change the secret blindly: open the
+saved template in the editor and retry the inspection. Never paste the hash or
+a cookie into chat, an issue, a public database field or a client variable.
 
 ## Re-verify the template in Telegram's editor
 
@@ -183,9 +210,11 @@ Rotate it only if the template itself changes or the value is lost:
    `https://www.merkurov.love/flow/<slug>` URL outside Telegram.
 
 The admin inspection never returns the hash. It reports only whether the editor
-currently exposes an `rhash`, whether that value matches the server-only
-environment variable, and the last check time. A mismatch is shown to the owner;
-the UI deliberately does not call the Vercel API or rewrite the secret.
+issued an `rhash`, whether that value matches the server-only environment
+variable, which detail/preview page was read, and the last check time. A real
+mismatch is shown to the owner with the exact variable name to update; an
+unreadable hash is shown as `unknown`, not as a mismatch. The UI deliberately
+does not call the Vercel API or rewrite the secret automatically.
 
 Required server-side configuration for the admin session:
 

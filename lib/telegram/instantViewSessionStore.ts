@@ -9,10 +9,37 @@ export const INSTANT_VIEW_SESSION_SETTING_KEY = 'telegram_instant_view_session';
 
 export type InstantViewSessionStatus = 'disconnected' | 'pending' | 'connected' | 'error';
 
+/**
+ * Outcome of comparing the editor-issued `rhash` with the server-only
+ * production secret.
+ *
+ * - `verified`              editor and server hashes are identical
+ * - `mismatch`              editor and server hashes are both present but differ
+ * - `missing_server_hash`   editor issued a hash but the server is not configured
+ * - `unknown`               the editor hash could not be obtained; never report
+ *                           this as a mismatch
+ */
+export type InstantViewHashStatus = 'verified' | 'mismatch' | 'missing_server_hash' | 'unknown';
+
+/**
+ * Whether the template detail/preview page could actually be inspected.
+ * A successful listing read alone is not enough to prove anything about the
+ * hash.
+ */
+export type InstantViewTemplateDetailStatus =
+  | 'not_attempted'
+  | 'loaded'
+  | 'unavailable'
+  | 'unauthenticated';
+
 export type InstantViewTemplateState = {
   templatePresent?: boolean;
   rhashPresent?: boolean;
   hashMatchesEnv?: boolean | null;
+  hashStatus?: InstantViewHashStatus | null;
+  serverHashConfigured?: boolean;
+  detailStatus?: InstantViewTemplateDetailStatus | null;
+  detailChecked?: boolean;
   templateUrl?: string | null;
   checkedAt?: string | null;
 };
@@ -82,6 +109,24 @@ function readStatus(value: unknown): InstantViewSessionStatus {
   return value === 'pending' || value === 'connected' || value === 'error' ? value : 'disconnected';
 }
 
+function readHashStatus(value: unknown): InstantViewHashStatus | null {
+  return value === 'verified' ||
+    value === 'mismatch' ||
+    value === 'missing_server_hash' ||
+    value === 'unknown'
+    ? value
+    : null;
+}
+
+function readDetailStatus(value: unknown): InstantViewTemplateDetailStatus | null {
+  return value === 'not_attempted' ||
+    value === 'loaded' ||
+    value === 'unavailable' ||
+    value === 'unauthenticated'
+    ? value
+    : null;
+}
+
 function normalizeState(value: unknown): InstantViewSessionState {
   if (!isRecord(value)) return emptyInstantViewSessionState();
 
@@ -101,6 +146,16 @@ function normalizeState(value: unknown): InstantViewSessionState {
             : value.template.hashMatchesEnv === null
               ? null
               : undefined,
+        hashStatus: readHashStatus(value.template.hashStatus),
+        serverHashConfigured:
+          typeof value.template.serverHashConfigured === 'boolean'
+            ? value.template.serverHashConfigured
+            : undefined,
+        detailStatus: readDetailStatus(value.template.detailStatus),
+        detailChecked:
+          typeof value.template.detailChecked === 'boolean'
+            ? value.template.detailChecked
+            : undefined,
         templateUrl: readString(value.template.templateUrl),
         checkedAt: readString(value.template.checkedAt),
       }

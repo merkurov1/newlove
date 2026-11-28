@@ -100,6 +100,39 @@ describe('Telegram Instant View owner panel', () => {
     expect(screen.getByRole('button', { name: 'Отключить' })).toBeInTheDocument();
   });
 
+  it.each([
+    ['verified', /совпадает — проверено/],
+    ['mismatch', /не совпадает/],
+    ['missing_server_hash', /на сервере не настроен/],
+    ['unknown', /не удалось определить/],
+  ] as const)('renders the %s diagnostic without exposing the hash', (hashStatus, label) => {
+    render(
+      <InstantViewAuthPanel
+        initial={{
+          ...baseStatus,
+          status: 'connected',
+          connectedAt: '2026-11-28T09:00:00.000Z',
+          lastVerifiedAt: '2026-11-28T09:05:00.000Z',
+          template: {
+            templatePresent: true,
+            rhashPresent: hashStatus !== 'unknown',
+            hashMatchesEnv:
+              hashStatus === 'verified' ? true : hashStatus === 'mismatch' ? false : null,
+            hashStatus,
+            serverHashConfigured: hashStatus !== 'missing_server_hash',
+            detailStatus: 'loaded',
+            detailChecked: true,
+            templateUrl: 'https://instantview.telegram.org/my/merkurov.love',
+            checkedAt: '2026-11-28T09:05:00.000Z',
+          },
+        }}
+      />
+    );
+
+    expect(screen.getAllByText(label).length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toMatch(/rhash=|%3D|cookie=/i);
+  });
+
   it('renders a safe storage-unavailable state without action ambiguity', () => {
     render(
       <InstantViewAuthPanel

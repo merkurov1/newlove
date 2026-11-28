@@ -42,6 +42,46 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
+function hashStatusLabel(status: Status['template']): string {
+  switch (status?.hashStatus) {
+    case 'verified':
+      return 'совпадает — проверено';
+    case 'mismatch':
+      return 'не совпадает — нужен точный editor-issued hash';
+    case 'missing_server_hash':
+      return 'редактор выдал rhash, на сервере не настроен';
+    case 'unknown':
+      return 'не удалось определить';
+    default:
+      return 'не проверено — запустите проверку шаблона';
+  }
+}
+
+function hashStatusTone(status: Status['template']): string {
+  switch (status?.hashStatus) {
+    case 'verified':
+      return 'text-emerald-700';
+    case 'mismatch':
+    case 'missing_server_hash':
+      return 'text-red-700';
+    default:
+      return 'text-[#211F1F]';
+  }
+}
+
+function detailStatusLabel(status: Status['template']): string {
+  switch (status?.detailStatus) {
+    case 'loaded':
+      return 'страница шаблона открыта';
+    case 'unavailable':
+      return 'страница шаблона недоступна';
+    case 'unauthenticated':
+      return 'страница шаблона не приняла сессию';
+    default:
+      return 'detail/preview не открывался';
+  }
+}
+
 function errorText(code: string | undefined): string {
   switch (code) {
     case 'invalid_phone':
@@ -336,7 +376,7 @@ export default function InstantViewAuthPanel({ initial }: PanelProps) {
           </div>
 
           {status.template && (
-            <dl className="mt-5 grid gap-3 border-t border-[#EAE6E1] pt-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <dl className="mt-5 grid gap-3 border-t border-[#EAE6E1] pt-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
                   Template
@@ -347,23 +387,33 @@ export default function InstantViewAuthPanel({ initial }: PanelProps) {
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
-                  rhash
+                  editor rhash
                 </dt>
                 <dd className="mt-1 text-[#211F1F]">
-                  {status.template.rhashPresent ? 'выдан редактором' : 'не найден'}
+                  {status.template.rhashPresent ? 'выдан редактором' : 'не получен'}
                 </dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
                   Совпадение с production
                 </dt>
-                <dd className="mt-1 text-[#211F1F]">
-                  {status.template.hashMatchesEnv === true
-                    ? 'да'
-                    : status.template.hashMatchesEnv === false
-                      ? 'нет — проверьте server-side secret'
-                      : 'не проверено'}
+                <dd className={`mt-1 font-medium ${hashStatusTone(status.template)}`}>
+                  {hashStatusLabel(status.template)}
                 </dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
+                  server-side secret
+                </dt>
+                <dd className="mt-1 text-[#211F1F]">
+                  {status.template.serverHashConfigured ? 'настроен' : 'не настроен'}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
+                  Detail / preview
+                </dt>
+                <dd className="mt-1 text-[#211F1F]">{detailStatusLabel(status.template)}</dd>
               </div>
               <div>
                 <dt className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#89827B]">
@@ -376,10 +426,37 @@ export default function InstantViewAuthPanel({ initial }: PanelProps) {
             </dl>
           )}
 
+          {status.template?.hashStatus === 'mismatch' && (
+            <p className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-800">
+              Серверный secret не совпадает с hash, который выдал редактор. Откройте сохранённый
+              шаблон в instantview.telegram.org, скопируйте значение <code>rhash</code> из ссылки
+              «View in Telegram» и обновите только переменную{' '}
+              <code>TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH</code> в Vercel → Settings → Environment
+              Variables. Не отправляйте hash в чат и не меняйте его вручную.
+            </p>
+          )}
+
+          {status.template?.hashStatus === 'missing_server_hash' && (
+            <p className="mt-4 border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-800">
+              Редактор уже выдал <code>rhash</code>, но на сервере не настроена переменная{' '}
+              <code>TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH</code>. Добавьте точное значение из ссылки
+              «View in Telegram» в Vercel → Settings → Environment Variables. Не публикуйте его в
+              клиентских переменных.
+            </p>
+          )}
+
+          {status.template?.hashStatus === 'unknown' && (
+            <p className="mt-4 border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-[#6B5320]">
+              <code>rhash</code> не удалось получить со страницы шаблона или preview. Это не
+              доказывает, что server-side secret неверен. Откройте сохранённый шаблон в редакторе и
+              повторите проверку; production hash не меняется автоматически.
+            </p>
+          )}
+
           <p className="mt-4 border-t border-[#EAE6E1] pt-4 text-xs leading-relaxed text-[#89827B]">
-            Проверка редактора не перезаписывает шаблон. Репозиторный .iv остаётся единственным
-            source of truth; расхождение с редактором требует решения владельца, а не автоматической
-            замены.
+            Проверка редактора не перезаписывает шаблон и не меняет hash. Репозиторный .iv остаётся
+            единственным source of truth; расхождение с редактором требует решения владельца, а не
+            автоматической замены. Сам hash и cookie никогда не возвращаются в браузер.
           </p>
         </section>
       )}
@@ -388,7 +465,10 @@ export default function InstantViewAuthPanel({ initial }: PanelProps) {
         <h2 className="font-serif text-xl text-[#211F1F]">Что происходит после подключения</h2>
         <ol className="mt-3 space-y-2 text-sm leading-relaxed text-[#746D66]">
           <li>1. Worker проверяет /my/ уже с серверной сессией, без 401.</li>
-          <li>2. Шаблон в редакторе только читается и сравнивается; автоматической записи нет.</li>
+          <li>
+            2. Если в listing нет rhash, worker открывает сохранённый template detail/preview и
+            читает ссылку «View in Telegram». Автоматической записи в редактор нет.
+          </li>
           <li>3. Реальный rhash сверяется с server-only TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH.</li>
           <li>
             4. При совпадении публичный Flow crosspost использует t.me/iv; иначе остаётся безопасный

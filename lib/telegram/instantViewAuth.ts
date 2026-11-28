@@ -1,7 +1,10 @@
 import crypto from 'node:crypto';
 
 import { assertServerOnly } from '@/lib/serverOnly';
-import { telegramInstantViewTemplateHash } from '@/lib/telegram/instantView';
+import {
+  normalizeFlowInstantViewPageUrl,
+  telegramInstantViewTemplateHash,
+} from '@/lib/telegram/instantView';
 
 import {
   instantViewFingerprint,
@@ -13,8 +16,10 @@ import {
   createSupabaseInstantViewSessionStore,
   emptyInstantViewSessionState,
   InstantViewStorageError,
+  type InstantViewHashStatus,
   type InstantViewSessionState,
   type InstantViewSessionStore,
+  type InstantViewTemplateDetailStatus,
   type InstantViewTemplateState,
 } from './instantViewSessionStore';
 
@@ -24,6 +29,9 @@ const EDITOR_ORIGIN = 'https://instantview.telegram.org';
 const REQUEST_TIMEOUT_MS = 15_000;
 const PENDING_TTL_MS = 10 * 60 * 1000;
 const USER_AGENT = 'merkurov.love Instant View admin session/1.0 (+https://www.merkurov.love)';
+const MAX_TEMPLATE_DETAIL_PAGES = 2;
+const MAX_TEMPLATE_PREVIEW_PAGES = 2;
+const RHASH_VALUE = /^[a-f0-9]{8,64}$/i;
 
 export type InstantViewAuthEnv = {
   TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH?: string;
@@ -181,45 +189,479 @@ function safeHashEqual(left: string, right: string): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function parseTemplateState(
-  html: string,
-  env: InstantViewAuthEnv,
-  checkedAt: string
-): InstantViewTemplateState {
-  const hashes = Array.from(html.matchAll(/[?&]rhash=([a-f0-9]{8,64})/gi), (match) =>
-    match[1].toLowerCase()
-  );
-  const configured = telegramInstantViewTemplateHash(env);
-  const hashMatchesEnv =
-    configured && hashes.length
-      ? hashes.some((value) => safeHashEqual(value, configured))
-      : hashes.length
-        ? false
-        : configured
-          ? false
-          : null;
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/gi, '&')
+    .replace(/&#0*38;/g, '&')
+    .replace(/&#x0*26;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;/g, "'")
+    .replace(/&#x0*27;/gi, "'")
+    .replace(/&apos;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>');
+}
 
-  const templateHref = html.match(/href="([^"]*(?:my\/|template)[^"]*merkurov\.love[^"]*)"/i)?.[1];
+function editorUrl(href: string, base: string | URL = EDITOR_ORIGIN): URL | null {
+  let url: URL;
 
-  let templateUrl: string | null = null;
-  if (templateHref) {
-    try {
-      const url = new URL(templateHref.replace(/&amp;/g, '&'), EDITOR_ORIGIN);
-      // Never return a URL that carries the editor hash.
-      url.searchParams.delete('rhash');
-      templateUrl = url.toString();
-    } catch {
-      templateUrl = null;
+  try {
+    url = new URL(decodeHtmlEntities(href).trim(), base);
+  } catch {
+    return null;
+  }
+
+  // Only the official editor is ever fetched or followed. This prevents an
+  // editor page from redirecting the worker to an unrelated internal host.
+  if (url.origin !== EDITOR_ORIGIN) return null;
+
+  return url;
+}
+
+function hrefValues(html: string): string[] {
+  const values: string[] = [];
+
+  for (const match of html.matchAll(/\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    values.push(match[1] ?? match[2] ?? '');
+  }
+
+  return values;
+}
+
+function decodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Extract an editor-issued `rhash` from a URL or from the encoded URL inside a
+ * Telegram share link. The real "View in Telegram" anchor looks like:
+ *
+ *   https://t.me/share/url?url=https%3A%2F%2Ft.me%2Fiv%3Furl%3D…%26rhash%3D…
+ *
+ * The hash is therefore usually percent-encoded twice and never appears as a
+ * plain `?rhash=` on the listing page. The old parser only matched the plain
+ * form, which turned a valid template into a false mismatch.
+ */
+function rhashValuesFromString(raw: string, depth = 0): string[] {
+  if (depth > 3) return [];
+
+  const decoded = decodeHtmlEntities(raw).trim();
+  if (!decoded) return [];
+
+  const found: string[] = [];
+
+  for (const match of decoded.matchAll(/rhash(?:=|%3d)([a-f0-9]{8,64})/gi)) {
+    found.push(match[1].toLowerCase());
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(decoded, EDITOR_ORIGIN);
+  } catch {
+    return found;
+  }
+
+  // Only inspect the official editor and Telegram share/Instant View links.
+  if (
+    url.hostname !== 't.me' &&
+    url.hostname !== 'telegram.me' &&
+    url.hostname !== 'www.telegram.me' &&
+    url.origin !== EDITOR_ORIGIN
+  ) {
+    return found;
+  }
+
+  const direct = url.searchParams.get('rhash');
+  if (direct && RHASH_VALUE.test(direct)) {
+    found.push(direct.toLowerCase());
+  }
+
+  const nested = url.searchParams.get('url');
+  if (nested) {
+    found.push(...rhashValuesFromString(decodeParam(nested), depth + 1));
+  }
+
+  return found;
+}
+
+function extractRhashValues(html: string): string[] {
+  const decoded = decodeHtmlEntities(html);
+  const found = new Set<string>();
+
+  for (const match of decoded.matchAll(/rhash(?:=|%3d)([a-f0-9]{8,64})/gi)) {
+    found.add(match[1].toLowerCase());
+  }
+
+  for (const href of hrefValues(decoded)) {
+    for (const value of rhashValuesFromString(href)) {
+      found.add(value);
     }
   }
 
+  return [...found];
+}
+
+/**
+ * The owner account may contain templates for several domains. Only consider
+ * hashes close to a `merkurov.love` occurrence so another template's hash can
+ * never be compared with our production secret.
+ */
+function extractRhashValuesNearDomain(html: string): string[] {
+  const decoded = decodeHtmlEntities(html);
+  const found = new Set<string>();
+  const marker = /merkurov\.love/gi;
+  const windowSize = 4_000;
+
+  for (const match of decoded.matchAll(marker)) {
+    const index = match.index ?? 0;
+    const window = decoded.slice(
+      Math.max(0, index - windowSize),
+      Math.min(decoded.length, index + windowSize)
+    );
+
+    for (const value of extractRhashValues(window)) {
+      found.add(value);
+    }
+  }
+
+  return [...found];
+}
+
+function safeTemplateUrl(href: string, base: string | URL = EDITOR_ORIGIN): string | null {
+  const url = editorUrl(href, base);
+  if (!url || !url.pathname.startsWith('/my/')) return null;
+
+  const sanitized = new URL(url.toString());
+  sanitized.searchParams.delete('rhash');
+  sanitized.hash = '';
+
+  // A nested or encoded hash must never be returned in the public status.
+  if (/rhash/i.test(decodeParam(sanitized.search))) {
+    sanitized.search = '';
+  }
+
+  return sanitized.toString();
+}
+
+function normalizeTrackedFlowSample(value: string): string | null {
+  const direct = normalizeFlowInstantViewPageUrl(value);
+  if (direct) return direct;
+
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+
+  if (url.protocol !== 'https:') return null;
+
+  // Editor-tracked URLs may carry analytics parameters. The path is still the
+  // canonical Flow post; strip the query before validating the public shape.
+  url.search = '';
+  url.hash = '';
+
+  return normalizeFlowInstantViewPageUrl(url.toString());
+}
+
+function publicTemplateUrl(href: string, base: string | URL = EDITOR_ORIGIN): string | null {
+  const url = editorUrl(href, base);
+  if (!url || !url.pathname.startsWith('/my/')) return null;
+
+  // Rebuild the URL from an allowlist. This guarantees that no unknown query
+  // parameter, nested hash or editor token can slip into the owner diagnostics.
+  const sanitized = new URL(`${EDITOR_ORIGIN}${url.pathname}`);
+  const sample = url.searchParams.get('url');
+  const canonical = sample ? normalizeTrackedFlowSample(sample) : null;
+  if (canonical) sanitized.searchParams.set('url', canonical);
+
+  return sanitized.toString();
+}
+
+function hasOtherTemplateLinks(html: string): boolean {
+  for (const href of hrefValues(html)) {
+    const url = editorUrl(href);
+    if (!url || !url.pathname.startsWith('/my/')) continue;
+    if (/^\/my\/?$/.test(url.pathname)) continue;
+    if (/merkurov\.love/i.test(`${url.pathname}${decodeParam(url.search)}`)) continue;
+
+    return true;
+  }
+
+  return false;
+}
+
+function findTemplateLinks(html: string): string[] {
+  const links: string[] = [];
+  const seen = new Set<string>();
+
+  for (const href of hrefValues(html)) {
+    const url = editorUrl(href);
+    if (!url || !url.pathname.startsWith('/my/')) continue;
+    if (/^\/my\/?$/.test(url.pathname)) continue;
+    if (!/merkurov\.love/i.test(`${url.pathname}${decodeParam(url.search)}`)) continue;
+
+    const sanitized = safeTemplateUrl(url.toString());
+    if (!sanitized || seen.has(sanitized)) continue;
+
+    seen.add(sanitized);
+    links.push(sanitized);
+  }
+
+  return links;
+}
+
+function findTrackedFlowLinks(html: string, base: string): string[] {
+  const links: string[] = [];
+  const seen = new Set<string>();
+
+  for (const href of hrefValues(html)) {
+    const url = editorUrl(href, base);
+    if (!url || !url.pathname.startsWith('/my/')) continue;
+
+    const sample = url.searchParams.get('url');
+    if (!sample) continue;
+
+    // Rebuild the preview URL with a validated canonical Flow post only.
+    const canonical = normalizeTrackedFlowSample(sample);
+    if (!canonical) continue;
+
+    const preview = new URL(url.toString());
+    preview.search = '';
+    preview.searchParams.set('url', canonical);
+    preview.hash = '';
+
+    const key = preview.toString();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    links.push(key);
+  }
+
+  return links;
+}
+
+function isEditorLoginPage(status: number, html: string): boolean {
+  if (status === 401 || status === 403) return true;
+  if (/App\.unauth\s*=\s*true/.test(html)) return true;
+  if (/openPopup\('#login-popup-container'\)/.test(html)) return true;
+
+  return false;
+}
+
+function isEditorWorkspaceHtml(status: number, html: string): boolean {
+  return status === 200 && !isEditorLoginPage(status, html);
+}
+
+type EditorPage = {
+  status: number;
+  html: string;
+  authenticated: boolean;
+  unauthenticated: boolean;
+};
+
+async function fetchEditorPage(
+  fetcher: typeof fetch,
+  cookie: string,
+  target: string
+): Promise<EditorPage> {
+  const initial = editorUrl(target);
+  if (!initial) {
+    return { status: 0, html: '', authenticated: false, unauthenticated: false };
+  }
+
+  let path = `${initial.pathname}${initial.search}`;
+
+  for (let redirects = 0; redirects < 3; redirects += 1) {
+    let response: Response;
+
+    try {
+      response = await editorFetch(fetcher, path, {
+        method: 'GET',
+        redirect: 'manual',
+        headers: {
+          cookie,
+          accept: 'text/html',
+        },
+      });
+    } catch {
+      return { status: 0, html: '', authenticated: false, unauthenticated: false };
+    }
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      if (!location) {
+        return {
+          status: response.status,
+          html: '',
+          authenticated: false,
+          unauthenticated: false,
+        };
+      }
+
+      // Follow only same-origin editor redirects. The encrypted editor cookie
+      // must never be forwarded to another host by a redirect.
+      const next = editorUrl(location, `${EDITOR_ORIGIN}${path}`);
+      if (!next) {
+        return {
+          status: response.status,
+          html: '',
+          authenticated: false,
+          unauthenticated: false,
+        };
+      }
+
+      path = `${next.pathname}${next.search}`;
+      continue;
+    }
+
+    const html = await response.text().catch(() => '');
+    return {
+      status: response.status,
+      html,
+      authenticated: isEditorWorkspaceHtml(response.status, html),
+      unauthenticated: isEditorLoginPage(response.status, html),
+    };
+  }
+
+  return { status: 0, html: '', authenticated: false, unauthenticated: false };
+}
+
+function buildTemplateState(input: {
+  listingHtml: string;
+  hashes: string[];
+  configured: string | null;
+  checkedAt: string;
+  detailStatus: InstantViewTemplateDetailStatus;
+  detailUrl: string | null;
+}): InstantViewTemplateState {
+  const uniqueHashes = [...new Set(input.hashes)];
+  const rhashPresent = uniqueHashes.length > 0;
+  const configured = input.configured;
+  const serverHashConfigured = Boolean(configured);
+
+  let hashStatus: InstantViewHashStatus;
+
+  if (rhashPresent && configured) {
+    hashStatus = uniqueHashes.some((value) => safeHashEqual(value, configured))
+      ? 'verified'
+      : 'mismatch';
+  } else if (rhashPresent) {
+    hashStatus = 'missing_server_hash';
+  } else {
+    // No editor hash means the comparison is unknown, never a mismatch.
+    hashStatus = 'unknown';
+  }
+
   return {
-    templatePresent: /merkurov\.love/i.test(html),
-    rhashPresent: hashes.length > 0,
-    hashMatchesEnv,
-    templateUrl,
-    checkedAt,
+    templatePresent: /merkurov\.love/i.test(input.listingHtml) || Boolean(input.detailUrl),
+    rhashPresent,
+    hashMatchesEnv: hashStatus === 'verified' ? true : hashStatus === 'mismatch' ? false : null,
+    hashStatus,
+    serverHashConfigured,
+    detailStatus: input.detailStatus,
+    detailChecked: input.detailStatus !== 'not_attempted',
+    templateUrl: input.detailUrl,
+    checkedAt: input.checkedAt,
   };
+}
+
+async function inspectTemplateState(
+  fetcher: typeof fetch,
+  cookie: string,
+  listingHtml: string,
+  env: InstantViewAuthEnv,
+  checkedAt: string
+): Promise<InstantViewTemplateState> {
+  const configured = telegramInstantViewTemplateHash(env);
+  let hashes: string[] = [];
+  let detailUrl: string | null = null;
+  let attempted = false;
+  let anyLoaded = false;
+  let anyUnauthenticated = false;
+
+  const templates = /merkurov\.love/i.test(listingHtml)
+    ? findTemplateLinks(listingHtml).slice(0, MAX_TEMPLATE_DETAIL_PAGES)
+    : [];
+
+  if (templates.length) {
+    for (const template of templates) {
+      attempted = true;
+      const page = await fetchEditorPage(fetcher, cookie, template);
+
+      if (!page.authenticated) {
+        anyUnauthenticated = anyUnauthenticated || page.unauthenticated;
+        continue;
+      }
+
+      anyLoaded = true;
+      detailUrl = detailUrl ?? publicTemplateUrl(template);
+
+      const pageHashes = extractRhashValues(page.html);
+      if (pageHashes.length) {
+        hashes = pageHashes;
+        break;
+      }
+
+      const previews = findTrackedFlowLinks(page.html, template).slice(
+        0,
+        MAX_TEMPLATE_PREVIEW_PAGES
+      );
+
+      for (const preview of previews) {
+        attempted = true;
+        const previewPage = await fetchEditorPage(fetcher, cookie, preview);
+
+        if (!previewPage.authenticated) {
+          anyUnauthenticated = anyUnauthenticated || previewPage.unauthenticated;
+          continue;
+        }
+
+        anyLoaded = true;
+        detailUrl = detailUrl ?? publicTemplateUrl(preview);
+
+        const previewHashes = extractRhashValues(previewPage.html);
+        if (previewHashes.length) {
+          hashes = previewHashes;
+          break;
+        }
+      }
+
+      if (hashes.length) break;
+    }
+  }
+
+  // Only a hash near the merkurov.love row may be used as a fallback, and only
+  // when there is no detail page to inspect. Hashes from another owner
+  // template must never be compared with our secret.
+  if (!hashes.length && !templates.length && !hasOtherTemplateLinks(listingHtml)) {
+    hashes = extractRhashValuesNearDomain(listingHtml);
+  }
+
+  const detailStatus: InstantViewTemplateDetailStatus = anyLoaded
+    ? 'loaded'
+    : anyUnauthenticated
+      ? 'unauthenticated'
+      : attempted
+        ? 'unavailable'
+        : 'not_attempted';
+
+  return buildTemplateState({
+    listingHtml,
+    hashes,
+    configured,
+    checkedAt,
+    detailStatus,
+    // Keep a sanitized link to the template even when the hash was already
+    // available on the listing page.
+    detailUrl: detailUrl ?? publicTemplateUrl(findTemplateLinks(listingHtml)[0] ?? '') ?? null,
+  });
 }
 
 function pendingExpired(state: InstantViewSessionState, now: number): boolean {
@@ -242,7 +684,15 @@ function sanitizedStatus(
     connectedAt: state.connectedAt,
     lastVerifiedAt: state.lastVerifiedAt,
     lastErrorCode: state.lastErrorCode,
-    template: state.template,
+    // Re-sanitize a persisted URL so an older row can never return a hash.
+    template: state.template
+      ? {
+          ...state.template,
+          templateUrl: state.template.templateUrl
+            ? publicTemplateUrl(state.template.templateUrl)
+            : null,
+        }
+      : null,
   };
 }
 
@@ -514,7 +964,7 @@ export async function inspectInstantViewEditor(
     return sanitizedStatus(next, 'available', env);
   }
 
-  const template = parseTemplateState(verified.html, env, timestamp);
+  const template = await inspectTemplateState(fetcher, cookie, verified.html, env, timestamp);
   const next: InstantViewSessionState = {
     ...state,
     status: 'connected',
