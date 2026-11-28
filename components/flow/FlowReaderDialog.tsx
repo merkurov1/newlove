@@ -3,6 +3,8 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
+import { registerTelegramBackHandler } from '@/lib/telegram/backHandler';
+
 type Props = {
   onClose: () => void;
   side: 'left' | 'right';
@@ -42,6 +44,17 @@ function getPortalTarget(): HTMLElement | null {
 export default function FlowReaderDialog({ onClose, side, labelledBy, testId, children }: Props) {
   const panelRef = useRef<HTMLElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
+
+  // Telegram's native BackButton closes the topmost reader sheet before the
+  // publication route is allowed to navigate back to the feed.
+  useEffect(
+    () =>
+      registerTelegramBackHandler(() => {
+        onClose();
+        return true;
+      }),
+    [onClose]
+  );
 
   useEffect(() => {
     const panel = panelRef.current;
