@@ -253,6 +253,128 @@ describe('Telegram Flow layout', () => {
     ).toBeNull();
   });
 
+  it('renders an explicit Markdown heading as the card title above the body, after the image', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'heading-entry',
+        title: 'Heart & Angel > World > Temple',
+        slug: 'heart-angel-world-temple-nf4en',
+        type: 'photo',
+        contentType: 'photo',
+        showTitle: true,
+        bodyExcerpt: 'Фотография храма и его отражения.',
+        bodyTruncated: false,
+        images: [
+          {
+            url: 'https://cdn.example.com/temple.jpg',
+            alt: 'Temple',
+            caption: null,
+            width: 1200,
+            height: 800,
+          },
+        ],
+      },
+    ]);
+
+    render(app());
+
+    const article = await waitFor(() => {
+      const node = document.querySelector('[data-flow-entry-id="heading-entry"]');
+      expect(node).not.toBeNull();
+      return node as HTMLElement;
+    });
+    const title = article.querySelector('.flow-entry__title');
+    const media = article.querySelector('.flow-entry__media');
+    const body = article.querySelector('.flow-entry__body');
+
+    expect(title?.tagName).toBe('H2');
+    expect(title).toHaveTextContent('Heart & Angel > World > Temple');
+    expect(article.querySelectorAll('.flow-entry__title')).toHaveLength(1);
+    expect(body).toHaveTextContent('Фотография храма и его отражения.');
+    expect(body).not.toHaveTextContent('Heart & Angel > World > Temple');
+    expect(
+      media!.compareDocumentPosition(title!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      title!.compareDocumentPosition(body!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('keeps a plain photo caption in the body without rendering a feed title', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'caption-only-entry',
+        title: 'Фото',
+        type: 'photo',
+        contentType: 'photo',
+        showTitle: false,
+        bodyExcerpt: 'Тёплый вечер у моря.',
+        images: [
+          {
+            url: 'https://cdn.example.com/sea.jpg',
+            alt: null,
+            caption: null,
+            width: 1200,
+            height: 800,
+          },
+        ],
+      },
+    ]);
+
+    render(app());
+
+    await screen.findByText('Тёплый вечер у моря.');
+
+    expect(
+      document.querySelector(
+        '[data-flow-entry-id="caption-only-entry"] .flow-entry__title'
+      )
+    ).toBeNull();
+    expect(
+      document.querySelector(
+        '[data-flow-entry-id="caption-only-entry"] .flow-entry__body'
+      )
+    ).toHaveTextContent('Тёплый вечер у моря.');
+  });
+
+  it('keeps the YouTube metadata title on the feed card', async () => {
+    installFetch(false, [
+      {
+        ...FLOW_ITEM,
+        id: 'youtube-entry',
+        title: 'DeepSeek | Merkurov x Pierrot',
+        type: 'video',
+        contentType: 'video',
+        showTitle: true,
+        bodyExcerpt: '',
+        videos: [
+          {
+            url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+            provider: 'youtube',
+            videoId: 'dQw4w9WgXcQ',
+            title: 'DeepSeek | Merkurov x Pierrot',
+            thumbnail: null,
+            author: 'Anton Merkurov',
+          },
+        ],
+      },
+    ]);
+
+    render(app());
+
+    const heading = await waitFor(() => {
+      const node = document.querySelector(
+        '[data-flow-entry-id="youtube-entry"] .flow-entry__title'
+      );
+      expect(node).not.toBeNull();
+      return node;
+    });
+
+    expect(heading).toHaveTextContent('DeepSeek | Merkurov x Pierrot');
+  });
+
   it('renders exactly one date marker for a calendar day with several posts', async () => {
     installFetch(false, [
       {

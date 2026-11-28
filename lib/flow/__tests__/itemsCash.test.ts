@@ -154,6 +154,45 @@ describe('loadFlowItemsPage', () => {
     expect(item.links[0].title).toBe('Open Graph headline');
   });
 
+  it('serializes an explicit leading heading as the paginated card title and excerpt', async () => {
+    const fake = fakeSupabase([
+      row({
+        id: 'heading-1',
+        slug: 'heart-angel-world-temple-nf4en',
+        title: 'Heart & Angel > World > Temple',
+        type: 'photo',
+        body_md:
+          '## Heart & Angel > World > Temple\n\nФотография храма и его отражения.',
+        metadata: {
+          title_source: 'body',
+          generated_title: 'Heart & Angel > World > Temple',
+          images: [
+            {
+              url: 'https://cdn.example.com/temple.jpg',
+              alt: 'Temple',
+            },
+          ],
+        },
+      }),
+      row({ id: 'older-1', title: 'Older note' }),
+    ]);
+    mockedCreateClient.mockReturnValue(fake.supabase);
+
+    const result = await loadFlowItemsPage(1, 0);
+    const item = result.items[0] as Record<string, any>;
+
+    expect(result.items).toHaveLength(1);
+    expect(result.hasMore).toBe(true);
+    expect(result.nextOffset).toBe(1);
+    expect(item.title).toBe('Heart & Angel > World > Temple');
+    expect(item.titleSource).toBe('heading');
+    expect(item.showTitle).toBe(true);
+    expect(item.bodyExcerpt).toBe('Фотография храма и его отражения.');
+    expect(item.bodyExcerpt).not.toContain('##');
+    expect(item.bodyExcerpt).not.toContain('Heart & Angel');
+    expect(item.images).toHaveLength(1);
+  });
+
   it('returns an empty page without inventing entries for an empty catalogue', async () => {
     const fake = fakeSupabase([]);
     mockedCreateClient.mockReturnValue(fake.supabase);

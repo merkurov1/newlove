@@ -401,6 +401,196 @@ describe('Content Resolver — title rules', () => {
   });
 });
 
+describe('Content Resolver — explicit Markdown headings', () => {
+  it('promotes a leading ## heading to the card title and removes it from the body', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'photo',
+        title: 'Heart & Angel > World > Temple',
+        body_md:
+          '## Heart & Angel > World > Temple \n\nФотография храма и его отражения.',
+        metadata: {
+          title_source: 'body',
+          generated_title: 'Heart & Angel > World > Temple',
+          images: [
+            {
+              url: 'https://cdn.example.com/temple.jpg',
+              alt: 'Temple',
+            },
+          ],
+        },
+      })
+    );
+
+    expect(content.title).toBe('Heart & Angel > World > Temple');
+    expect(content.titleSource).toBe('heading');
+    expect(content.showTitle).toBe(true);
+    expect(content.titleIsRedundant).toBe(false);
+    expect(content.images).toHaveLength(1);
+    expect(content.body).toBe('Фотография храма и его отражения.');
+    expect(content.bodyExcerpt).toBe('Фотография храма и его отражения.');
+    expect(content.bodyExcerpt).not.toContain('##');
+    expect(content.bodyTruncated).toBe(false);
+  });
+
+  it('supports single # headings, surrounding whitespace/NBSP and inline formatting', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'article',
+        body_md:
+          '\n\u00a0\n#\u00a0**Bold** [linked](https://example.com) title ##\n\nПервый абзац после заголовка.',
+      })
+    );
+
+    expect(content.title).toBe('Bold linked title');
+    expect(content.titleSource).toBe('heading');
+    expect(content.showTitle).toBe(true);
+    expect(content.body).toBe('Первый абзац после заголовка.');
+    expect(content.bodyExcerpt).toBe('Первый абзац после заголовка.');
+    expect(content.bodyExcerpt).not.toContain('Bold');
+  });
+
+  it('shows a leading heading once when it repeats a manual title', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'article',
+        title: 'Заголовок публикации',
+        body_md: '## Заголовок публикации\n\nАвторский текст.',
+        metadata: { title_source: 'manual' },
+      })
+    );
+
+    expect(content.title).toBe('Заголовок публикации');
+    expect(content.titleSource).toBe('manual');
+    expect(content.showTitle).toBe(true);
+    expect(content.titleIsRedundant).toBe(false);
+    expect(content.body).toBe('Авторский текст.');
+    expect(content.bodyExcerpt).toBe('Авторский текст.');
+  });
+
+  it('keeps a different manual title and leaves the heading as a section heading', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'article',
+        title: 'Авторский заголовок',
+        body_md: '## Раздел статьи\n\nТекст раздела.',
+        metadata: { title_source: 'manual' },
+      })
+    );
+
+    expect(content.title).toBe('Авторский заголовок');
+    expect(content.titleSource).toBe('manual');
+    expect(content.showTitle).toBe(true);
+    expect(content.body).toContain('Раздел статьи');
+    expect(content.bodyExcerpt).toContain('Раздел статьи');
+  });
+
+  it('keeps a plain photo caption in the body instead of inventing a title', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'photo',
+        title: null,
+        body_md: 'Тёплый вечер у моря.',
+        metadata: {
+          images: [{ url: 'https://cdn.example.com/sea.jpg' }],
+        },
+      })
+    );
+
+    expect(content.titleSource).toBe('body');
+    expect(content.showTitle).toBe(false);
+    expect(content.body).toBe('Тёплый вечер у моря.');
+    expect(content.bodyExcerpt).toBe('Тёплый вечер у моря.');
+  });
+
+  it('keeps a plain first sentence in the body when there is no explicit heading', () => {
+    const content = normalizeFlowItem(
+      item({
+        type: 'note',
+        body_md: 'Это обычная первая фраза заметки.\n\nВторой абзац остаётся текстом.',
+      })
+    );
+
+    expect(content.titleSource).toBe('body');
+    expect(content.showTitle).toBe(false);
+    expect(content.bodyExcerpt).toContain('Это обычная первая фраза заметки.');
+  });
+
+  it('does not spend the excerpt limit on a leading heading and still truncates the body', () => {
+    const content = normalizeFlowItem(
+      item({
+        body_md: `## ${'Длинный заголовок '.repeat(20)}\n\n${'Слово '.repeat(120)}финал`,
+      })
+    );
+
+    expect(content.titleSource).toBe('heading');
+    expect(content.title.length).toBeLessThanOrEqual(160);
+    expect(content.bodyExcerpt.startsWith('Слово')).toBe(true);
+    expect(content.bodyExcerpt).not.toContain('Длинный заголовок');
+    expect(content.bodyExcerpt.endsWith('…')).toBe(true);
+    expect(content.bodyTruncated).toBe(true);
+  });
+
+  it('keeps the existing YouTube title and link preview behavior', () => {
+    const video = normalizeFlowItem(
+      item({
+        type: 'video',
+        title: 'DeepSeek | Merkurov x Pierrot',
+        body_md: '',
+        metadata: {
+          title_source: 'youtube',
+          generated_title: 'DeepSeek | Merkurov x Pierrot',
+          youtube: {
+            video_id: 'dQw4w9WgXcQ',
+            title: 'DeepSeek | Merkurov x Pierrot',
+          },
+        },
+      })
+    );
+
+    expect(video.title).toBe('DeepSeek | Merkurov x Pierrot');
+    expect(video.titleSource).toBe('youtube');
+    expect(video.showTitle).toBe(true);
+
+    const link = normalizeFlowItem(
+      item({
+        type: 'link',
+        title: 'Saved Flow title',
+        source_url: 'https://example.com/news',
+        metadata: {
+          title_source: 'link',
+          generated_title: 'Open Graph headline',
+          link_previews: [
+            {
+              url: 'https://example.com/news',
+              title: 'Open Graph headline',
+              site_name: 'Example',
+            },
+          ],
+        },
+      })
+    );
+
+    expect(link.title).toBe('Saved Flow title');
+    expect(link.titleSource).toBe('manual');
+    expect(link.showTitle).toBe(true);
+    expect(link.links[0].title).toBe('Open Graph headline');
+  });
+
+  it('keeps an empty body clean when the heading is the only content', () => {
+    const content = normalizeFlowItem(
+      item({ type: 'note', body_md: '### Только заголовок' })
+    );
+
+    expect(content.title).toBe('Только заголовок');
+    expect(content.titleSource).toBe('heading');
+    expect(content.showTitle).toBe(true);
+    expect(content.body).toBe('');
+    expect(content.bodyExcerpt).toBe('');
+    expect(content.bodyTruncated).toBe(false);
+  });
+});
+
 describe('Content Resolver — excerpts', () => {
   it('shows short text in full', () => {
     const content = normalizeFlowItem(
