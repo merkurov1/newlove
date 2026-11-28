@@ -268,6 +268,7 @@ describe('Content Resolver — title rules', () => {
         source_url: 'https://t.me/PierrotAi_bot',
         metadata: {
           title_source: 'link',
+          generated_title: 'Pierrot',
           link_previews: [
             { url: 'https://t.me/PierrotAi_bot', title: 'Pierrot' },
           ],
@@ -295,6 +296,71 @@ describe('Content Resolver — title rules', () => {
 
     expect(manual.title).toBe('Журнал. История вопроса.');
     expect(manual.titleSource).toBe('manual');
+  });
+
+  it('keeps the item Title field when it differs from a stale generated source', () => {
+    const preview = {
+      url: 'https://example.com/news',
+      title: 'Open Graph headline',
+      site_name: 'Example',
+    };
+
+    const link = normalizeFlowItem(
+      item({
+        title: 'Saved Flow title',
+        type: 'link',
+        source_url: preview.url,
+        metadata: {
+          title_source: 'link',
+          generated_title: 'Open Graph headline',
+          link_previews: [preview],
+        },
+      })
+    );
+
+    expect(link.title).toBe('Saved Flow title');
+    expect(link.titleSource).toBe('manual');
+    expect(link.showTitle).toBe(true);
+    // The destination still keeps its own preview title on the link card.
+    expect(link.links[0].title).toBe('Open Graph headline');
+
+    const article = normalizeFlowItem(
+      item({
+        title: 'Saved article title',
+        type: 'article',
+        body_md: 'Первая строка статьи.\n\nОсновной текст.',
+        source_url: preview.url,
+        metadata: {
+          title_source: 'link',
+          generated_title: 'Open Graph headline',
+          link_previews: [preview],
+        },
+      })
+    );
+
+    expect(article.title).toBe('Saved article title');
+    expect(article.titleSource).toBe('manual');
+    expect(article.showTitle).toBe(true);
+    expect(article.links[0].title).toBe('Open Graph headline');
+  });
+
+  it('keeps an authored title even when a legacy row has no generated_title', () => {
+    const content = normalizeFlowItem(
+      item({
+        title: 'Saved Flow title',
+        type: 'link',
+        source_url: 'https://example.com/news',
+        metadata: {
+          title_source: 'link',
+          link_previews: [
+            { url: 'https://example.com/news', title: 'Open Graph headline' },
+          ],
+        },
+      })
+    );
+
+    expect(content.title).toBe('Saved Flow title');
+    expect(content.titleSource).toBe('manual');
   });
 
   it('rejects filenames, URLs, dates and generic placeholders as titles', () => {
