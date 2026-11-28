@@ -220,6 +220,38 @@ describe('YouTube multi-channel OAuth callback', () => {
     );
   });
 
+  it('reports an authentication denial without exchanging the code', async () => {
+    const { AuthenticationError } = jest.requireActual('@/lib/auth/errors') as {
+      AuthenticationError: new (message?: string) => Error;
+    };
+    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(
+      new AuthenticationError('Unauthorized')
+    );
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'auth-code', stateValue: state() })
+    );
+
+    expect(location(response).searchParams.get('reason')).toBe('unauthorized');
+    expect(oauth.exchangeGoogleCode).not.toHaveBeenCalled();
+  });
+
+  it('distinguishes an auth backend error from a visitor denial', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(
+      new Error('profile database unavailable')
+    );
+
+    const response = await handleYouTubeChannelsCallback(
+      callbackRequest({ code: 'auth-code', stateValue: state() })
+    );
+
+    expect(location(response).searchParams.get('reason')).toBe('auth_backend_error');
+    expect(oauth.exchangeGoogleCode).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
   it('rejects a missing nonce cookie before exchanging the code', async () => {
     mockCookieValue = undefined;
 

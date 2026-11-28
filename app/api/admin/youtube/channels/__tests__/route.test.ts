@@ -78,6 +78,19 @@ jest.mock('@/lib/youtube/channels', () => ({
   })),
   unbindProject: jest.fn(async () => undefined),
   disconnectOAuthConnection: jest.fn(async () => ({ revoked: true })),
+  suggestProjectBindings: jest.fn(() => [
+    {
+      projectSlug: 'art-engine',
+      projectName: 'Art Engine',
+      handle: '@merkurov-art',
+      state: 'available',
+      channelRecordId: 'channel-record-1',
+      channelId: 'UC_art',
+      channelTitle: 'Merkurov Art',
+      connectionId: 'connection-1',
+      candidateCount: 1,
+    },
+  ]),
   loadChannelAccessToken: jest.fn(),
   loadConnectionAccessToken: jest.fn(async () => ({
     accessToken: 'access-token',
@@ -89,6 +102,9 @@ jest.mock('@/lib/youtube/channels', () => ({
 const { GET, POST } = require('../route') as {
   GET: (request: Request) => Promise<Response>;
   POST: (request: Request) => Promise<Response>;
+};
+const { AuthenticationError } = require('@/lib/auth/errors') as {
+  AuthenticationError: new (message?: string) => Error;
 };
 const serverAuth = require('@/lib/serverAuth') as {
   requireAdminFromRequest: jest.Mock;
@@ -121,7 +137,9 @@ beforeEach(() => {
 
 describe('multi-channel YouTube owner API', () => {
   it('rejects visitors before reading channel state', async () => {
-    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(new Error('Unauthorized'));
+    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(
+      new AuthenticationError('Unauthorized')
+    );
 
     const response = await GET(
       new Request('https://www.merkurov.love/api/admin/youtube/channels?project=art-engine')
@@ -154,6 +172,37 @@ describe('multi-channel YouTube owner API', () => {
       'UC_art',
       'UC_unframed',
     ]);
+    expect(body.auth).toEqual({ method: 'cookie', role: 'ADMIN' });
+    expect(body.config).toMatchObject({
+      googleOAuthConfigured: expect.any(Boolean),
+      serviceRoleConfigured: expect.any(Boolean),
+      tokenEncryptionConfigured: expect.any(Boolean),
+      callbackPath: expect.stringContaining('/api/auth/'),
+      scopes: expect.any(Array),
+    });
+    expect(body.suggestedBindings).toEqual([
+      expect.objectContaining({
+        projectSlug: 'art-engine',
+        state: 'available',
+        channelRecordId: 'channel-record-1',
+      }),
+    ]);
+    expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
+  });
+
+  it('explains an unauthenticated state request instead of a bare 401', async () => {
+    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(
+      new AuthenticationError('Unauthorized')
+    );
+
+    const response = await GET(
+      new Request('https://www.merkurov.love/api/admin/youtube/channels?project=art-engine')
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toMatchObject({ ok: false, error: 'unauthorized', code: 'unauthorized' });
+    expect(body.message).toContain('Войдите заново');
     expect(JSON.stringify(body)).not.toMatch(/token_ciphertext|refresh_token|access_token/i);
   });
 

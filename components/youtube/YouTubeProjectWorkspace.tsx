@@ -50,6 +50,7 @@ type StatusPayload = {
   schemaReady?: boolean;
   schema?: SchemaStatus;
   viewer?: { id: string; email: string | null; role: string };
+  auth?: { method: string; role: string };
   project?: string;
   projects?: Array<{ slug: string; name: string; defaultChannelHandle: string | null }>;
   connections?: Connection[];
@@ -57,11 +58,35 @@ type StatusPayload = {
   bindings?: Binding[];
   activeByProject?: Record<string, { binding: Binding; channel: Channel } | undefined>;
   active?: { binding: Binding; channel: Channel; connection: Connection | null } | null;
-  config?: { connectUrl: string; redirectUri: string; scopes: string[] };
+  suggestedBindings?: BindingSuggestion[];
+  config?: {
+    connectUrl: string;
+    redirectUri: string;
+    scopes: string[];
+    googleOAuthConfigured?: boolean;
+    googleOAuthMissing?: string[];
+    serviceRoleConfigured?: boolean;
+    supabaseUrlConfigured?: boolean;
+    tokenEncryptionConfigured?: boolean;
+    callbackPath?: string | null;
+    dedicatedCallbackConfigured?: boolean;
+  };
   message?: string;
   error?: string;
   code?: string;
   retryable?: boolean;
+};
+
+type BindingSuggestion = {
+  projectSlug: string;
+  projectName: string;
+  handle: string | null;
+  state: 'bound' | 'available' | 'missing' | 'ambiguous';
+  channelRecordId: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  connectionId: string | null;
+  candidateCount: number;
 };
 
 type StatusError = {
@@ -858,6 +883,7 @@ export default function YouTubeProjectWorkspace({
                 : ' · сессия найдена'
               : ' · браузерная сессия не найдена'
             : null}
+          {status?.auth ? ` · сервер проверил: ${status.auth.method}, роль ${status.auth.role}` : null}
         </p>
 
         <div className="pw-analytics-card-actions">
@@ -929,7 +955,36 @@ export default function YouTubeProjectWorkspace({
         {status?.config?.redirectUri && (
           <p className="pw-analytics-hint">
             Redirect URI для Google Cloud: <code>{status.config.redirectUri}</code>
+            {status.config.callbackPath ? ` · callback ${status.config.callbackPath}` : ''}
           </p>
+        )}
+
+        {status?.config?.googleOAuthConfigured === false && (
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              Google OAuth не настроен:{' '}
+              <code>{(status.config.googleOAuthMissing ?? []).join(', ') || 'неизвестно'}</code>.
+              Подключение недоступно, пока переменные не заданы на сервере.
+            </p>
+          </div>
+        )}
+
+        {status?.config?.serviceRoleConfigured === false && (
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              На сервере отсутствует <code>SUPABASE_SERVICE_ROLE_KEY</code>. Сохранение подключения
+              и чтение каналов невозможны; ключ должен быть только в серверном окружении.
+            </p>
+          </div>
+        )}
+
+        {status?.config?.tokenEncryptionConfigured === false && (
+          <div className="pw-analytics-error" role="alert">
+            <p>
+              Не задан ключ шифрования refresh token (<code>ANALYTICS_SYNC_SECRET</code>). Без него
+              Google-подключение нельзя сохранить безопасно.
+            </p>
+          </div>
         )}
 
         {active && (
@@ -1019,6 +1074,48 @@ export default function YouTubeProjectWorkspace({
               </li>
             ))}
           </ul>
+        )}
+
+        {status?.suggestedBindings && status.suggestedBindings.length > 0 && (
+          <div className="pw-analytics-config">
+            <h3>Рекомендуемые привязки</h3>
+            <p className="pw-analytics-hint">
+              Проверено по handle канала из Google. Привязка выполняется только по кнопке — ничего не
+              выбирается автоматически.
+            </p>
+            <ul>
+              {status.suggestedBindings.map((suggestion) => (
+                <li key={suggestion.projectSlug}>
+                  <strong>{suggestion.projectName}</strong> ·{' '}
+                  <code>{suggestion.handle || '—'}</code> ·{' '}
+                  {suggestion.state === 'bound'
+                    ? `привязан: ${suggestion.channelTitle || suggestion.channelId}`
+                    : suggestion.state === 'available'
+                      ? `найден канал: ${suggestion.channelTitle || suggestion.channelId}`
+                      : suggestion.state === 'ambiguous'
+                        ? `несколько каналов (${suggestion.candidateCount}); выберите вручную`
+                        : 'канал не найден среди подключённых'}
+                  {suggestion.state === 'available' && suggestion.channelRecordId ? (
+                    <button
+                      type="button"
+                      className="pw-analytics-button pw-analytics-button--quiet"
+                      disabled={busy}
+                      onClick={() =>
+                        suggestion.channelRecordId &&
+                        void runChannelAction({
+                          action: 'bind',
+                          project: suggestion.projectSlug,
+                          channelRecordId: suggestion.channelRecordId,
+                        })
+                      }
+                    >
+                      Привязать {suggestion.projectName}
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <h3>Каналы, доступные аккаунту</h3>

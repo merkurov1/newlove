@@ -192,6 +192,7 @@ import {
   replaceConnectionChannels,
   resolveProjectChannel,
   saveOAuthConnection,
+  suggestProjectBindings,
 } from '../channels';
 
 const oauth = require('@/lib/analytics/website/providers/oauth') as {
@@ -284,6 +285,17 @@ describe('two independent Google accounts and shared channels', () => {
     expect(new Set(channels.map((item) => item.connectionId))).toEqual(
       new Set([a.connection.id, b.connection.id])
     );
+
+    expect(suggestProjectBindings(channels, [])).toEqual([
+      expect.objectContaining({ projectSlug: 'art-engine', state: 'available', channelId: 'UC_art' }),
+      expect.objectContaining({ projectSlug: 'unframed', state: 'available', channelId: 'UC_unframed' }),
+      expect.objectContaining({ projectSlug: 'pierrot', state: 'available', channelId: 'UC_unframed' }),
+      expect.objectContaining({
+        projectSlug: 'heart-and-angel',
+        state: 'available',
+        channelId: 'UC_heart',
+      }),
+    ]);
 
     const art = channels.find((item) => item.channelId === 'UC_art');
     const unframed = channels.find((item) => item.channelId === 'UC_unframed');

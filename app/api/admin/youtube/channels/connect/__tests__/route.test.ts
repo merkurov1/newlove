@@ -59,14 +59,22 @@ afterAll(() => {
 });
 
 describe('GET /api/admin/youtube/channels/connect', () => {
-  it('rejects visitors', async () => {
-    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(new Error('Unauthorized'));
+  it('rejects visitors with an actionable JSON error', async () => {
+    const { AuthenticationError } = jest.requireActual('@/lib/auth/errors') as {
+      AuthenticationError: new (message?: string) => Error;
+    };
+    serverAuth.requireAdminFromRequest.mockRejectedValueOnce(
+      new AuthenticationError('Unauthorized')
+    );
 
     const response = await GET(
       new Request('https://www.merkurov.love/api/admin/youtube/channels/connect?project=art-engine')
     );
+    const body = (await response.json()) as { error: string; message: string };
 
     expect(response.status).toBe(401);
+    expect(body.error).toBe('unauthorized');
+    expect(body.message).toContain('Войдите заново');
   });
 
   it('builds a dedicated state-protected consent URL with least-privilege scopes', async () => {

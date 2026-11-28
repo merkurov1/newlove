@@ -78,11 +78,33 @@ export async function GET(request: Request) {
     user = await requireAdminFromRequest(request);
   } catch (error) {
     if (!isAuthenticationError(error)) {
-      console.error('[admin-auth]', error);
-      throw error;
+      console.error('[youtube-channels-connect] auth backend failed', error);
+      return noStore(
+        NextResponse.json(
+          {
+            ok: false,
+            error: 'auth_backend_error',
+            retryable: true,
+            message:
+              'Не удалось проверить сессию администратора из-за серверной ошибки. Повторите подключение.',
+          },
+          { status: 500 }
+        )
+      );
     }
 
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return noStore(
+      NextResponse.json(
+        {
+          ok: false,
+          error: 'unauthorized',
+          code: 'unauthorized',
+          message:
+            'Сессия администратора не подтверждена. Войдите заново и повторите подключение Google.',
+        },
+        { status: 401 }
+      )
+    );
   }
 
   const url = new URL(request.url);

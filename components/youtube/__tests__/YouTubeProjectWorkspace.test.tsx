@@ -64,6 +64,20 @@ function statusPayload(project: string) {
     bindings: [],
     activeByProject: {},
     active: null,
+    auth: { method: 'cookie', role: 'ADMIN' },
+    suggestedBindings: [
+      {
+        projectSlug: 'art-engine',
+        projectName: 'Art Engine',
+        handle: '@merkurov-art',
+        state: 'available',
+        channelRecordId: 'channel-record-1',
+        channelId: 'UC_art',
+        channelTitle: 'Merkurov Art',
+        connectionId: 'connection-1',
+        candidateCount: 1,
+      },
+    ],
     config: {
       connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       redirectUri: 'https://example.test/api/auth/youtube-channels/callback',
@@ -312,6 +326,36 @@ describe('YouTube workspace multi-account states', () => {
     expect(JSON.parse(String(disconnectCall?.[1]?.body))).toMatchObject({
       action: 'disconnect',
       connectionId: 'connection-b',
+    });
+  });
+});
+
+describe('YouTube workspace binding suggestions and auth diagnostics', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('shows the server-verified auth method and one-click recommended binding', async () => {
+    const fetchMock = installFetch('art-engine') as unknown as jest.Mock;
+
+    render(<YouTubeProjectWorkspace project="art-engine" />);
+
+    expect(await screen.findByText(/сервер проверил: cookie, роль ADMIN/)).toBeInTheDocument();
+    expect(await screen.findByText('Рекомендуемые привязки')).toBeInTheDocument();
+    expect(screen.getByText('@merkurov-art')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Привязать Art Engine' }));
+
+    await waitFor(() => {
+      const calls = fetchMock.mock.calls as unknown as FetchCall[];
+      const bindCall = calls.find(
+        ([url, init]) => String(url) === '/api/admin/youtube/channels' && init?.method === 'POST'
+      );
+      expect(JSON.parse(String(bindCall?.[1]?.body))).toMatchObject({
+        action: 'bind',
+        project: 'art-engine',
+        channelRecordId: 'channel-record-1',
+      });
     });
   });
 });

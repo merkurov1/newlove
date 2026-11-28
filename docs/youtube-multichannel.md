@@ -5,6 +5,22 @@ is already present in production. Code and tests live in this PR; production
 OAuth consent still requires the owner to sign in interactively. No production
 migration is re-applied and no real metadata write is performed by this change.
 
+## Verification status
+
+- Repository code, typecheck, lint and targeted tests are verified locally.
+- Production migration `20261126140616`, UUID `owner_id`, RLS and indexes were
+  verified directly on 2026-11-26 (recorded in the task) and are not modified
+  here.
+- Production Vercel environment values and the live Google consent round-trip
+  cannot be read from this workspace without owner credentials. Use the
+  `config` diagnostics block on `/admin/pierrot/youtube` to confirm variable
+  presence names and the exact redirect URI without exposing values.
+- A connection is considered verified only after a real callback returns
+  `youtube_channels=connected`, `youtube_oauth_connections` has a row for that
+  Google account, `youtube_channels` has its channels and
+  `youtube_project_bindings` has the intended project rows. A consent redirect
+  or a READY preview alone is not success.
+
 ## What already existed (audit)
 
 The repository already had a working single-channel YouTube stack:
@@ -76,6 +92,50 @@ Refresh tokens are opened only inside `lib/youtube/channels.ts`. Access tokens
 are cached in-process until shortly before expiry. Rotated refresh tokens are
 re-sealed and stored. Disconnect revokes the Google grant (best effort), clears
 the sealed token, marks channels disconnected and deactivates bindings.
+
+### Admin authentication resilience
+
+`/api/*` is excluded from the proxy/middleware matcher, so a route handler can
+receive an expired Supabase access-token cookie that middleware would otherwise
+refresh. `lib/serverAuth.ts` now asks the auth client for the session once
+(which refreshes and rewrites the cookie through the server adapter) and then
+re-verifies with `getUser()` before rejecting the request.
+
+Denials are logged distinctly as `reason=user` (no verified session) and
+`reason=admin` (signed in, role is not ADMIN), which makes the production 401
+observable without logging identities. The admin client also sends the current
+access token as a Bearer credential and retries once after a refresh.
+
+The status payload exposes `auth: { method, role }` after a successful check.
+The UI shows the server-verified method (`cookie` or `bearer`) next to the
+administrator email, and the 401 state explains how to sign in again.
+
+### Binding suggestions and diagnostics
+
+`GET /api/admin/youtube/channels` returns `suggestedBindings`: a read-only
+comparison of the three owner-approved default handles with the channels that
+are actually connected to this owner.
+
+| Project | Default handle |
+| --- | --- |
+| Art Engine | `@merkurov-art` |
+| UNFRAMED | `@unframed-tv` |
+| Pierrot | `@unframed-tv` |
+| Heart & Angel | `@heartandangel` |
+
+Matching is case-insensitive and tolerates a missing `@`. A suggestion is
+`bound`, `available`, `missing`, or `ambiguous` (two connected channels share a
+handle, so the UI refuses to guess). The UI offers a one-click bind only for an
+exact `available` match; discovery never writes a binding by itself.
+
+The same payload carries safe runtime diagnostics under `config`:
+`googleOAuthConfigured`, `googleOAuthMissing` (names only), `redirectUri`,
+`callbackPath`, `dedicatedCallbackConfigured`, `serviceRoleConfigured`,
+`supabaseUrlConfigured` and `tokenEncryptionConfigured`. Values of secrets are
+never returned or logged. The callback writes structured `stage`/`reason`
+lines (`token_exchange_failed`, `missing_scopes`, `save_failed`,
+`channels_failed`, `connected`, …) with counts only — never auth codes, tokens,
+emails or payload contents.
 
 ### Analytics
 
@@ -200,6 +260,10 @@ YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
 - `lib/youtube/__tests__/channelAnalytics.test.ts` — real metrics, unavailable
   impressions without zeros, cache/fresh behaviour, rebound-channel cache
   isolation, unbound project.
+- `lib/youtube/__tests__/bindingSuggestions.test.ts` — exact handle-to-project
+  mapping (`@merkurov-art`, `@unframed-tv` shared by UNFRAMED and Pierrot,
+  `@heartandangel`), case-insensitive normalisation, inactive-channel
+  exclusion and ambiguous duplicates.
 - `lib/youtube/__tests__/channelsCallback.test.ts` — signed state/nonce,
   scope validation (including broader-scope aliases), identity failure and
   discovery failure diagnostics without token leakage.

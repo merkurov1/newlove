@@ -13,6 +13,7 @@ import {
   listYouTubeChannels,
   loadConnectionAccessToken,
   replaceConnectionChannels,
+  suggestProjectBindings,
   unbindProject,
   YOUTUBE_PROJECTS,
   type YouTubeProjectSlug,
@@ -21,6 +22,7 @@ import {
   YOUTUBE_CHANNEL_CONNECTION_SCOPES,
   getYouTubeChannelsRedirectUri,
 } from '@/lib/youtube/config';
+import { getGoogleOAuthConfig } from '@/lib/analytics/website/config';
 import { YouTubeError } from '@/lib/youtube/types';
 
 export const runtime = 'nodejs';
@@ -68,18 +70,77 @@ function errorResponse(error: unknown) {
   );
 }
 
+/**
+ * Safe runtime diagnostics. Only booleans and environment variable *names*
+ * are exposed; values (client secret, service key, encryption key) never leave
+ * the server. This lets the owner see whether production has the pieces the
+ * OAuth flow needs without reading Vercel's secret store from a terminal.
+ */
+function runtimeConfig() {
+  const oauth = getGoogleOAuthConfig();
+  const redirectUri = getYouTubeChannelsRedirectUri();
+  let callbackPath: string | null = null;
+
+  try {
+    callbackPath = new URL(redirectUri).pathname;
+  } catch {
+    callbackPath = null;
+  }
+
+  return {
+    googleOAuthConfigured: oauth.configured,
+    googleOAuthMissing: oauth.missing,
+    serviceRoleConfigured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    supabaseUrlConfigured: Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
+    ),
+    tokenEncryptionConfigured: Boolean(
+      process.env.ANALYTICS_SYNC_SECRET ||
+        process.env.CRON_SECRET ||
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+    ),
+    redirectUri,
+    callbackPath,
+    dedicatedCallbackConfigured: Boolean(process.env.YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI),
+    scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
+  };
+}
+
 export async function GET(request: Request) {
   let user;
   try {
     user = await requireAdminFromRequest(request);
   } catch (error) {
     if (!isAuthenticationError(error)) {
-      console.error('[admin-auth]', error);
-      throw error;
+      console.error('[admin-auth] youtube-channels status failed', error);
+      return json(
+        {
+          ok: false,
+          error: 'auth_backend_error',
+          retryable: true,
+          message:
+            'Не удалось проверить сессию администратора из-за серверной ошибки. Повторите запрос.',
+        },
+        500
+      );
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return json(
+      {
+        ok: false,
+        error: 'unauthorized',
+        code: 'unauthorized',
+        message:
+          'Сессия администратора не подтверждена. Войдите заново; данные подключений не затронуты.',
+      },
+      401
+    );
   }
+
+  const auth = {
+    method: user.authMethod ?? 'cookie',
+    role: user.role,
+  };
 
   const url = new URL(request.url);
   const rawProject = url.searchParams.get('project');
@@ -118,15 +179,16 @@ export async function GET(request: Request) {
       schemaReady: false,
       schema,
       viewer,
+      auth,
       project,
       projects: YOUTUBE_PROJECTS,
       connections: [],
       channels: [],
       bindings: [],
       activeByProject: {},
+      suggestedBindings: [],
       config: {
-        scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
-        redirectUri: getYouTubeChannelsRedirectUri(),
+        ...runtimeConfig(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       },
       message:
@@ -161,6 +223,7 @@ export async function GET(request: Request) {
       schemaReady: true,
       schema,
       viewer,
+      auth,
       project,
       projects: YOUTUBE_PROJECTS,
       connections,
@@ -168,9 +231,9 @@ export async function GET(request: Request) {
       bindings,
       activeByProject,
       active: activeByProject[project] ?? null,
+      suggestedBindings: suggestProjectBindings(channels, bindings),
       config: {
-        scopes: [...YOUTUBE_CHANNEL_CONNECTION_SCOPES],
-        redirectUri: getYouTubeChannelsRedirectUri(),
+        ...runtimeConfig(),
         connectUrl: `/api/admin/youtube/channels/connect?project=${project}`,
       },
     });
@@ -206,11 +269,29 @@ export async function POST(request: Request) {
     user = await requireAdminFromRequest(request);
   } catch (error) {
     if (!isAuthenticationError(error)) {
-      console.error('[admin-auth]', error);
-      throw error;
+      console.error('[admin-auth] youtube-channels action failed', error);
+      return json(
+        {
+          ok: false,
+          error: 'auth_backend_error',
+          retryable: true,
+          message:
+            'Не удалось проверить сессию администратора из-за серверной ошибки. Повторите действие.',
+        },
+        500
+      );
     }
 
-    return json({ error: 'Unauthorized' }, 401);
+    return json(
+      {
+        ok: false,
+        error: 'unauthorized',
+        code: 'unauthorized',
+        message:
+          'Сессия администратора не подтверждена. Войдите заново; действие не выполнено.',
+      },
+      401
+    );
   }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;

@@ -44,6 +44,113 @@ export function isYouTubeProjectSlug(value: unknown): value is YouTubeProjectSlu
   return typeof value === 'string' && PROJECT_SLUGS.has(value);
 }
 
+/**
+ * Normalises a YouTube custom URL so `@Name`, `@name` and `name` match.
+ * Handles are the only stable hint we have for the owner's intended default
+ * channel; a display title is never used as a binding signal.
+ */
+export function normalizeYouTubeHandle(value: string | null | undefined): string | null {
+  const trimmed = (value ?? '').trim().toLowerCase().replace(/\/+$/, '');
+  if (!trimmed) return null;
+  return trimmed.startsWith('@') ? trimmed : `@${trimmed}`;
+}
+
+export type ProjectBindingSuggestionState = 'bound' | 'available' | 'missing' | 'ambiguous';
+
+export type ProjectBindingSuggestion = {
+  projectSlug: YouTubeProjectSlug;
+  projectName: string;
+  handle: string | null;
+  state: ProjectBindingSuggestionState;
+  channelRecordId: string | null;
+  channelId: string | null;
+  channelTitle: string | null;
+  connectionId: string | null;
+  candidateCount: number;
+};
+
+/**
+ * Builds read-only binding suggestions for the three owner-approved handle
+ * mappings. It never writes a binding: discovery can return Brand Accounts
+ * with similar names, so the owner still confirms the selection explicitly.
+ */
+export function suggestProjectBindings(
+  channels: Pick<
+    YouTubeChannelRecord,
+    'id' | 'connectionId' | 'channelId' | 'title' | 'handle' | 'status'
+  >[],
+  bindings: Pick<YouTubeProjectBinding, 'channelRecordId' | 'projectSlug' | 'isActive'>[]
+): ProjectBindingSuggestion[] {
+  const activeChannels = channels.filter((channel) => channel.status === 'active');
+
+  return YOUTUBE_PROJECTS.map((project) => {
+    const base = {
+      projectSlug: project.slug,
+      projectName: project.name,
+      handle: project.defaultChannelHandle,
+    };
+    const bound = bindings.find(
+      (binding) => binding.projectSlug === project.slug && binding.isActive
+    );
+    const boundChannel = bound
+      ? activeChannels.find((channel) => channel.id === bound.channelRecordId)
+      : null;
+
+    if (boundChannel) {
+      return {
+        ...base,
+        state: 'bound' as const,
+        channelRecordId: boundChannel.id,
+        channelId: boundChannel.channelId,
+        channelTitle: boundChannel.title,
+        connectionId: boundChannel.connectionId,
+        candidateCount: 1,
+      };
+    }
+
+    const wanted = normalizeYouTubeHandle(project.defaultChannelHandle);
+    const candidates = wanted
+      ? activeChannels.filter((channel) => normalizeYouTubeHandle(channel.handle) === wanted)
+      : null;
+
+    if (!candidates || candidates.length === 0) {
+      return {
+        ...base,
+        state: 'missing' as const,
+        channelRecordId: null,
+        channelId: null,
+        channelTitle: null,
+        connectionId: null,
+        candidateCount: 0,
+      };
+    }
+
+    if (candidates.length > 1) {
+      return {
+        ...base,
+        state: 'ambiguous' as const,
+        channelRecordId: null,
+        channelId: null,
+        channelTitle: null,
+        connectionId: null,
+        candidateCount: candidates.length,
+      };
+    }
+
+    const match = candidates[0];
+
+    return {
+      ...base,
+      state: 'available' as const,
+      channelRecordId: match.id,
+      channelId: match.channelId,
+      channelTitle: match.title,
+      connectionId: match.connectionId,
+      candidateCount: 1,
+    };
+  });
+}
+
 export function youTubeProjectName(slug: string): string {
   return YOUTUBE_PROJECTS.find((project) => project.slug === slug)?.name ?? slug;
 }

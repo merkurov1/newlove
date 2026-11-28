@@ -11,6 +11,7 @@ import {
 } from '@/lib/analytics/website/providers/oauth';
 import { sealSecret, verifyState } from '@/lib/analytics/website/tokenCrypto';
 import { getServerSupabaseClient, requireAdminFromRequest } from '@/lib/serverAuth';
+import { isAuthenticationError } from '@/lib/auth/errors';
 import { listMyChannels } from '@/lib/youtube/api';
 import {
   isYouTubeProjectSlug,
@@ -64,6 +65,14 @@ function exchangeReason(error: unknown): string {
   return 'token_exchange_failed';
 }
 
+/**
+ * Structured, safe callback diagnostics. Only stage names, reason codes and
+ * counts are logged: never codes, tokens, emails or other payload values.
+ */
+function logStage(stage: string, detail: Record<string, string | number | boolean> = {}): void {
+  console.info('[youtube-channels-callback]', stage, detail);
+}
+
 export async function handleYouTubeChannelsCallback(request: Request) {
   const url = new URL(request.url);
   const error = url.searchParams.get('error');
@@ -73,19 +82,31 @@ export async function handleYouTubeChannelsCallback(request: Request) {
     state && isYouTubeProjectSlug(state.project) ? state.project : 'art-engine';
 
   if (error) {
+    logStage('google_error', { reason: error.slice(0, 80) });
     return redirect(request, { youtube_channels: 'error', reason: error.slice(0, 80) }, stateProject);
   }
 
   let user;
   try {
     user = await requireAdminFromRequest(request);
-  } catch {
+  } catch (authError) {
+    if (!isAuthenticationError(authError)) {
+      console.error('[youtube-channels-callback] auth backend failed', authError);
+      return redirect(
+        request,
+        { youtube_channels: 'error', reason: 'auth_backend_error' },
+        stateProject
+      );
+    }
+
+    logStage('auth_denied', { reason: 'unauthorized' });
     return redirect(request, { youtube_channels: 'error', reason: 'unauthorized' }, stateProject);
   }
 
   const code = url.searchParams.get('code');
 
   if (!code || !stateValue) {
+    logStage('missing_code_or_state', { hasCode: Boolean(code), hasState: Boolean(stateValue) });
     return redirect(
       request,
       { youtube_channels: 'error', reason: 'missing_code_or_state' },
@@ -104,6 +125,14 @@ export async function handleYouTubeChannelsCallback(request: Request) {
     !cookieNonce ||
     cookieNonce !== state.nonce
   ) {
+    logStage('invalid_state', {
+      hasState: Boolean(state),
+      purposeMatches: state?.purpose === 'youtube_channels',
+      uidMatches: state?.uid === user.id,
+      expired: Boolean(state && state.exp < Date.now()),
+      hasNonceCookie: Boolean(cookieNonce),
+      nonceMatches: Boolean(state && cookieNonce === state.nonce),
+    });
     return redirect(request, { youtube_channels: 'error', reason: 'invalid_state' }, stateProject);
   }
 
@@ -115,17 +144,16 @@ export async function handleYouTubeChannelsCallback(request: Request) {
       redirectUri: getYouTubeChannelsRedirectUri(),
     });
   } catch (exchangeError) {
-    return redirect(
-      request,
-      { youtube_channels: 'error', reason: exchangeReason(exchangeError) },
-      project
-    );
+    const reason = exchangeReason(exchangeError);
+    logStage('token_exchange_failed', { reason });
+    return redirect(request, { youtube_channels: 'error', reason }, project);
   }
 
   const grantedScopes = (tokens.scope || '').split(' ').filter(Boolean);
   const missingScopes = missingYouTubeScopes(grantedScopes, REQUIRED_SCOPES);
 
   if (missingScopes.length > 0) {
+    logStage('missing_scopes', { count: missingScopes.length });
     return redirect(
       request,
       {
@@ -141,6 +169,7 @@ export async function handleYouTubeChannelsCallback(request: Request) {
   try {
     identity = await fetchGoogleUserInfo(tokens.accessToken);
   } catch {
+    logStage('identity_failed', { reason: 'google_identity_unavailable' });
     return redirect(
       request,
       { youtube_channels: 'error', reason: 'google_identity_unavailable' },
@@ -149,6 +178,7 @@ export async function handleYouTubeChannelsCallback(request: Request) {
   }
 
   if (!identity.email && !identity.subject) {
+    logStage('identity_missing', { hasEmail: false, hasSubject: false });
     return redirect(
       request,
       { youtube_channels: 'error', reason: 'google_identity_unavailable' },
@@ -160,6 +190,7 @@ export async function handleYouTubeChannelsCallback(request: Request) {
   try {
     sealed = tokens.refreshToken ? sealSecret(tokens.refreshToken) : null;
   } catch {
+    logStage('encryption_failed', { reason: 'token_encryption_unavailable' });
     return redirect(
       request,
       { youtube_channels: 'error', reason: 'token_encryption_unavailable' },
@@ -180,11 +211,9 @@ export async function handleYouTubeChannelsCallback(request: Request) {
       sealed,
     });
   } catch (saveError) {
-    return redirect(
-      request,
-      { youtube_channels: 'error', reason: exchangeReason(saveError) },
-      project
-    );
+    const reason = exchangeReason(saveError);
+    logStage('save_failed', { reason });
+    return redirect(request, { youtube_channels: 'error', reason }, project);
   }
 
   // One Google account may expose several channels, including Brand Accounts.
@@ -198,16 +227,27 @@ export async function handleYouTubeChannelsCallback(request: Request) {
       channels: channels.channels,
     });
   } catch (channelError) {
+    const reason = exchangeReason(channelError);
+    logStage('channels_failed', {
+      reason,
+      accountSaved: true,
+    });
     return redirect(
       request,
       {
         youtube_channels: 'channels_failed',
-        reason: exchangeReason(channelError),
+        reason,
         account: connection.googleAccountEmail,
       },
       project
     );
   }
+
+  logStage('connected', {
+    channels: channels.channels.length,
+    truncated: channels.truncated,
+    hasRefreshToken: Boolean(tokens.refreshToken),
+  });
 
   const response = redirect(
     request,

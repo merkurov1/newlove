@@ -55,6 +55,7 @@ function client({
   return {
     auth: {
       getUser: jest.fn(async () => ({ data: { user }, error: authError })),
+      getSession: jest.fn(async () => ({ data: { session: null }, error: null })),
     },
     from: jest.fn(() => ({
       select: () => ({
@@ -99,11 +100,56 @@ describe('serverAuth error classification', () => {
     expect(logger.logSecurityEvent).toHaveBeenCalledWith(
       'auth_denied',
       'low',
-      expect.objectContaining({ reason: 'admin' })
+      expect.objectContaining({ reason: 'user' })
     );
     // Expected denials are security events, not application crashes.
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
+  });
+
+  it('refreshes an expired route-handler cookie once and verifies the admin again', async () => {
+    let userCalls = 0;
+    const refreshing = {
+      auth: {
+        getUser: jest.fn(async () => {
+          userCalls += 1;
+          return userCalls === 1
+            ? { data: { user: null }, error: { message: 'JWT expired' } }
+            : {
+                data: { user: { id: 'owner-1', email: 'owner@example.com' } },
+                error: null,
+              };
+        }),
+        getSession: jest.fn(async () => ({
+          data: { session: { access_token: 'refreshed-token' } },
+          error: null,
+        })),
+      },
+      from: jest.fn(() => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: { id: 'owner-1', role: 'ADMIN' },
+              error: null,
+            }),
+          }),
+        }),
+      })),
+    };
+
+    supabaseServer.createClient.mockResolvedValueOnce(refreshing);
+
+    await expect(
+      requireAdminFromRequest(new Request('http://localhost/api/admin/youtube/channels'))
+    ).resolves.toMatchObject({
+      id: 'owner-1',
+      role: 'ADMIN',
+      authMethod: 'cookie',
+    });
+
+    expect(refreshing.auth.getSession).toHaveBeenCalledTimes(1);
+    expect(refreshing.auth.getUser).toHaveBeenCalledTimes(2);
+    expect(logger.logSecurityEvent).not.toHaveBeenCalled();
   });
 
   it('rejects an authenticated non-admin as an authorization denial', async () => {
@@ -118,6 +164,11 @@ describe('serverAuth error classification', () => {
 
     expect(error).toBeInstanceOf(AuthenticationError);
     expect(isAuthenticationError(error)).toBe(true);
+    expect(logger.logSecurityEvent).toHaveBeenCalledWith(
+      'auth_denied',
+      'low',
+      expect.objectContaining({ reason: 'admin' })
+    );
   });
 
   it('does not classify a profile database failure as authentication', async () => {

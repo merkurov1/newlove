@@ -16,12 +16,16 @@ type ServerAuthOptions = {
   useServiceRole?: boolean;
 };
 
+export type AuthMethod = 'cookie' | 'bearer' | 'telegram' | 'secret';
+
 export interface AuthenticatedUser {
   id: string;
   email?: string;
   role: 'USER' | 'ADMIN';
   profile: any;
   user?: any;
+  /** How this request proved its identity. Safe to expose as a diagnostic. */
+  authMethod?: AuthMethod;
 }
 
 /**
@@ -119,10 +123,30 @@ function verifyTelegramWebAppData(
 async function loadCurrentUser(): Promise<AuthenticatedUser | null> {
   const supabase = await createClient();
 
-  const {
+  let {
     data: { user },
     error,
   } = await supabase.auth.getUser();
+
+  // Route handlers under /api are excluded from the proxy/middleware matcher,
+  // so an expired access-token cookie is never refreshed before they run.
+  // `getUser()` validates the token but does not refresh it. Ask the auth
+  // client for the session once (which refreshes and rewrites the cookie via
+  // the server adapter), then verify the refreshed token again.
+  if ((error || !user) && typeof supabase.auth.getSession === 'function') {
+    try {
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (!sessionError && sessionData?.session) {
+        const retry = await supabase.auth.getUser();
+        user = retry.data.user;
+        error = retry.error;
+      }
+    } catch {
+      // A refresh failure is just an unauthenticated request; the caller
+      // classifies it as a 401 rather than crashing the route.
+    }
+  }
 
   if (error || !user) {
     return null;
@@ -150,6 +174,7 @@ async function loadCurrentUser(): Promise<AuthenticatedUser | null> {
     role: profile?.role === 'ADMIN' ? 'ADMIN' : 'USER',
     profile,
     user,
+    authMethod: 'cookie',
   };
 }
 
@@ -225,7 +250,15 @@ async function requireAdminWithContext(
 ): Promise<AuthenticatedUser> {
   const user = await loadRequiredUser();
 
-  if (!user || user.role !== 'ADMIN') {
+  if (!user) {
+    // No verified session at all. Keep this distinct from a signed-in
+    // non-admin so production logs can tell an expired cookie from a role
+    // problem without exposing identity.
+    logAuthDenied('user', req);
+    throw new AuthenticationError('Unauthorized');
+  }
+
+  if (user.role !== 'ADMIN') {
     logAuthDenied('admin', req);
     throw new AuthenticationError('Unauthorized: Admin access required');
   }
@@ -266,6 +299,7 @@ export async function requireAdminFromRequest(
       email: 'admin@merkurov.love',
       role: 'ADMIN',
       profile: { role: 'ADMIN' },
+      authMethod: 'secret',
     };
   }
 
@@ -284,6 +318,7 @@ export async function requireAdminFromRequest(
           role: 'ADMIN',
           telegram_id: telegramUser.userId,
         },
+        authMethod: 'telegram',
       };
     }
   }
@@ -356,6 +391,7 @@ export async function requireAdminFromRequest(
       role: 'ADMIN',
       profile,
       user,
+      authMethod: 'bearer',
     };
   }
 
