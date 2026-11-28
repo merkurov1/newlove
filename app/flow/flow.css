@@ -614,6 +614,139 @@ html[data-flow-reader-theme='dark'] .flow-post-page--reader {
   color: var(--flow-reader-muted);
 }
 
+/* ---------------------------------------------------------------
+ * Pierrot's reading note: a second authorial layer, not a widget.
+ * It inherits the publication's serif, measure and reading rhythm and
+ * keeps only a thin rule plus the portrait as its visual accent.
+ * ------------------------------------------------------------- */
+
+.flow-pierrot {
+  min-width: 0;
+  margin-top: clamp(2.5rem, 1.6rem + 2.2vw, 3.5rem);
+  padding-top: clamp(1.5rem, 1rem + 1.2vw, 2rem);
+  border-top: 1px solid var(--flow-reader-line, var(--flow-line));
+}
+
+.flow-pierrot__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1.15rem;
+}
+
+.flow-pierrot__identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.flow-pierrot__avatar {
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--flow-reader-line, var(--flow-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--flow-reader-line, var(--flow-line)) 45%, transparent);
+}
+
+.flow-pierrot__avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.flow-pierrot__name {
+  min-width: 0;
+  font-family: var(--flow-serif);
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-pierrot__lang {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.1rem;
+  padding: 0.15rem;
+  border: 1px solid var(--flow-reader-line, var(--flow-line));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--flow-reader-bg, var(--flow-paper)) 86%, transparent);
+  font-family: var(--flow-mono);
+}
+
+.flow-pierrot__lang button {
+  display: inline-flex;
+  min-width: 2.35rem;
+  min-height: 1.9rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.55rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--flow-reader-muted, var(--flow-muted));
+  font-family: inherit;
+  font-size: 0.6rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  line-height: 1;
+  text-transform: uppercase;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.flow-pierrot__lang button:hover {
+  color: var(--flow-reader-ink, var(--flow-ink));
+}
+
+.flow-pierrot__lang button[aria-pressed='true'] {
+  background: var(--flow-reader-ink, var(--flow-ink));
+  color: var(--flow-reader-bg, var(--flow-paper));
+}
+
+.flow-pierrot__lang button:focus-visible {
+  outline: 2px solid var(--flow-reader-ink, var(--flow-ink));
+  outline-offset: 2px;
+}
+
+.flow-pierrot__body {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--flow-reader-body, var(--flow-body));
+  font-family: var(--flow-serif);
+  font-size: calc(1.125rem * var(--flow-reader-font-scale, 1));
+  line-height: var(--flow-reader-line-height, 1.75);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .flow-pierrot__body {
+    font-size: calc(1.25rem * var(--flow-reader-font-scale, 1));
+  }
+}
+
+.flow-pierrot__body > :first-child {
+  margin-top: 0;
+}
+
+.flow-pierrot__body > :last-child {
+  margin-bottom: 0;
+}
+
+.flow-pierrot__body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+}
+
 .flow-post-page--reader .flow-share {
   color: var(--flow-reader-muted);
 }
@@ -1612,6 +1745,7 @@ body.telegram-app .flow-viewer {
   .flow-reader__sources a,
   .flow-reader__control,
   .flow-reader__footer,
+  .flow-pierrot__lang button,
   .flow-share__button,
   .flow-reader-settings__theme,
   .flow-reader-settings__step {

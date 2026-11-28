@@ -33,6 +33,36 @@ const FLOW_DETAIL_ITEMS = {
     bluesky_uri: null,
     telegram_message_id: null,
   },
+  // An image-only entry: the reader must not attach the text comment to it.
+  'photo-study': {
+    id: 'flow-photo-detail-1',
+    title: 'A photo study',
+    slug: 'photo-study',
+    lang: 'en',
+    type: 'photo',
+    status: 'published',
+    visibility: 'public',
+    body_md: '',
+    source_url: null,
+    ai_allowed: true,
+    rag_allowed: true,
+    metadata: {
+      images: [
+        {
+          url: 'https://images.flow.test/photo-study.jpg',
+          alt: 'A pale study of light on paper',
+          caption: 'Photo study',
+          width: 1200,
+          height: 900,
+        },
+      ],
+    },
+    published_at: '2026-11-21T11:00:00.000Z',
+    created_at: '2026-11-21T11:00:00.000Z',
+    updated_at: '2026-11-21T11:00:00.000Z',
+    bluesky_uri: null,
+    telegram_message_id: null,
+  },
   // A longer, image-led entry for reader, progress and gallery coverage.
   'reader-with-images': {
     id: 'flow-reader-detail-1',
@@ -87,6 +117,71 @@ const FLOW_DETAIL_ITEMS = {
   },
 };
 
+const FLOW_CONTEXTS = {
+  'flow-navigation-detail-1': {
+    id: 'flow-context-1',
+    item_id: 'flow-navigation-detail-1',
+    content: [
+      '[EN] The quiet index works as a **reading discipline**: naming what stays in view and what recedes. It is less an archive than a *tempo*.',
+      '',
+      '> Attention becomes architecture when it is held long enough.',
+      '',
+      '- A note is a decision.',
+      '- Silence is part of the index.',
+      '',
+      '| Layer | Function |',
+      '| --- | --- |',
+      '| Page | Keeps the hour |',
+      '| Index | Keeps the order |',
+      '',
+      '`Flow` is the surface, and [the index](https://example.com/quiet-index) is its edge.',
+      '',
+      '```text',
+      "index.keep('the hour')",
+      '```',
+      '',
+      '## A second reading',
+      '',
+      'The entry returns to the same room with a different light.',
+      '',
+      '[RU] Тихий индекс работает как **дисциплина чтения**: он называет то, что остаётся в поле зрения, и то, что отступает. Это не столько архив, сколько *темп*.',
+      '',
+      '> Внимание становится архитектурой, когда его удерживают достаточно долго.',
+      '',
+      '- Заметка — это решение.',
+      '- Тишина — часть индекса.',
+      '',
+      '| Слой | Функция |',
+      '| --- | --- |',
+      '| Страница | Хранит час |',
+      '| Индекс | Хранит порядок |',
+      '',
+      '`Flow` — это поверхность, а [индекс](https://example.com/quiet-index) — её край.',
+      '',
+      '```text',
+      "index.keep('the hour')",
+      '```',
+      '',
+      '## Второе чтение',
+      '',
+      'Запись возвращается в ту же комнату при другом свете.',
+    ].join('\n'),
+    model: 'test',
+    provider: 'test',
+    status: 'ready',
+    generated_at: '2026-11-24T12:00:00.000Z',
+  },
+  'flow-photo-detail-1': {
+    id: 'flow-context-photo-1',
+    item_id: 'flow-photo-detail-1',
+    content: '[EN] A comment that must stay hidden on a photo item.',
+    model: 'test',
+    provider: 'test',
+    status: 'ready',
+    generated_at: '2026-11-21T12:00:00.000Z',
+  },
+};
+
 const server = http.createServer((request, response) => {
   response.setHeader('Access-Control-Allow-Origin', '*');
   response.setHeader('Access-Control-Allow-Headers', '*');
@@ -108,13 +203,29 @@ const server = http.createServer((request, response) => {
 
   if (request.url?.includes('/rest/v1/')) {
     const url = new URL(request.url, 'http://127.0.0.1');
+    const wantsObject = String(request.headers.accept || '').includes(
+      'application/vnd.pgrst.object+json'
+    );
+
+    const sendSingleOrEmpty = (row) => {
+      if (!row) {
+        response.writeHead(406);
+        response.end(
+          JSON.stringify({
+            code: 'PGRST116',
+            message: 'JSON object requested, multiple (or no) rows returned',
+          })
+        );
+        return;
+      }
+
+      response.writeHead(200);
+      response.end(JSON.stringify(row));
+    };
 
     if (url.pathname.endsWith('/rest/v1/letters')) {
       const idParam = url.searchParams.get('id') ?? '';
       const id = idParam.startsWith('eq.') ? idParam.slice(3) : '';
-      const wantsObject = String(request.headers.accept || '').includes(
-        'application/vnd.pgrst.object+json'
-      );
 
       const rows = id ? LETTERS.filter((letter) => String(letter.id) === id) : LETTERS;
 
@@ -130,19 +241,43 @@ const server = http.createServer((request, response) => {
       return;
     }
 
+    if (url.pathname.endsWith('/rest/v1/flow_ai_context')) {
+      const itemParam = url.searchParams.get('item_id') ?? '';
+      const itemId = itemParam.startsWith('eq.') ? itemParam.slice(3) : '';
+      const context = FLOW_CONTEXTS[itemId];
+
+      if (wantsObject) {
+        sendSingleOrEmpty(context);
+        return;
+      }
+
+      response.writeHead(200);
+      response.end(JSON.stringify(context ? [context] : []));
+      return;
+    }
+
     if (url.pathname.endsWith('/rest/v1/items')) {
       const slugParam = url.searchParams.get('slug') ?? '';
       const slug = slugParam.startsWith('eq.') ? slugParam.slice(3) : '';
       const item = FLOW_DETAIL_ITEMS[slug];
 
       if (item) {
+        if (wantsObject) {
+          sendSingleOrEmpty(item);
+          return;
+        }
+
         response.writeHead(200);
         response.end(JSON.stringify([item]));
         return;
       }
 
-      // Contextual neighbours for the reader footer.
-      const publishedParam = url.searchParams.get('published_at') ?? '';
+      // Contextual neighbours for the reader footer. The query also carries a
+      // `not.is.null` condition, so pick the ordered comparison explicitly.
+      const publishedParam =
+        url.searchParams
+          .getAll('published_at')
+          .find((value) => value.startsWith('gt.') || value.startsWith('lt.')) ?? '';
       const comparison = publishedParam.startsWith('gt.')
         ? 'gt'
         : publishedParam.startsWith('lt.')
@@ -161,6 +296,11 @@ const server = http.createServer((request, response) => {
             slug: entry.slug,
             published_at: entry.published_at,
           }));
+
+        if (wantsObject) {
+          sendSingleOrEmpty(neighbours[0]);
+          return;
+        }
 
         response.writeHead(200);
         response.end(JSON.stringify(neighbours.slice(0, 1)));

@@ -713,6 +713,10 @@ export default async function FlowItemPage({ params }: PageProps) {
 
           <FlowHero content={content} headingIds={headingIds} />
 
+          {content.contentType !== 'photo' && (
+            <PierrotContextBlock context={context} defaultLang={content.language} />
+          )}
+
           <footer className="flow-reader__footer">
             <div className="flow-reader__share">
               <FlowShare
@@ -777,10 +781,6 @@ export default async function FlowItemPage({ params }: PageProps) {
 
             <FlowHomeScreenPrompt className="flow-home-screen--reader" />
           </footer>
-
-          {content.contentType !== 'photo' && (
-            <PierrotContextBlock context={context} defaultLang={content.language} />
-          )}
         </article>
       </div>
     </>
