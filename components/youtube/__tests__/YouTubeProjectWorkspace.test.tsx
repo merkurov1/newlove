@@ -295,6 +295,7 @@ describe('YouTube workspace multi-account states', () => {
       expect(connectUrl).toContain('select_account=true');
     });
 
+    const confirmSpy = jest.spyOn(window, 'confirm').mockReturnValue(true);
     const disconnectButtons = screen.getAllByRole('button', { name: 'Отозвать доступ' });
     fireEvent.click(disconnectButtons[1]);
 
@@ -304,6 +305,7 @@ describe('YouTube workspace multi-account states', () => {
         expect.objectContaining({ method: 'POST' })
       );
     });
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining('unframed@example.com'));
 
     const calls = fetchMock.mock.calls as unknown as FetchCall[];
     const disconnectCall = calls.find(
@@ -313,6 +315,59 @@ describe('YouTube workspace multi-account states', () => {
       action: 'disconnect',
       connectionId: 'connection-b',
     });
+  });
+
+  it('requires an explicit confirmation before revoking an account grant', async () => {
+    const fetchMock = installFetch('art-engine');
+    const confirmSpy = jest
+      .spyOn(window, 'confirm')
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+    const disconnectCalls = () =>
+      (fetchMock.mock.calls as unknown as FetchCall[]).filter(
+        ([url, init]) => String(url) === '/api/admin/youtube/channels' && init?.method === 'POST'
+      );
+
+    render(<YouTubeProjectWorkspace project="art-engine" />);
+
+    const disconnect = await screen.findByRole('button', { name: 'Отозвать доступ' });
+    fireEvent.click(disconnect);
+
+    await waitFor(() => expect(confirmSpy).toHaveBeenCalledTimes(1));
+    expect(disconnectCalls()).toHaveLength(0);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Отозвать доступ' }));
+
+    await waitFor(() => expect(disconnectCalls()).toHaveLength(1));
+    expect(JSON.parse(String(disconnectCalls()[0]?.[1]?.body))).toMatchObject({
+      action: 'disconnect',
+      connectionId: 'connection-1',
+    });
+  });
+
+  it('offers reconnect when a connected row has no stored refresh token', async () => {
+    const payload = statusPayload('art-engine');
+    payload.connections = [
+      {
+        ...payload.connections[0],
+        status: 'connected',
+        lastErrorCode: null,
+        hasRefreshToken: false,
+      },
+    ];
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === '/api/admin/youtube/channels?project=art-engine') {
+        return response(payload);
+      }
+      return response({ error: 'not_found' }, false, 404);
+    }) as unknown as typeof fetch;
+
+    render(<YouTubeProjectWorkspace project="art-engine" />);
+
+    expect(
+      await screen.findByRole('button', { name: 'Переподключить этот аккаунт' })
+    ).toBeEnabled();
+    expect(screen.getByText(/нет refresh token/)).toBeInTheDocument();
   });
 });
 

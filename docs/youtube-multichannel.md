@@ -1,9 +1,22 @@
 # YouTube multi-channel integration
 
 Status: additive migration `20261126140616` (youtube_multichannel_connections_and_bindings)
-is already present in production. Code and tests live in this PR; production
-OAuth consent still requires the owner to sign in interactively. No production
-migration is re-applied and no real metadata write is performed by this change.
+is already present in production and is the source of truth for the live schema.
+The task's production audit reports `owner_id` as `uuid`, RLS enabled and the
+expected indexes present; re-run the read-only verifier below to confirm the
+live state. This branch does not create, re-apply or modify a production
+migration and does not perform real metadata writes. Production OAuth consent
+still requires the owner to sign in interactively; the verification procedure
+below records that step separately.
+
+Reference only: PR #166 and task `5ae80438-6927-488f-b86b-49b36e62e7e5` are not
+merged or updated by this branch. The owner closes PR #166 manually after the
+production result is accepted.
+
+Audit finding (2026-11-28): current `main` already contains the multi-account /
+multi-channel implementation and its tests, merged from later attempts. This
+branch does not re-import the stale PR #166 head. It adds the missing production
+verification, safer reconnect/disconnect UI states and migration guardrails.
 
 ## What already existed (audit)
 
@@ -24,12 +37,12 @@ The repository already had a working single-channel YouTube stack:
 
 Two callback URIs already existed and remain separate:
 
-| Flow | Callback | Default |
-| --- | --- | --- |
-| Analytics/Google (GA4, GSC, legacy YouTube) | `/api/auth/google-analytics/callback` | `ANALYTICS_GOOGLE_REDIRECT_URI` |
-| Incremental YouTube management | `/api/auth/youtube-management/callback` | `YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI` |
-| New multi-channel OAuth (default) | reuses `/api/auth/youtube-management/callback` | same as management |
-| New multi-channel OAuth (optional dedicated) | `/api/auth/youtube-channels/callback` | `YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI` |
+| Flow                                         | Callback                                       | Default                                  |
+| -------------------------------------------- | ---------------------------------------------- | ---------------------------------------- |
+| Analytics/Google (GA4, GSC, legacy YouTube)  | `/api/auth/google-analytics/callback`          | `ANALYTICS_GOOGLE_REDIRECT_URI`          |
+| Incremental YouTube management               | `/api/auth/youtube-management/callback`        | `YOUTUBE_MANAGEMENT_GOOGLE_REDIRECT_URI` |
+| New multi-channel OAuth (default)            | reuses `/api/auth/youtube-management/callback` | same as management                       |
+| New multi-channel OAuth (optional dedicated) | `/api/auth/youtube-channels/callback`          | `YOUTUBE_CHANNELS_GOOGLE_REDIRECT_URI`   |
 
 The legacy analytics flow actually uses the first URI unless overridden. The
 new multi-channel flow reuses the already-registered management callback by
@@ -41,7 +54,15 @@ override and never changes the two existing grants.
 
 ### Entities
 
-`migrations/2026-12-15_youtube_multichannel.sql` (additive, prepared only):
+Reference file `migrations/2026-12-15_youtube_multichannel.sql` (additive,
+prepared only):
+
+> **Do not apply this file to production.** Production already has migration
+> `20261126140616` (`youtube_multichannel_connections_and_bindings`), which is
+> the source of truth. The dated file is retained only for a fresh
+> non-production environment and is not authoritative for the live schema.
+
+It describes:
 
 - `youtube_oauth_connections` — one Google OAuth grant per owner/account.
   Sealed refresh token columns only. RLS on, anon/authenticated revoked.
@@ -72,6 +93,13 @@ read-only fallback for historical analytics. Rollback:
 5. All returned channels are stored. The owner explicitly selects one and
    binds it to a project. Nothing is auto-bound.
 
+PKCE is not used by this flow. It is a confidential server-side OAuth client
+(client secret held only on the server) protected by a signed `state`, an
+httpOnly nonce cookie, a ten-minute expiry, and a callback that re-checks the
+admin session and `state.uid`. The nonce cookie is cleared after the callback.
+If PKCE is added later, it must be implemented in the shared OAuth helper and
+proved with a real production callback; a unit test alone is not enough.
+
 Refresh tokens are opened only inside `lib/youtube/channels.ts`. Access tokens
 are cached in-process until shortly before expiry. Rotated refresh tokens are
 re-sealed and stored. Disconnect revokes the Google grant (best effort), clears
@@ -88,8 +116,8 @@ the sealed token, marks channels disconnected and deactivates bindings.
   not support them, values stay `null` with an explicit reason — never `0`.
 - Top videos (25) and a daily series come from bounded Analytics queries.
 - At most four Analytics queries and one Data API title lookup per report.
-- In-process cache keyed by owner + project + active binding + channel record
-  + connection + period. Rebinding a project therefore cannot serve another
+- In-process cache keyed by owner, project, active binding, channel record,
+  connection and period. Rebinding a project therefore cannot serve another
   channel's cached report. Default TTL 300 seconds
   (`YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS`); `fresh=1` bypasses it.
 - The response includes period, timezone, fetched-at timestamp, API sources,
@@ -149,9 +177,10 @@ connections, discovery and project bindings stay in the dedicated workspace.
 4. Consent screen scopes: `openid`, `email`, `youtube.readonly`,
    `yt-analytics.readonly`, `youtube.upload`.
 5. Add the owner Google account as a test user while the app is unverified.
-6. Production already has the additive migration and UUID `owner_id` columns;
-   do not re-apply it. For a fresh non-production environment apply
-   `2026-12-15_youtube_multichannel.sql` first.
+6. Production already has migration `20261126140616` and UUID `owner_id`
+   columns; do not re-apply it. For a fresh non-production environment only,
+   the dated reference `2026-12-15_youtube_multichannel.sql` may be used. Never
+   apply that dated file to production.
 
 Optional environment overrides:
 
@@ -161,25 +190,73 @@ YOUTUBE_ANALYTICS_CACHE_TTL_SECONDS=300
 YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
 ```
 
-## Manual acceptance sequence
+## Production verification (read-only)
 
-1. Production migration is already applied; apply the additive migration only
-   in a fresh non-production environment.
-2. Sign in as the owner, open Art Engine, click «Подключить Google-аккаунт».
-3. Choose `Merkurov@gmail.com`, grant the scopes, confirm `@merkurov-art` is
-   listed and bind it to Art Engine.
-4. Compare analytics with YouTube Studio, allowing the 2-day API delay; check
+`scripts/youtube/verify-multichannel-production.mjs` inspects the live schema
+and state without selecting any token column. It prints masked account emails
+and `token_ciphertext IS NOT NULL` booleans only.
+
+Prerequisites: a Postgres connection string in `DATABASE_URL` (or
+`POSTGRES_URL` / `SUPABASE_DB_URL`), supplied through an untracked env file.
+Never commit it and never paste its value into a PR, report or chat.
+
+```bash
+node --env-file=.env.production.local scripts/youtube/verify-multichannel-production.mjs
+node --env-file=.env.production.local scripts/youtube/verify-multichannel-production.mjs --json
+node scripts/youtube/verify-multichannel-production.mjs --self-test
+```
+
+It checks:
+
+- the four tables and every required column;
+- `owner_id` is `uuid` on connections, channels and bindings;
+- unique keys and the partial `WHERE is_active` binding index;
+- RLS is enabled and `anon` / `authenticated` keep no table privileges;
+- connection, channel and active-binding rows, with masked emails and token
+  presence booleans only;
+- the required mapping `art-engine → @merkurov-art`,
+  `unframed → @unframed-tv`, `pierrot → @unframed-tv`,
+  `heart-and-angel → @heartandangel`;
+- at least two independent connections, all healthy and with a refresh token.
+
+Exit code `0` means schema and state accepted, `1` means a check failed, `2`
+means the database URL is missing or the connection failed. `--self-test` runs
+the pure checks without a database and is safe in CI. Override the expected
+mapping with
+`--expect=art-engine:@merkurov-art,unframed:@unframed-tv,pierrot:@unframed-tv,heart-and-angel:@heartandangel`.
+
+The equivalent owner-only HTTP state is
+`GET /api/admin/youtube/channels?project=art-engine`. It returns
+`hasRefreshToken: true|false` per connection and never returns token values,
+cookies or OAuth state.
+
+## Manual acceptance sequence (production, no metadata writes)
+
+1. Production migration is already applied; do not apply the dated reference
+   file.
+2. Sign in as the owner, open `/admin/pierrot/youtube?project=art-engine`, click
+   «Подключить Google-аккаунт».
+3. Choose the Merkurov Gmail account, grant the scopes, verify every returned
+   channel is listed, and bind `@merkurov-art` to Art Engine.
+4. Open the UNFRAMED, Pierrot and Heart & Angel project tabs. Connect the
+   second Google account (not the Merkurov one). Verify `@unframed-tv` and
+   `@heartandangel` are discovered, including Brand Accounts and all pages.
+   Bind `@unframed-tv` to UNFRAMED and Pierrot, and `@heartandangel` to Heart &
+   Angel.
+5. Run the read-only verifier and keep its output as evidence. Do not replace
+   masked emails with real addresses in the report.
+6. Reconnect only the second account; verify the first account's connection
+   status and bindings do not change.
+7. Only with owner approval: disconnect the second account, verify Art Engine
+   remains bound, then reconnect and restore the second account's bindings. Do
+   not revoke a grant the owner still needs.
+8. Compare analytics with YouTube Studio, allowing the 2-day API delay; check
    period, timezone, fetched-at and source are visible.
-5. Page through the full video catalog.
-6. Open one test video, run the analysis, generate the diff. Verify nothing
-   was written to YouTube.
-7. Press «Запросить подтверждение», review the diff, then «Записать на YouTube».
-8. In YouTube Studio verify title/description/tags changed and category,
-   language, privacy and localization did not.
-9. Check `youtube_management_audit` contains one completed row with changed
-   field names only.
-10. Connect the second Google account, bind `@unframed-tv` to UNFRAMED and
-    Pierrot, and `@heartandangel` to Heart & Angel.
+9. Page through the full video catalog. Open a test video and use analysis and
+   preview only. Do **not** press the final write button; this acceptance
+   performs no metadata writes.
+10. Confirm `youtube_management_audit` gained no write rows from this
+    acceptance run.
 
 ## Automated tests added
 
@@ -213,6 +290,13 @@ YOUTUBE_ANALYTICS_TIMEZONE=Europe/London
   diff preview writes nothing; real update requires explicit confirmation.
 - `lib/youtube/__tests__/managementAudit.test.ts` — audit field names only and
   failure isolation.
+- `components/youtube/__tests__/YouTubeProjectWorkspace.test.tsx` — two-account
+  state, reconnect only for the failing account, explicit disconnect
+  confirmation, disconnect isolation and reconnect when no refresh token is
+  stored.
+- `scripts/youtube/verify-multichannel-production.mjs --self-test` — schema and
+  state evaluators, email masking and the three-project mapping, with no
+  database and no secrets.
 
 ## Out of scope (unchanged)
 

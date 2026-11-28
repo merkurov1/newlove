@@ -976,48 +976,70 @@ export default function YouTubeProjectWorkspace({
           <p className="pw-analytics-hint">Пока нет ни одного подключения.</p>
         ) : (
           <ul>
-            {connections.map((connection) => (
-              <li key={connection.id}>
-                <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
-                {connection.scopes.length} scopes
-                {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
-                {connection.lastErrorMessage ? (
-                  <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
-                ) : null}
-                <div className="pw-analytics-card-actions">
-                  <button
-                    type="button"
-                    className="pw-analytics-button pw-analytics-button--quiet"
-                    disabled={busy}
-                    onClick={() =>
-                      void runChannelAction({ action: 'refresh', connectionId: connection.id })
-                    }
-                  >
-                    Обновить каналы
-                  </button>
-                  {connection.status !== 'connected' ? (
-                    <button
-                      type="button"
-                      className="pw-analytics-button pw-analytics-button--quiet"
-                      disabled={connectBusy || busy}
-                      onClick={() => void startConnect(connection.googleAccountEmail)}
-                    >
-                      Переподключить этот аккаунт
-                    </button>
+            {connections.map((connection) => {
+              const needsReconnect =
+                connection.status !== 'connected' ||
+                !connection.hasRefreshToken ||
+                Boolean(connection.lastErrorCode);
+              const canRefresh = connection.status !== 'revoked';
+              const canDisconnect = connection.status !== 'revoked';
+
+              return (
+                <li key={connection.id}>
+                  <strong>{connection.googleAccountEmail}</strong> · {connection.status} ·{' '}
+                  {connection.scopes.length} scopes · каналов:{' '}
+                  {channels.filter((channel) => channel.connectionId === connection.id).length}
+                  {connection.hasRefreshToken ? null : ' · нет refresh token'}
+                  {connection.lastErrorCode ? ` · ошибка: ${connection.lastErrorCode}` : ''}
+                  {connection.lastErrorMessage ? (
+                    <p className="pw-analytics-hint">{connection.lastErrorMessage}</p>
                   ) : null}
-                  <button
-                    type="button"
-                    className="pw-analytics-button pw-analytics-button--quiet"
-                    disabled={busy}
-                    onClick={() =>
-                      void runChannelAction({ action: 'disconnect', connectionId: connection.id })
-                    }
-                  >
-                    Отозвать доступ
-                  </button>
-                </div>
-              </li>
-            ))}
+                  <div className="pw-analytics-card-actions">
+                    {canRefresh ? (
+                      <button
+                        type="button"
+                        className="pw-analytics-button pw-analytics-button--quiet"
+                        disabled={busy}
+                        onClick={() =>
+                          void runChannelAction({ action: 'refresh', connectionId: connection.id })
+                        }
+                      >
+                        Обновить каналы
+                      </button>
+                    ) : null}
+                    {needsReconnect ? (
+                      <button
+                        type="button"
+                        className="pw-analytics-button pw-analytics-button--quiet"
+                        disabled={connectBusy || busy}
+                        onClick={() => void startConnect(connection.googleAccountEmail)}
+                      >
+                        Переподключить этот аккаунт
+                      </button>
+                    ) : null}
+                    {canDisconnect ? (
+                      <button
+                        type="button"
+                        className="pw-analytics-button pw-analytics-button--quiet"
+                        disabled={busy}
+                        onClick={() => {
+                          const confirmed = window.confirm(
+                            `Отозвать Google-доступ для ${connection.googleAccountEmail}? Другие подключённые аккаунты не затрагиваются.`
+                          );
+                          if (!confirmed) return;
+                          void runChannelAction({
+                            action: 'disconnect',
+                            connectionId: connection.id,
+                          });
+                        }}
+                      >
+                        Отозвать доступ
+                      </button>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
 

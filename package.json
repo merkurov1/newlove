@@ -43,6 +43,7 @@
     "test:attach-tags": "node scripts/test_attach_tags.js",
     "test:telegram-research": "jest lib/telegram-research --runInBand",
     "security:verify": "node scripts/security/verify-supabase-exposure.mjs",
+    "youtube:verify-multichannel": "node scripts/youtube/verify-multichannel-production.mjs",
     "typecheck:telegram-research": "tsc -p tsconfig.telegram-research.json",
     "telegram:configure": "node scripts/telegram/configure-bot.mjs",
     "telegram:find": "bun run scripts/telegram-research/cli.ts find",
