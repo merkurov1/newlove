@@ -56,13 +56,22 @@ without the real tokens. Use the owner checklist in `docs/telegram-operations.md
 
 - `components/useIsTelegram.ts` detects a real Mini App by the presence of
   `Telegram.WebApp.initData`. It never treats `initDataUnsafe` as auth.
+- `lib/telegram/sdkBootstrap.ts` + `app/layout.tsx` load
+  `telegram-web-app.js` in the document head only when Telegram launch markers
+  or the older WebView bridge are present; ordinary browser pages do not request
+  it.
 - `components/TelegramMiniApp.tsx` handles `ready`, `expand`, optional
   fullscreen, safe/content safe area, viewport, theme params, BackButton and
   haptic feedback.
-- Main entry route is `/lobby`.
+- Main entry route is `/lobby` for the Menu Button. The Main Mini App itself is
+  an owner-only BotFather setting; it can point at `/flow` (Flow-first) or
+  `/lobby` (Lobby-first).
 - `lib/telegram/miniAppRoutes.ts` resolves only allowlisted `startapp`
   parameters: `lobby`, `flow`, `journal`, `temple`, `selection`, `art`, and a
-  concrete Flow slug encoded as `flow__<base64url-slug>`.
+  concrete Flow slug encoded as `flow__<base64url-slug>`. It reads the
+  documented `tgWebAppStartParam` URL fallback as well as `start_param`.
+- BackButton goes “up” from a nested Flow publication to `/flow`, then follows
+  real history, then falls back to `/lobby` or closes.
 - Flow, Temple and Journal remain normal Next.js routes; there are no duplicate
   Mini App pages.
 

@@ -29,6 +29,7 @@ import { PierrotProvider } from '@/components/pierrot/PierrotContext';
 import TelegramMiniApp from '@/components/TelegramMiniApp';
 import SiteChromeVisibility from '@/components/SiteChromeVisibility';
 import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { TELEGRAM_SDK_BOOTSTRAP } from '@/lib/telegram/sdkBootstrap';
 import { unstable_cache } from 'next/cache';
 
 import UserSidebar from '@/components/lazy/UserSidebarLazy';
@@ -234,6 +235,12 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
+        {/* Telegram requires `telegram-web-app.js` in the head. This snippet
+            injects it only for real Mini App launches, so an ordinary browser
+            page never downloads Telegram's SDK and `WebApp.ready()` can run
+            before hydration instead of on browser idle. */}
+        <script dangerouslySetInnerHTML={{ __html: TELEGRAM_SDK_BOOTSTRAP }} />
+
         <link rel="preconnect" href="https://txvkqcitalfbjytmnawq.supabase.co" />
         <link rel="dns-prefetch" href="https://txvkqcitalfbjytmnawq.supabase.co" />
 
@@ -285,9 +292,6 @@ export default async function RootLayout({
         {/* Single GA4 property. The component is a no-op outside production and
             sends exactly one page_view per App Router navigation. */}
         <GoogleAnalytics />
-
-        {/* Загружаем Telegram Web App асинхронно, чтобы исключить Forced Reflow при первой загрузке */}
-        <Script src="https://telegram.org/js/telegram-web-app.js" strategy="lazyOnload" />
 
         {/* Аналитика Umami без блокировки основного потока */}
         <Script

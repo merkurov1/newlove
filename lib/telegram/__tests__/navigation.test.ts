@@ -7,6 +7,7 @@ import {
   isTelegramTempleRoute,
   resolveTelegramNavigation,
   resolveTelegramNavigationContext,
+  resolveTelegramSectionHome,
 } from '@/lib/telegram/navigation';
 import { TEMPLE_RITUAL_LINKS } from '@/lib/temple/ritualMenu';
 
@@ -119,5 +120,17 @@ describe('Telegram navigation route model', () => {
 
     expect(model.context).toBe('temple');
     expect(model.activeHref).toBeNull();
+  });
+
+  it('resolves a cold deep-linked Flow publication to the Flow index', () => {
+    expect(resolveTelegramSectionHome('/flow/structural-integrity')).toBe('/flow');
+    expect(resolveTelegramSectionHome('/flow/structural-integrity/')).toBe('/flow');
+    expect(resolveTelegramSectionHome('/flow')).toBeNull();
+    expect(resolveTelegramSectionHome('/flow-issues/issue-1')).toBe('/flow-issues');
+    expect(resolveTelegramSectionHome('/en/flow-issues/issue-1')).toBe('/en/flow-issues');
+    expect(resolveTelegramSectionHome('/flow-issues')).toBeNull();
+    expect(resolveTelegramSectionHome('/en/flow-issues')).toBeNull();
+    expect(resolveTelegramSectionHome('/temple')).toBeNull();
+    expect(resolveTelegramSectionHome('/lobby')).toBeNull();
   });
 });

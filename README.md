@@ -174,6 +174,9 @@ Deployment and migration instructions may apply only to particular legacy or fea
 ## Documentation
 
 - [Telegram research module](./docs/telegram-research.md) — local export, verification, statistics, and analysis workflow; includes important privacy and access-control details.
+- [Flow × Telegram Main Mini App audit](./docs/flow-main-mini-app-audit.md) — bot, shell, deep links, safe area and production verification status.
+- [BotFather setup for the Flow Main Mini App](./docs/telegram-botfather-setup.md) — owner-only values and sequence.
+- [Flow Mini App Store readiness](./docs/flow-mini-app-store-readiness.md) — mandatory checks, metadata, media assets and open owner decisions.
 - [Bluesky integration](./docs/BLUESKY-INTEGRATION-COMPLETE.md)
 - [Medium integration](./docs/MEDIUM-INTEGRATION-COMPLETE.md)
 - [Editor button architecture](./docs/EDIT-BUTTON-ARCHITECTURE.md)

@@ -109,17 +109,22 @@ CI.
 
 ### Mini App
 
-- [ ] Main Mini App opens `/lobby`.
-- [ ] Menu Button opens `/lobby`.
+- [ ] Main Mini App opens the owner-approved entry (`/flow` for a Flow-first app,
+      `/lobby` when the Lobby is kept as the profile entry).
+- [ ] Menu Button still opens `/lobby` unless the owner approved a change.
+- [ ] Cold launch: no loading loop, `ready()` fires without waiting for browser idle.
+- [ ] Repeat launch after closing the Mini App.
 - [ ] Deep link `lobby`, `flow`, `journal`, `temple`, `selection`, `art` works.
-- [ ] Deep link to a concrete Flow slug works.
+- [ ] Deep link to a concrete Flow slug works, including via `tgWebAppStartParam`.
+- [ ] Telegram Back from a deep-linked Flow publication returns to `/flow`.
 - [ ] Unknown/deep-link injection is rejected.
-- [ ] BackButton follows real history.
+- [ ] BackButton follows real history outside nested Flow routes.
 - [ ] BackButton at `/lobby` closes or falls back safely.
 - [ ] ThemeChanged updates theme variables.
 - [ ] Safe Area / content safe area works on iOS.
 - [ ] Fullscreen falls back gracefully when unsupported.
-- [ ] Safari outside Telegram does not initialize Telegram UI.
+- [ ] Safari outside Telegram does not request `telegram-web-app.js` and does not
+      initialize Telegram UI.
 - [ ] iOS, Android and Telegram Desktop checked.
 
 ### Voice and photos

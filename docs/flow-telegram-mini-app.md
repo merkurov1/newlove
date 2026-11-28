@@ -6,18 +6,19 @@ administration, auth and the shared Telegram navigation are unchanged.
 
 ## What changed
 
-| Surface | File | Behaviour |
-| --- | --- | --- |
-| SDK lifecycle | `lib/telegram/lifecycle.ts` | One feature-detected lifecycle: `ready`, `expand`, viewport, safe-area, theme, fullscreen and activation events, with full listener cleanup. |
-| Shell | `components/TelegramMiniApp.tsx` | Uses the lifecycle; asks for fullscreen only on Flow routes; keeps BackButton, start-param and native chrome behaviour. Reserves masthead space for the fullscreen close control. |
-| Feed continuity | `app/flow/page.tsx` | Stable entry-anchor scroll restoration (including bounded re-pagination), versioned local last-read/progress, a quiet “Continue reading” line and a Home Screen offer. |
-| Reader | `app/flow/[slug]/page.tsx` | Focused publication layout, reading progress, contextual newer/older links, share at the end, source links moved out of the reading path. |
-| Reader client layer | `components/flow/FlowReaderShell.tsx` | Progress line, storage writes, delegated gallery opening and Telegram BackButton handling. |
-| Image viewer | `components/flow/FlowImageViewer.tsx` | Gallery navigation, swipe, pinch/double-tap zoom, captions/alt, scroll lock, Escape/Back/browser-Back close. |
-| Share | `components/flow/FlowShare.tsx`, `lib/telegram/share.ts` | Flow's Share action opts out of Story (`storyMode: 'off'`) so reading is never hijacked; Story is a separate action (`'only'`) when supported and media-safe. Existing Vigil callers keep the historical `auto` default. |
-| Home Screen | `components/flow/FlowHomeScreenPrompt.tsx` | Feature-detected, after-reading, 30-day cooldown, never blocks reading. |
-| State | `lib/flow/readerState.ts`, `lib/flow/readingProgress.ts` | Versioned, validated, failure-tolerant local state; pure progress maths. |
-| Neighbours | `lib/flow/items-cash.ts` | Immediate newer/older publications from the existing public ordering; no recommendation engine. |
+| Surface             | File                                                     | Behaviour                                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| SDK bootstrap       | `lib/telegram/sdkBootstrap.ts`, `app/layout.tsx`         | Injects `telegram-web-app.js` in the head only for Telegram launch markers or the WebView bridge; ordinary browsers never request it.                                                                                    |
+| SDK lifecycle       | `lib/telegram/lifecycle.ts`                              | One feature-detected lifecycle: `ready`, `expand`, viewport, safe-area, theme, fullscreen and activation events, with full listener cleanup.                                                                             |
+| Shell               | `components/TelegramMiniApp.tsx`                         | Uses the lifecycle; asks for fullscreen only on Flow routes; keeps BackButton, start-param and native chrome behaviour. Reserves masthead space for the fullscreen close control.                                        |
+| Feed continuity     | `app/flow/page.tsx`                                      | Stable entry-anchor scroll restoration (including bounded re-pagination), versioned local last-read/progress, a quiet “Continue reading” line and a Home Screen offer.                                                   |
+| Reader              | `app/flow/[slug]/page.tsx`                               | Focused publication layout, reading progress, contextual newer/older links, share at the end, source links moved out of the reading path.                                                                                |
+| Reader client layer | `components/flow/FlowReaderShell.tsx`                    | Progress line, storage writes, delegated gallery opening and Telegram BackButton handling.                                                                                                                               |
+| Image viewer        | `components/flow/FlowImageViewer.tsx`                    | Gallery navigation, swipe, pinch/double-tap zoom, captions/alt, scroll lock, Escape/Back/browser-Back close.                                                                                                             |
+| Share               | `components/flow/FlowShare.tsx`, `lib/telegram/share.ts` | Flow's Share action opts out of Story (`storyMode: 'off'`) so reading is never hijacked; Story is a separate action (`'only'`) when supported and media-safe. Existing Vigil callers keep the historical `auto` default. |
+| Home Screen         | `components/flow/FlowHomeScreenPrompt.tsx`               | Feature-detected, after-reading, 30-day cooldown, never blocks reading.                                                                                                                                                  |
+| State               | `lib/flow/readerState.ts`, `lib/flow/readingProgress.ts` | Versioned, validated, failure-tolerant local state; pure progress maths.                                                                                                                                                 |
+| Neighbours          | `lib/flow/items-cash.ts`                                 | Immediate newer/older publications from the existing public ordering; no recommendation engine.                                                                                                                          |
 
 ## Telegram API inventory
 
@@ -36,18 +37,21 @@ Already used before this task:
 
 Newly exercised by this task:
 
+- Early head bootstrap of `telegram-web-app.js` for real Telegram launches
 - `requestFullscreen`, `exitFullscreen` (Bot API 8.0, feature-detected, Flow routes only)
 - `disableVerticalSwipes`, `enableVerticalSwipes` (restored on cleanup)
 - `colorScheme` + `themeParams` with a luminance fallback
 - `activated` / `deactivated` lifecycle events
 - `fullscreenChanged` event
+- `tgWebAppStartParam` URL fallback for `start_param`
+- Route-aware BackButton fallback from `/flow/<slug>` to `/flow`
 
 Unavailable or intentionally not used:
 
 - `requestContact`, `requestWriteAccess`, `requestPhoneAccess`: unrelated to reading.
 - `showPopup`, `showAlert`, `showConfirm`: would replace native editorial UI with extra dialogs.
 - `lockOrientation`: the task explicitly forbids forcing orientation.
-- `initDataUnsafe` for identity: never trusted. Only `start_param` is read for deep links; permissions are server-verified.
+- `initDataUnsafe` for identity: never trusted. Only `start_param` is read for deep links; permissions are server-verified. The signed `initData` remains the only auth input.
 - Payments, invoices, clipboard write via Telegram: no scope and no need; the existing browser clipboard/Web Share fallbacks remain.
 - `shareToStory` success confirmation: the SDK exposes no completion callback, so Flow never says a Story was posted. The label is “Story editor opened”.
 
@@ -55,6 +59,9 @@ Unavailable or intentionally not used:
 
 - `lib/flow/__tests__/readerState.test.ts` (versioned state, storage failures and progress maths)
 - `lib/telegram/__tests__/lifecycle.test.ts`
+- `lib/telegram/__tests__/sdkBootstrap.test.ts` (launch-marker detection, no SDK in a normal browser, single fallback injection)
+- `lib/telegram/__tests__/miniAppRoutes.test.ts` (`start_param` allowlist, URL fallback and injection rejection)
+- `lib/telegram/__tests__/navigation.test.ts` (BackButton section-home fallback)
 - `components/flow/__tests__/FlowImageViewer.test.tsx`
 - `components/flow/__tests__/FlowReaderShell.test.tsx`
 - `components/flow/__tests__/FlowHomeScreenPrompt.test.tsx`

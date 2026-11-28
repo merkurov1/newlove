@@ -6,16 +6,17 @@ import { X } from 'lucide-react';
 import useIsTelegram from '@/components/useIsTelegram';
 import TelegramNavigation from '@/components/telegram/TelegramNavigation';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
-import { resolveTelegramStartParam } from '@/lib/telegram/miniAppRoutes';
+import {
+  resolveTelegramStartParam,
+  readTelegramStartParamFromUrl,
+} from '@/lib/telegram/miniAppRoutes';
 import {
   hasTelegramBackHandler,
   runTopTelegramBackHandler,
   subscribeTelegramBackHandlers,
 } from '@/lib/telegram/backHandler';
-import {
-  isRitualRoute,
-  isTelegramNavigationHidden,
-} from '@/lib/temple/routes';
+import { isRitualRoute, isTelegramNavigationHidden } from '@/lib/temple/routes';
+import { resolveTelegramSectionHome } from '@/lib/telegram/navigation';
 import { resolveTelegramChrome } from '@/lib/telegram/chrome';
 import { getTelegramWebApp, hapticSelection } from '@/lib/telegram/webApp';
 import { attachTelegramLifecycle } from '@/lib/telegram/lifecycle';
@@ -113,8 +114,7 @@ export default function TelegramMiniApp() {
   // Reserve editorial breathing room for the fullscreen close affordance so it
   // never sits on top of the Flow masthead or the reader's back link.
   useEffect(() => {
-    const active =
-      isTelegram && isFullscreen && isFlowPath(pathname);
+    const active = isTelegram && isFullscreen && isFlowPath(pathname);
 
     document.body.classList.toggle('telegram-fullscreen-close', active);
 
@@ -163,7 +163,11 @@ export default function TelegramMiniApp() {
 
     const handleStartParam = () => {
       const tg = getTelegramWebApp();
-      const raw = tg?.initDataUnsafe?.start_param;
+      // The SDK is the primary source, but Telegram also passes the value as
+      // `tgWebAppStartParam`. The URL fallback lets a deep link resolve before
+      // a slow SDK finishes loading.
+      const raw =
+        tg?.initDataUnsafe?.start_param || readTelegramStartParamFromUrl(window.location.href);
       const value = typeof raw === 'string' ? raw.trim() : '';
 
       if (!value || startParamHandledRef.current === value) return;
@@ -174,8 +178,8 @@ export default function TelegramMiniApp() {
 
       const target = resolveTelegramStartParam(value);
 
-      // Unknown payloads safely fall back to the Temple home only when the
-      // current route is not already a valid first-party destination.
+      // Unknown payloads are ignored: the current first-party route is already
+      // a safe destination, and an external URL is never accepted here.
       if (target && target !== pathname) {
         router.replace(target);
       }
@@ -220,6 +224,16 @@ export default function TelegramMiniApp() {
         return;
       }
 
+      // A Flow publication opened from a cold deep link has no meaningful
+      // in-app history. Go "up" to the Flow index rather than closing the Mini
+      // App or jumping back to the Lobby.
+      const sectionHome = resolveTelegramSectionHome(pathname);
+
+      if (sectionHome) {
+        router.replace(sectionHome);
+        return;
+      }
+
       if (typeof window !== 'undefined' && window.history.length > 1) {
         router.back();
         return;
@@ -261,8 +275,7 @@ export default function TelegramMiniApp() {
 
   if (!isTelegram) return null;
 
-  const isFlowRoute =
-    pathname === '/flow' || pathname.startsWith('/flow/');
+  const isFlowRoute = pathname === '/flow' || pathname.startsWith('/flow/');
   const showFullscreenClose = isFullscreen && isFlowRoute;
   const navigationHidden = isTelegramNavigationHidden(pathname);
 

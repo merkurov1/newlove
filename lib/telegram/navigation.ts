@@ -197,6 +197,28 @@ export function isTelegramTempleRoute(pathname: string): boolean {
   );
 }
 
+/**
+ * Resolve the predictable "up" destination for a nested first-party route.
+ *
+ * Telegram's native BackButton is the primary navigation control inside the
+ * Mini App. On a cold deep-link launch there is no in-app history to go back
+ * to, so a Flow publication must return to the Flow index instead of closing
+ * the Mini App or falling through to the Lobby.
+ */
+export function resolveTelegramSectionHome(pathname: string): string | null {
+  const current = normalizeTelegramNavigationPath(pathname);
+
+  if (current === '/flow-issues' || current === '/en/flow-issues') return null;
+
+  if (isRouteOrChild(current, '/en/flow-issues')) return '/en/flow-issues';
+
+  if (isRouteOrChild(current, '/flow-issues')) return '/flow-issues';
+
+  if (current !== '/flow' && isRouteOrChild(current, '/flow')) return '/flow';
+
+  return null;
+}
+
 export function resolveTelegramNavigationContext(pathname: string): TelegramNavigationContext {
   return isTelegramFlowRoute(pathname) ? 'flow' : 'temple';
 }

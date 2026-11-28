@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
+import { ensureTelegramSdk } from './sdkBootstrap';
+
 /**
  * Deterministic Telegram Mini App detection for the browser.
  *
@@ -335,6 +337,13 @@ function startWatcher() {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
   scanForScripts();
+
+  // Safety net for clients that blocked the synchronous head bootstrap. A
+  // normal browser has neither launch markers nor the Telegram WebView bridge.
+  if (!getTelegramWebApp() && (hasTelegramLaunchParams() || hasTelegramBridge())) {
+    ensureTelegramSdk();
+    scanForScripts();
+  }
 
   if (typeof MutationObserver !== 'undefined' && document.documentElement) {
     observer = new MutationObserver((mutations) => {

@@ -31,8 +31,10 @@ A missing token/channel or a Telegram failure never changes the Vigil result.
 There is no retry loop and no extra bot command.
 
 When `TELEGRAM_MINI_APP_BOT_USERNAME` is set, the Flow link in a Telegram
-crosspost opens the exact publication inside the Mini App. Without it, the
-crosspost keeps the canonical web URL as a safe fallback.
+crosspost opens the exact publication inside the Mini App. Set it only **after**
+the Main Mini App is enabled in BotFather; otherwise `?startapp=` links have no
+app to open. Without it, the crosspost keeps the canonical web URL as a safe
+fallback.
 
 Never add bot tokens or webhook secrets as `NEXT_PUBLIC_*`.
 
@@ -125,8 +127,10 @@ NEXT_PUBLIC_APP_URL=https://www.merkurov.love \
 npm run telegram:configure
 ```
 
-The script sets profile descriptions, command scopes and the Main Mini App /
-Menu Button. It does not change the webhook.
+The script sets profile descriptions, command scopes and the **Menu Button**. It
+does not change the webhook. It also cannot configure the Main Mini App or the
+splash screen: those are BotFather-only settings (see
+`docs/telegram-botfather-setup.md`).
 
 ## 6. Flow direct publish operations
 

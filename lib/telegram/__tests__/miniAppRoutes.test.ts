@@ -1,6 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { buildTelegramStartParam, resolveTelegramStartParam } from '../miniAppRoutes';
+import {
+  buildTelegramStartParam,
+  readTelegramStartParamFromUrl,
+  resolveTelegramStartParam,
+} from '../miniAppRoutes';
 
 describe('Telegram Mini App deep links', () => {
   it('resolves only allowlisted first-party routes', () => {
@@ -56,5 +60,20 @@ describe('Telegram Mini App deep links', () => {
     expect(buildTelegramStartParam('/admin')).toBeNull();
     expect(buildTelegramStartParam('https://evil.example')).toBeNull();
     expect(buildTelegramStartParam('/flow/a/b')).toBeNull();
+  });
+
+  it('reads the start parameter from the documented URL fallback', () => {
+    const param = buildTelegramStartParam('/flow/structural-integrity');
+
+    expect(
+      readTelegramStartParamFromUrl(`https://www.merkurov.love/lobby?tgWebAppStartParam=${param}`)
+    ).toBe(param);
+    expect(
+      readTelegramStartParamFromUrl(
+        `https://www.merkurov.love/lobby#tgWebAppData=signed&tgWebAppStartParam=${param}`
+      )
+    ).toBe(param);
+    expect(readTelegramStartParamFromUrl('https://www.merkurov.love/lobby')).toBeNull();
+    expect(readTelegramStartParamFromUrl('not a url')).toBeNull();
   });
 });

@@ -5,6 +5,11 @@
  * Run locally with server-side env variables. The script never prints or
  * accepts the bot token as a command-line argument, and it never changes a
  * webhook. Webhook re-registration is a separate, explicit owner action.
+ *
+ * The Bot API can configure the menu button, commands and descriptions. It
+ * cannot configure the Main Mini App: that is a BotFather-only setting (name,
+ * URL, short name, icon and previews). The script reports this explicitly so it
+ * is never mistaken for a Main Mini App deployment.
  */
 
 const TOKEN = process.env.PIERROT_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
@@ -75,6 +80,7 @@ async function api(method, payload) {
 
 async function main() {
   const owner = ownerId();
+  const me = await api('getMe', {});
 
   await api('setMyDescription', {
     description: SHORT_DESCRIPTION,
@@ -114,8 +120,12 @@ async function main() {
     },
   });
 
-  console.log('Telegram bot profile and commands configured.');
-  console.log(`Main Mini App / Menu Button: ${MINI_APP_URL}`);
+  console.log(`Bot: @${me.username}`);
+  console.log('Menu Button configured. This script does not change the webhook.');
+  console.log(
+    'Main Mini App (URL, short name, icon, previews) is a separate BotFather setting and was not changed.'
+  );
+  console.log(`Menu Button URL: ${MINI_APP_URL}`);
   console.log(
     owner
       ? `Owner commands registered for chat ${owner}.`

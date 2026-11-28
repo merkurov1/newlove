@@ -53,10 +53,7 @@ function encodeBase64Url(value: string): string {
 function decodeBase64Url(value: string): string | null {
   try {
     const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(
-      normalized.length + ((4 - (normalized.length % 4)) % 4),
-      '='
-    );
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
     const binary = atob(padded);
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
 
@@ -79,9 +76,7 @@ export function resolveTelegramStartParam(raw: unknown): string | null {
   if (value.startsWith('flow__')) {
     const decoded = decodeBase64Url(value.slice('flow__'.length))?.trim();
 
-    return decoded && FLOW_SLUG.test(decoded)
-      ? `/flow/${encodeURIComponent(decoded)}`
-      : null;
+    return decoded && FLOW_SLUG.test(decoded) ? `/flow/${encodeURIComponent(decoded)}` : null;
   }
 
   if (value.startsWith('flow_')) {
@@ -91,6 +86,26 @@ export function resolveTelegramStartParam(raw: unknown): string | null {
   }
 
   return null;
+}
+
+/**
+ * Read `startapp` from the URL as a fallback for `initDataUnsafe.start_param`.
+ *
+ * Telegram documents that the start parameter is delivered both in signed
+ * `initData` and in the GET parameter `tgWebAppStartParam`, so the app can
+ * resolve the correct interface immediately, even before the SDK is ready.
+ * This value is still untrusted and must pass `resolveTelegramStartParam`.
+ */
+export function readTelegramStartParamFromUrl(href: string): string | null {
+  try {
+    const url = new URL(href, 'https://www.merkurov.love');
+    const hash = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash;
+    const params = new URLSearchParams([url.search.slice(1), hash].filter(Boolean).join('&'));
+
+    return params.get('tgWebAppStartParam') || params.get('startapp') || null;
+  } catch {
+    return null;
+  }
 }
 
 export function buildTelegramStartParam(path: string): string | null {
