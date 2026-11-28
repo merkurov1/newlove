@@ -8,10 +8,18 @@ posts on `merkurov.love`.
 - Template domain: `merkurov.love`
 - Crosspost helper: [`lib/telegram/instantView.ts`](../../lib/telegram/instantView.ts)
 
-The template is deliberately **not** activated by a hash in this repository.
-Telegram issues the hash from a logged-in Instant View editor, and the hash is
-deployment configuration. Until a real, validated hash is configured, Telegram
-crossposts keep using the existing Mini App link or the canonical Flow URL.
+The template is the single source of truth for the domain. The production
+template hash has already been issued by the Telegram Instant View editor and
+is already configured as the server-side Vercel environment variable
+`TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH`. The hash value is deliberately **not**
+stored in this repository and must never be added to a `NEXT_PUBLIC_*`
+variable, HTML, analytics or logs.
+
+Do not edit the rules, selectors, extraction order or syntax in
+[`merkurov.love.iv`](./merkurov.love.iv). If the production markup changes,
+adapt the SSR markup in `app/flow/[slug]/page.tsx` to the template instead.
+Changing the template invalidates the issued hash and requires owner
+re-verification and a new editor hash.
 
 ## What the template extracts
 
@@ -36,19 +44,22 @@ The title rule reads the Flow post's own `data-flow-title`, then its in-article
 heading, then the Flow page's own `og:title`. It never reads a linked page's
 preview title from the link card.
 
-## Validate the template in Telegram's editor
+## Re-verify the template in Telegram's editor
+
+The template is already saved in the editor and the hash has already been
+issued, so do not paste a different rules file over it. To re-verify after an
+SSR markup change:
 
 1. Sign in at <https://instantview.telegram.org/my/> with the owner's Telegram
    account.
-2. Enter `merkurov.love` as the target domain and open a Flow post URL.
-3. Paste the contents of [`merkurov.love.iv`](./merkurov.love.iv) into the
-   **Rules** pane. The editor attaches the rules to the domain, so the file
-   intentionally contains no `@domain` rule.
+2. Open the saved `merkurov.love` template and one Flow post URL.
+3. Confirm the Rules pane matches [`merkurov.love.iv`](./merkurov.love.iv)
+   byte-for-byte. If it differs, stop: the repository copy is wrong, not the
+   saved template.
 4. Check the rendered preview and the status line. The page must be valid, with
    no warnings and no "unsupported element" errors.
-5. Repeat on the representative public posts below. Adjust selectors only if
-   the live markup changed; keep the canonical URL and public/private rules
-   untouched.
+5. Repeat on the representative public posts below. Never edit the template to
+   fit the markup; fix the SSR markup instead.
 
 ### Representative posts
 
@@ -72,7 +83,13 @@ For each case verify:
 - YouTube/video content is represented by a supported embed or link;
 - a link-only post still has a readable body.
 
-## Obtain and configure the hash
+## Hash status and rotation
+
+The production hash has already been issued by Telegram's Instant View editor
+and is already configured in the Vercel project as the server-side
+`TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH` variable. It is not stored in this
+repository. Do not create a second variable, do not add it to a `NEXT_PUBLIC_*`
+variable, and do not print it in logs or analytics.
 
 The hash is the `rhash` value in the editor's **View in Telegram** link:
 
@@ -80,11 +97,12 @@ The hash is the `rhash` value in the editor's **View in Telegram** link:
 https://t.me/iv?url=https%3A%2F%2Fwww.merkurov.love%2Fflow%2Fexample&rhash=<hash>
 ```
 
-After at least the five representative posts validate:
+Rotate it only if the template itself changes or the value is lost:
 
 1. Copy the real `rhash` from that link. Do not type a hash by hand and do not
    use a placeholder.
-2. Set it as a server-side environment variable (never a public client value):
+2. Update the existing server-side environment variable (never a public client
+   value):
 
    ```dotenv
    TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH=<real editor hash>
@@ -99,11 +117,18 @@ After at least the five representative posts validate:
 5. Confirm the same post still opens normally at its canonical
    `https://www.merkurov.love/flow/<slug>` URL outside Telegram.
 
-The helper validates the hash as 8–64 hexadecimal characters and only wraps
-canonical `https://merkurov.love/flow/<slug>` (optionally `www`) URLs. If the
-hash is absent, malformed, or the URL is not a public Flow post, the helper
-returns `null`; the publisher then uses the existing Mini App URL or the
-canonical web URL. A missing hash can never create a broken `t.me/iv` link.
+The helper validates the hash as 8–64 hexadecimal characters and only wraps a
+canonical `https://www.merkurov.love/flow/<slug>` URL. It rejects other hosts,
+HTTP, userinfo, ports, query strings, fragments, encoded path separators,
+reserved feed routes and private/admin routes. The publisher additionally
+requires the row to be `status = published` and `visibility = public`. If the
+hash is absent, malformed, the row is not public, or the URL is not a public
+Flow post, the helper returns `null`; the publisher then uses the existing Mini
+App URL or the canonical web URL. A missing hash can never create a broken
+`t.me/iv` link.
+
+Unit and contract tests use a fixture hash only. The production hash is never
+committed and is never asserted in test output.
 
 ## Public approval
 
@@ -119,8 +144,13 @@ works and the canonical page remains the fallback.
 
 - The template only matches pages with `<article data-flow-item>`, which is
   rendered by the public Flow post route. Draft/private items do not use that
-  public rendering path.
-- The URL helper rejects non-Flow/admin routes and non-HTTPS URLs.
+  public rendering path, and the publisher refuses to create an Instant View
+  wrapper for a row whose explicit status/visibility is not published/public.
+- The URL helper rejects other hosts, HTTP, userinfo, ports, query strings,
+  fragments, encoded path separators, feed routes, admin routes and non-Flow
+  paths. It always rebuilds the URL on `https://www.merkurov.love`.
+- The hash is read server-side only by `lib/flow/telegram.ts`. Never import
+  `lib/telegram/instantView.ts` from a client component.
 - To roll back, unset `TELEGRAM_INSTANT_VIEW_TEMPLATE_HASH` (and the alias).
   Crossposts immediately fall back to the Mini App/canonical URL. Deleting the
   hash does not affect the canonical page, existing Telegram messages, or the

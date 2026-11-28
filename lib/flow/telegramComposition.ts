@@ -1420,6 +1420,8 @@ export async function formatTelegramMessage(
   const content = {
     id: null,
     slug: null,
+    status: null,
+    visibility: null,
     rawType: 'note',
     contentType: 'note',
     title: title ?? '',

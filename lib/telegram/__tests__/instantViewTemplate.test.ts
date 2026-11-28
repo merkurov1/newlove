@@ -1,6 +1,7 @@
 /** @jest-environment node */
 
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import { describe, expect, it } from '@jest/globals';
@@ -152,6 +153,45 @@ const cases = [
 ];
 
 describe('Flow Instant View template contract', () => {
+  it('keeps the repository reference copy byte-for-byte frozen', () => {
+    // Changing the template invalidates the hash issued by Telegram. Any
+    // deliberate owner-approved template update must update this checksum and
+    // obtain a new editor hash.
+    const checksum = createHash('sha256').update(template, 'utf8').digest('hex');
+    expect(checksum).toBe('1d38bbae59eae2b58465a123de4228df3c7b9bb322a540b191015c902e85796a');
+  });
+
+  it('does not use unverified template constructs', () => {
+    expect(template).not.toContain('?true');
+    expect(template).not.toContain('..after');
+    expect(template).not.toContain('@include');
+  });
+
+  it('renders the stable SSR hooks used by the template', () => {
+    const page = readFileSync(
+      path.resolve(__dirname, '../../../app/flow/[slug]/page.tsx'),
+      'utf8'
+    );
+
+    expect(page).toContain('data-flow-item={decodedSlug}');
+    expect(page).toContain('data-flow-title={metadata.title}');
+    expect(page).toContain('data-flow-author="Anton Merkurov"');
+    expect(page).toContain('data-flow-hero');
+    expect(page).toContain('data-flow-image');
+
+    // Reader UI, pager, share row and Pierrot context must stay outside the
+    // hero because the template takes only the hero as the article body.
+    const hero = page.indexOf('data-flow-hero');
+    const readerBar = page.indexOf('flow-reader__bar');
+    const footer = page.indexOf('flow-reader__footer');
+    const pierrot = page.indexOf('<PierrotContextBlock');
+
+    expect(hero).toBeGreaterThan(-1);
+    expect(readerBar).toBeGreaterThan(-1);
+    expect(footer).toBeGreaterThan(hero);
+    expect(pierrot).toBeGreaterThan(footer);
+  });
+
   it('targets version 2.1 and only public Flow post articles', () => {
     expect(template).toMatch(/^~version: "2\.1"$/m);
     expect(template).toContain('?path: /flow/[^/]+/?$');

@@ -245,10 +245,15 @@ export async function publishTelegramContent(
   const miniAppUrl = buildTelegramMiniAppUrl(miniAppPath);
 
   // A verified Instant View template hash takes precedence: the canonical Flow
-  // post opens as a clean reader inside Telegram. Without a valid hash the
-  // existing Mini App / canonical web fallback is kept unchanged, so a missing
-  // or malformed hash can never produce a broken link.
-  const instantViewUrl = buildTelegramInstantViewUrl(content.canonicalUrl);
+  // post opens as a clean reader inside Telegram. The wrapper is only created
+  // for a row that is explicitly published and public. Without a valid hash or
+  // for a non-public row the existing Mini App / canonical web fallback is kept
+  // unchanged, so a missing hash can never produce a broken link.
+  const isPubliclyPublished =
+    content.status === 'published' && content.visibility === 'public';
+  const instantViewUrl = isPubliclyPublished
+    ? buildTelegramInstantViewUrl(content.canonicalUrl)
+    : null;
   const flowUrl = instantViewUrl ?? miniAppUrl ?? content.canonicalUrl;
 
   const composition = composeTelegramPublication(content, { flowUrl });
