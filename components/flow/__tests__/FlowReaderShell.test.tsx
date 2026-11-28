@@ -358,6 +358,30 @@ describe('FlowReaderShell', () => {
     expect(window.location.hash).toBe('#opening');
   });
 
+  it('closes an open reader sheet with Telegram Back before leaving the publication', () => {
+    render(reader(HEADINGS));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance settings' }));
+
+    expect(screen.getByRole('dialog', { name: 'Appearance' })).toBeInTheDocument();
+
+    act(() => {
+      expect(runTopTelegramBackHandler()).toBe(true);
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Appearance' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Contents' }));
+
+    expect(screen.getByRole('dialog', { name: 'Contents' })).toBeInTheDocument();
+
+    act(() => {
+      expect(runTopTelegramBackHandler()).toBe(true);
+    });
+
+    expect(screen.queryByRole('dialog', { name: 'Contents' })).not.toBeInTheDocument();
+  });
+
   it('opens the server-rendered figures in the client gallery and closes with Telegram Back', async () => {
     const { unmount } = render(reader());
 

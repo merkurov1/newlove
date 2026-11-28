@@ -2,7 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
 import useIsTelegram from '@/components/useIsTelegram';
 import TelegramNavigation from '@/components/telegram/TelegramNavigation';
 import { usePierrot } from '@/components/pierrot/PierrotContext';
@@ -12,18 +11,29 @@ import {
   runTopTelegramBackHandler,
   subscribeTelegramBackHandlers,
 } from '@/lib/telegram/backHandler';
-import {
-  isRitualRoute,
-  isTelegramNavigationHidden,
-} from '@/lib/temple/routes';
+import { isRitualRoute, isTelegramNavigationHidden } from '@/lib/temple/routes';
 import { resolveTelegramChrome } from '@/lib/telegram/chrome';
 import { getTelegramWebApp, hapticSelection } from '@/lib/telegram/webApp';
 import { attachTelegramLifecycle } from '@/lib/telegram/lifecycle';
 
 const WORLD_ROUTE = '/heartandangel/world';
 
+function normalizePath(pathname: string) {
+  return pathname.replace(/\/$/, '') || '/';
+}
+
 function isFlowPath(pathname: string) {
-  return pathname === '/flow' || pathname.startsWith('/flow/');
+  const path = normalizePath(pathname);
+
+  return path === '/flow' || path.startsWith('/flow/');
+}
+
+function isFlowFeedPath(pathname: string) {
+  return normalizePath(pathname) === '/flow';
+}
+
+function isFlowPublicationPath(pathname: string) {
+  return normalizePath(pathname).startsWith('/flow/');
 }
 
 export default function TelegramMiniApp() {
@@ -110,11 +120,11 @@ export default function TelegramMiniApp() {
     }
   }, [isTelegram, pathname]);
 
-  // Reserve editorial breathing room for the fullscreen close affordance so it
-  // never sits on top of the Flow masthead or the reader's back link.
+  // Reserve editorial breathing room for Telegram's native fullscreen close
+  // control and BackButton so they never sit on top of the Flow masthead or
+  // the reader's back link.
   useEffect(() => {
-    const active =
-      isTelegram && isFullscreen && isFlowPath(pathname);
+    const active = isTelegram && isFullscreen && isFlowPath(pathname);
 
     document.body.classList.toggle('telegram-fullscreen-close', active);
 
@@ -206,17 +216,32 @@ export default function TelegramMiniApp() {
 
     const isEntryRoute = pathname === '/' || pathname === WORLD_ROUTE;
     const isConversationOpen = mode !== 'site';
-    const shouldShowBack = !isEntryRoute || isConversationOpen || overlayActive;
+    // The Flow feed is the entry surface of the editorial Mini App. Telegram
+    // already provides its own close control there, so a second route-level
+    // BackButton would duplicate it. Publications keep Back so the reader can
+    // return to the feed instead of closing the Mini App.
+    const isFlowFeed = isFlowFeedPath(pathname);
+    const isFlowPublication = isFlowPublicationPath(pathname);
+    const shouldShowBack = !isFlowFeed && (!isEntryRoute || isConversationOpen || overlayActive);
 
     const handleBack = () => {
       hapticSelection();
 
+      // Dialogs, the image viewer and the navigation sheet are the topmost
+      // surfaces. They must consume Back before any route navigation.
       if (runTopTelegramBackHandler()) {
         return;
       }
 
       if (isConversationOpen) {
         closeConversation();
+        return;
+      }
+
+      // A Flow publication always returns to the feed, regardless of the
+      // browser history stack or the route the Mini App was launched from.
+      if (isFlowPublication) {
+        router.push('/flow');
         return;
       }
 
@@ -261,56 +286,11 @@ export default function TelegramMiniApp() {
 
   if (!isTelegram) return null;
 
-  const isFlowRoute =
-    pathname === '/flow' || pathname.startsWith('/flow/');
-  const showFullscreenClose = isFullscreen && isFlowRoute;
   const navigationHidden = isTelegramNavigationHidden(pathname);
 
-  const closeMiniApp = () => {
-    const tg = getTelegramWebApp();
-
-    hapticSelection();
-
-    try {
-      if (tg?.close) {
-        tg.close();
-        return;
-      }
-    } catch {
-      /* Fall through to browser history. */
-    }
-
-    if (typeof window !== 'undefined' && window.history.length > 1) {
-      router.back();
-      return;
-    }
-
-    router.push('/lobby');
-  };
-
-  if (!showFullscreenClose && navigationHidden) {
+  if (navigationHidden) {
     return null;
   }
 
-  return (
-    <>
-      {showFullscreenClose && (
-        <button
-          type="button"
-          onClick={closeMiniApp}
-          aria-label="Close Mini App"
-          title="Close"
-          className="fixed z-[120] flex h-11 w-11 items-center justify-center rounded-full border border-white/20 bg-black/55 text-white shadow-lg backdrop-blur-md transition hover:bg-black/75 active:scale-95"
-          style={{
-            left: 'max(0.75rem, env(safe-area-inset-left), var(--tg-safe-area-left, 0px))',
-            top: 'max(0.75rem, env(safe-area-inset-top), var(--tg-safe-area-top, 0px))',
-          }}
-        >
-          <X size={19} strokeWidth={1.8} aria-hidden="true" />
-        </button>
-      )}
-
-      {!navigationHidden && <TelegramNavigation />}
-    </>
-  );
+  return <TelegramNavigation />;
 }

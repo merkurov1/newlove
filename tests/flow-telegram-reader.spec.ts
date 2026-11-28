@@ -56,21 +56,51 @@ const FEED_ITEMS = [
   })),
 ];
 
-async function installTelegram(page: Page) {
+async function installTelegram(
+  page: Page,
+  options: { startParam?: string; fullscreen?: boolean } = {}
+) {
   // The test supplies a deterministic WebApp mock. Aborting the remote SDK
   // keeps the browser/CI run offline and prevents the real script from
   // replacing the mock in a document without Telegram launch parameters.
   await page.route('https://telegram.org/js/telegram-web-app.js', (route) => route.abort());
 
   await page.addInitScript(
-    ({ safeTop, safeBottom }) => {
+    ({ safeTop, safeBottom, startParam, fullscreen }) => {
       const handlers = new Map<string, () => void>();
       const backHandlers: Array<() => void> = [];
+      let showCalls = 0;
+      let hideCalls = 0;
+      let onClickCalls = 0;
+      let offClickCalls = 0;
+      let closeCalls = 0;
+
+      const backButton = {
+        isVisible: false,
+        show() {
+          showCalls += 1;
+          backButton.isVisible = true;
+        },
+        hide() {
+          hideCalls += 1;
+          backButton.isVisible = false;
+        },
+        onClick(handler: () => void) {
+          onClickCalls += 1;
+          backHandlers.push(handler);
+        },
+        offClick(handler: () => void) {
+          offClickCalls += 1;
+          const index = backHandlers.lastIndexOf(handler);
+          if (index >= 0) backHandlers.splice(index, 1);
+        },
+      };
 
       const webApp = {
         initData: 'query_id=reader-test&user=%7B%22id%22%3A1%7D&auth_date=1&hash=test',
         platform: 'ios',
         version: '8.0',
+        initDataUnsafe: { start_param: startParam },
         viewportHeight: window.innerHeight,
         viewportStableHeight: window.innerHeight,
         safeAreaInset: { top: safeTop, right: 0, bottom: safeBottom, left: 0 },
@@ -86,16 +116,19 @@ async function installTelegram(page: Page) {
         ready() {},
         expand() {},
         requestFullscreen() {
-          this.isFullscreen = true;
+          if (!fullscreen) return;
+          webApp.isFullscreen = true;
           handlers.get('fullscreenChanged')?.();
         },
         exitFullscreen() {
-          this.isFullscreen = false;
+          webApp.isFullscreen = false;
           handlers.get('fullscreenChanged')?.();
         },
         disableVerticalSwipes() {},
         enableVerticalSwipes() {},
-        close() {},
+        close() {
+          closeCalls += 1;
+        },
         setHeaderColor() {},
         setBackgroundColor() {},
         setBottomBarColor() {},
@@ -110,17 +143,7 @@ async function installTelegram(page: Page) {
           notificationOccurred() {},
           selectionChanged() {},
         },
-        BackButton: {
-          show() {},
-          hide() {},
-          onClick(handler: () => void) {
-            backHandlers.push(handler);
-          },
-          offClick(handler: () => void) {
-            const index = backHandlers.lastIndexOf(handler);
-            if (index >= 0) backHandlers.splice(index, 1);
-          },
-        },
+        BackButton: backButton,
         shareToStory(mediaUrl: string, params: unknown) {
           (window as unknown as { __flowStory?: unknown }).__flowStory = { mediaUrl, params };
         },
@@ -138,9 +161,54 @@ async function installTelegram(page: Page) {
         backHandlers[backHandlers.length - 1]?.();
       };
 
+      (
+        window as unknown as {
+          __tgBackState?: () => {
+            isVisible: boolean;
+            handlerCount: number;
+            showCalls: number;
+            hideCalls: number;
+            onClickCalls: number;
+            offClickCalls: number;
+            closeCalls: number;
+          };
+        }
+      ).__tgBackState = () => ({
+        isVisible: backButton.isVisible,
+        handlerCount: backHandlers.length,
+        showCalls,
+        hideCalls,
+        onClickCalls,
+        offClickCalls,
+        closeCalls,
+      });
+
       (window as unknown as { Telegram?: unknown }).Telegram = { WebApp: webApp };
     },
-    { safeTop: SAFE_TOP, safeBottom: SAFE_BOTTOM }
+    {
+      safeTop: SAFE_TOP,
+      safeBottom: SAFE_BOTTOM,
+      startParam: options.startParam ?? '',
+      fullscreen: options.fullscreen ?? true,
+    }
+  );
+}
+
+async function readBackState(page: Page) {
+  return page.evaluate(() =>
+    (
+      window as unknown as {
+        __tgBackState?: () => {
+          isVisible: boolean;
+          handlerCount: number;
+          showCalls: number;
+          hideCalls: number;
+          onClickCalls: number;
+          offClickCalls: number;
+          closeCalls: number;
+        };
+      }
+    ).__tgBackState?.()
   );
 }
 
@@ -415,6 +483,186 @@ test.describe('Flow reader — Telegram', () => {
     ).toBe(true);
   });
 
+  test('Flow feed exposes only the native Telegram close control', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page);
+    await mockFlowApis(page);
+
+    await page.goto('/flow');
+
+    await expect(page.getByRole('link', { name: 'Two rooms, one light' })).toBeVisible();
+    await expect(page.locator('body')).toHaveClass(/telegram-fullscreen-close/);
+
+    await expect.poll(async () => (await readBackState(page))?.hideCalls ?? 0).toBeGreaterThan(0);
+
+    const state = await readBackState(page);
+
+    expect(state?.isVisible).toBe(false);
+    expect(state?.handlerCount).toBeLessThanOrEqual(1);
+    await expect(page.getByRole('button', { name: 'Close Mini App' })).toHaveCount(0);
+  });
+
+  test('Flow feed keeps the same single control without fullscreen support', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page, { fullscreen: false });
+    await mockFlowApis(page);
+
+    await page.goto('/flow');
+
+    await expect(page.getByRole('link', { name: 'Two rooms, one light' })).toBeVisible();
+    await expect(page.locator('body')).not.toHaveClass(/telegram-fullscreen-close/);
+
+    await expect.poll(async () => (await readBackState(page))?.hideCalls ?? 0).toBeGreaterThan(0);
+
+    expect((await readBackState(page))?.isVisible).toBe(false);
+    await expect(page.getByRole('button', { name: 'Close Mini App' })).toHaveCount(0);
+  });
+
+  test('Flow publication shows BackButton and returns to the feed without closing the Mini App', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page);
+    await mockFlowApis(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    const before = await readBackState(page);
+
+    await page.evaluate(() => {
+      (window as unknown as { __tgBack?: () => void }).__tgBack?.();
+    });
+
+    await expect(page).toHaveURL(/\/flow$/);
+    await expect(page.getByRole('link', { name: 'Two rooms, one light' })).toBeVisible();
+
+    const after = await readBackState(page);
+
+    expect(after?.closeCalls).toBe(before?.closeCalls ?? 0);
+  });
+
+  test('nested Flow overlays consume Back before returning from the publication to the feed', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page);
+    await mockFlowApis(page);
+    await mockImages(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    const appearance = page.getByRole('button', { name: 'Appearance settings' });
+
+    await appearance.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Appearance' });
+
+    await expect(dialog).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    await page.evaluate(() => {
+      (window as unknown as { __tgBack?: () => void }).__tgBack?.();
+    });
+
+    await expect(dialog).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/flow/reader-with-images');
+
+    await page.getByRole('link', { name: /Open image: First light/ }).click();
+
+    const viewer = page.getByRole('dialog', { name: 'Image viewer' });
+
+    await expect(viewer).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    await page.evaluate(() => {
+      (window as unknown as { __tgBack?: () => void }).__tgBack?.();
+    });
+
+    await expect(viewer).toHaveCount(0);
+    expect(new URL(page.url()).pathname).toBe('/flow/reader-with-images');
+
+    await page.evaluate(() => {
+      (window as unknown as { __tgBack?: () => void }).__tgBack?.();
+    });
+
+    await expect(page).toHaveURL(/\/flow$/);
+  });
+
+  test('BackButton listeners are replaced, not leaked, across Flow route changes', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page);
+    await mockFlowApis(page);
+
+    await page.goto('/flow/reader-with-images');
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    const before = await readBackState(page);
+
+    expect(before?.handlerCount).toBe(1);
+
+    await page.locator('.flow-reader__back').click();
+
+    await expect(page).toHaveURL(/\/flow$/);
+
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(false);
+
+    const feed = await readBackState(page);
+
+    expect(feed?.handlerCount).toBe(1);
+    expect(feed?.offClickCalls ?? 0).toBeGreaterThan(before?.offClickCalls ?? 0);
+
+    await page.getByRole('link', { name: 'Two rooms, one light' }).first().click();
+
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    const publication = await readBackState(page);
+
+    expect(publication?.handlerCount).toBe(1);
+    expect(publication?.onClickCalls ?? 0).toBeGreaterThan(feed?.onClickCalls ?? 0);
+  });
+
+  test('startapp deep link opens the publication and Back still returns to the feed', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await installTelegram(page, { startParam: 'flow_reader-with-images' });
+    await mockFlowApis(page);
+
+    await page.goto('/flow');
+
+    await expect(page).toHaveURL(/\/flow\/reader-with-images$/, { timeout: 15_000 });
+    await expect(
+      page.getByRole('heading', { name: 'Two rooms, one light', level: 1 })
+    ).toBeVisible();
+    await expect.poll(async () => (await readBackState(page))?.isVisible).toBe(true);
+
+    await page.evaluate(() => {
+      (window as unknown as { __tgBack?: () => void }).__tgBack?.();
+    });
+
+    await expect(page).toHaveURL(/\/flow$/);
+  });
+
   for (const viewport of [
     { width: 390, height: 844, telegram: true },
     { width: 768, height: 1024, telegram: true },
@@ -577,6 +825,7 @@ test.describe('Flow reader — Telegram', () => {
     await expect(page.locator('body')).not.toHaveClass(/telegram-app/);
     await expect(page.getByRole('progressbar', { name: 'Reading progress' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open Flow navigation' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Close Mini App' })).toHaveCount(0);
 
     await page.getByRole('link', { name: /Open image: First light/ }).click();
     await expect(page.getByRole('dialog', { name: 'Image viewer' })).toBeVisible();

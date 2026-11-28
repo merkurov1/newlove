@@ -47,8 +47,8 @@ body.telegram-app .flow-post-page {
   padding-right: 1.25rem;
 }
 
-/* The fullscreen close affordance is a floating 44px target at the top-left.
- * Flow reserves a clean masthead band instead of letting it overlap type. */
+/* Telegram owns the fullscreen close control and the publication BackButton.
+ * Flow reserves a clean masthead band instead of letting either overlap type. */
 body.telegram-app.telegram-fullscreen-close .flow-page,
 body.telegram-app.telegram-fullscreen-close .flow-post-page {
   padding-top: calc(
