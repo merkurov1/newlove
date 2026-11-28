@@ -319,6 +319,13 @@ async function renderWorkbench() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Queueing a reviewed task asks the owner to confirm. jsdom does not
+  // implement window.confirm, so without this the action never reaches fetch.
+  jest.spyOn(window, 'confirm').mockReturnValue(true);
+});
+
+afterEach(() => {
+  jest.restoreAllMocks();
 });
 
 describe('execution screen', () => {

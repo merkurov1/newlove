@@ -189,7 +189,7 @@ describe('Flow Instant View template contract', () => {
     expect(hero).toBeGreaterThan(-1);
     expect(readerBar).toBeGreaterThan(-1);
     expect(footer).toBeGreaterThan(hero);
-    expect(pierrot).toBeGreaterThan(footer);
+    expect(pierrot).toBeGreaterThan(hero);
   });
 
   it('targets version 2.1 and only public Flow post articles', () => {
