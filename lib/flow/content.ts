@@ -98,6 +98,13 @@ export type FlowLink = {
 export type FlowContent = {
   id: string | null;
   slug: string | null;
+  /**
+   * Publication state from the source row. `null` means the caller did not
+   * provide it (legacy preview payloads); callers that gate public delivery
+   * must treat an explicit non-public value as non-public.
+   */
+  status: string | null;
+  visibility: string | null;
   rawType: string;
   contentType: FlowContentType;
   title: string;
@@ -1208,6 +1215,8 @@ export function normalizeFlowItem(
   return {
     id: readString(item.id),
     slug,
+    status: readString(item.status),
+    visibility: readString(item.visibility),
     rawType,
     contentType,
     title,
