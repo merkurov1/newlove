@@ -170,6 +170,25 @@ describe('Flow item reader composition', () => {
     expect(screen.getByText('Pierrot')).toBeInTheDocument();
   });
 
+  it('shows a leading Markdown heading once as the page title and removes it from the body', async () => {
+    const { container } = await renderPage({
+      title: 'Heart & Angel > World > Temple',
+      body_md: '## Heart & Angel > World > Temple\n\nФотография храма.',
+      metadata: {
+        title_source: 'body',
+        generated_title: 'Heart & Angel > World > Temple',
+      },
+    });
+
+    const hero = container.querySelector('.flow-item__hero');
+    const heading = hero?.querySelector('h1');
+    const body = hero?.querySelector('.flow-item__body');
+
+    expect(heading).toHaveTextContent('Heart & Angel > World > Temple');
+    expect(body).toHaveTextContent('Фотография храма.');
+    expect(body).not.toHaveTextContent('Heart & Angel > World > Temple');
+  });
+
   it('omits the Pierrot block when there is no ready context', async () => {
     const { container } = await renderPage({}, null);
 

@@ -28,6 +28,7 @@ export type FlowTitleSource =
   | 'link'
   | 'youtube'
   | 'image'
+  | 'heading'
   | 'body'
   | 'generated'
   | 'fallback';
@@ -298,6 +299,72 @@ export function markdownToDisplayText(value: string | null | undefined): string 
 /** Markdown → single-line plain text for summaries and feed text. */
 export function markdownToPlainText(value: string | null | undefined): string {
   return markdownToDisplayText(value).replace(/\s+/g, ' ').trim();
+}
+
+export type LeadingMarkdownHeading = {
+  level: number;
+  /** Visible heading text with inline Markdown removed. */
+  text: string;
+  /** The body with the leading heading and its surrounding blank lines removed. */
+  rest: string;
+};
+
+const LEADING_HEADING_PATTERN = /^[ \t\u00a0]{0,3}(#{1,6})[ \t\u00a0]+(.*)$/;
+
+/** Removes inline Markdown while keeping the words a reader actually sees. */
+function markdownHeadingText(value: string): string {
+  return value
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\\([\\`*_[\]{}()#+\-.!])/g, '$1')
+    .replace(/[*_~`]+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Recognizes an ATX heading (`#` … `######`) only when it is the first
+ * meaningful block of the body. A heading deeper in the text stays a section
+ * heading and is never promoted to the publication title.
+ */
+export function extractLeadingMarkdownHeading(
+  value: string | null | undefined
+): LeadingMarkdownHeading | null {
+  if (!value) return null;
+
+  const lines = value.split(/\r?\n/);
+  let index = 0;
+
+  while (index < lines.length && /^[ \t\u00a0]*$/.test(lines[index])) {
+    index += 1;
+  }
+
+  if (index >= lines.length) return null;
+
+  const match = LEADING_HEADING_PATTERN.exec(lines[index]);
+  if (!match) return null;
+
+  const rawText = match[2]
+    .replace(/[ \t\u00a0]+#+[ \t\u00a0]*$/, '')
+    .trim();
+  const text = markdownHeadingText(rawText);
+
+  // A filename, URL or date inside a heading is not an authored title.
+  if (!text || isTechnicalText(text)) return null;
+
+  const restLines = lines.slice(index + 1);
+
+  while (restLines.length > 0 && /^[ \t\u00a0]*$/.test(restLines[0])) {
+    restLines.shift();
+  }
+
+  return {
+    level: match[1].length,
+    text,
+    rest: restLines.join('\n'),
+  };
 }
 
 /**
@@ -923,7 +990,11 @@ export function normalizeFlowItem(
   const rawType = readString(item.type)?.toLowerCase() ?? 'note';
 
   const body = readString(item.body_md) ?? '';
+  const leadingHeading = extractLeadingMarkdownHeading(body);
   const bodyText = markdownToDisplayText(body);
+  const bodyTextWithoutHeading = leadingHeading
+    ? markdownToDisplayText(leadingHeading.rest)
+    : bodyText;
   const descriptionCandidate =
     meaningfulText(metadata.description, 600) ??
     meaningfulText(metadata.excerpt, 600) ??
@@ -1011,6 +1082,7 @@ export function normalizeFlowItem(
   const generatedTitle = meaningfulText(metadata.generated_title, 300);
   const bodyTitleLine = firstMeaningfulLine(bodyText);
   const bodyTitleSentence = firstSentence(bodyText);
+  const explicitHeadingTitle = leadingHeading?.text ?? null;
   const sourceTitleKeys = new Set(
     [
       ...previews.map((preview) => preview.title),
@@ -1019,6 +1091,7 @@ export function normalizeFlowItem(
       metadata.title,
       metadata.alt,
       metadata.caption,
+      explicitHeadingTitle,
       bodyTitleLine,
       bodyTitleSentence,
       fallbackTitle(contentType, language, visibleLinks, videos),
@@ -1051,9 +1124,14 @@ export function normalizeFlowItem(
     meaningfulText(metadata.alt ?? metadata.caption, 300) ??
     null;
 
+  // An explicit leading Markdown heading is the author's title. On video
+  // publications the YouTube metadata title keeps the role it had before; on
+  // every other type the authored heading outranks an attached image caption.
   const candidateTitle =
     (storedTitleIsManual ? storedTitle : null) ??
     linkTitle ??
+    (rawType === 'video' ? videoTitle : null) ??
+    explicitHeadingTitle ??
     videoTitle ??
     imageTitle ??
     bodyTitleLine ??
@@ -1065,6 +1143,8 @@ export function normalizeFlowItem(
 
   if (storedTitleIsManual) titleSource = 'manual';
   else if (linkTitle) titleSource = 'link';
+  else if (rawType === 'video' && videoTitle) titleSource = 'youtube';
+  else if (explicitHeadingTitle) titleSource = 'heading';
   else if (videoTitle) titleSource = 'youtube';
   else if (imageTitle) titleSource = 'image';
   else if (bodyTitleLine) titleSource = 'body';
@@ -1076,6 +1156,18 @@ export function normalizeFlowItem(
     titleSource = 'fallback';
   }
 
+  // When the heading is the visible title, remove it from the body so the
+  // reader and the feed card never show the same text twice. A different
+  // manual title leaves the heading in place as a section heading.
+  const headingBecomesTitle = Boolean(
+    leadingHeading &&
+      titleComparisonKey(leadingHeading.text) === titleComparisonKey(title)
+  );
+  const displayBody = headingBecomesTitle ? leadingHeading?.rest ?? '' : body;
+  const displayBodyText = headingBecomesTitle
+    ? bodyTextWithoutHeading
+    : bodyText;
+
   title = truncateGraphemes(title.replace(/\s+/g, ' '), 160).trim();
 
   const description =
@@ -1083,17 +1175,19 @@ export function normalizeFlowItem(
     visibleLinks.find((link) => link.description)?.description ??
     images.find((image) => image.caption)?.caption ??
     images.find((image) => image.alt)?.alt ??
-    (bodyText
-      ? truncateGraphemes(bodyText.replace(/\s+/g, ' '), 200)
+    (displayBodyText
+      ? truncateGraphemes(displayBodyText.replace(/\s+/g, ' '), 200)
       : fallbackDescription(contentType, language));
 
-  const excerpt = truncatePlainText(bodyText, 400);
-  const redundant = titleIsRedundant(title, bodyText);
+  const excerpt = truncatePlainText(displayBodyText, 400);
+  const redundant = titleIsRedundant(title, displayBodyText);
   const showTitle =
     !redundant &&
-    titleSource !== 'body' &&
-    titleSource !== 'generated' &&
-    titleSource !== 'fallback';
+    (titleSource === 'manual' ||
+      titleSource === 'link' ||
+      titleSource === 'youtube' ||
+      titleSource === 'image' ||
+      titleSource === 'heading');
 
   const siteUrl = (options.siteUrl ?? FLOW_SITE_URL).replace(/\/+$/, '');
   const slug = readString(item.slug);
@@ -1119,8 +1213,8 @@ export function normalizeFlowItem(
     title,
     titleSource,
     description: truncateGraphemes(description, 300).trim(),
-    body,
-    bodyText,
+    body: displayBody,
+    bodyText: displayBodyText,
     bodyExcerpt: excerpt.text,
     bodyTruncated: excerpt.truncated,
     showTitle,

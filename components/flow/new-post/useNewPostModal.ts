@@ -930,6 +930,7 @@ export function useNewPostModal({
           ? item.metadata.title_source
           : null;
       const titleWasGenerated =
+        titleSource === 'heading' ||
         titleSource === 'body' ||
         titleSource === 'generated' ||
         titleSource === 'fallback' ||
