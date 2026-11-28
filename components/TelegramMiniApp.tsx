@@ -16,7 +16,11 @@ import {
   subscribeTelegramBackHandlers,
 } from '@/lib/telegram/backHandler';
 import { isRitualRoute, isTelegramNavigationHidden } from '@/lib/temple/routes';
-import { resolveTelegramSectionHome } from '@/lib/telegram/navigation';
+import {
+  pushTelegramNavigationRoute,
+  replaceTelegramNavigationRoute,
+  resolveTelegramSectionHome,
+} from '@/lib/telegram/navigation';
 import { resolveTelegramChrome } from '@/lib/telegram/chrome';
 import { getTelegramWebApp, hapticSelection } from '@/lib/telegram/webApp';
 import { attachTelegramLifecycle } from '@/lib/telegram/lifecycle';
@@ -33,8 +37,31 @@ export default function TelegramMiniApp() {
   const isTelegram = useIsTelegram();
   const { mode, closeConversation } = usePierrot();
   const startParamHandledRef = useRef<string | null>(null);
+  const navigationStackRef = useRef<string[]>([pathname || '/']);
+  const previousPathRef = useRef(pathname || '/');
+  const pendingReplaceRef = useRef<string | null>(null);
   const [overlayActive, setOverlayActive] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Track only in-app route transitions. The native BackButton must not use
+  // `window.history.length`: a Telegram WebView can start with a blank entry,
+  // which would make "back" leave the app instead of returning to the previous
+  // Flow screen. `replace` transitions do not create a new route entry.
+  useEffect(() => {
+    const current = pathname || '/';
+    const previous = previousPathRef.current;
+
+    if (current === previous) return;
+
+    const replacing = pendingReplaceRef.current === current;
+
+    if (replacing) pendingReplaceRef.current = null;
+
+    navigationStackRef.current = replacing
+      ? replaceTelegramNavigationRoute(navigationStackRef.current, current)
+      : pushTelegramNavigationRoute(navigationStackRef.current, current);
+    previousPathRef.current = current;
+  }, [pathname]);
 
   useEffect(() => {
     const sync = () => setOverlayActive(hasTelegramBackHandler());
@@ -181,6 +208,7 @@ export default function TelegramMiniApp() {
       // Unknown payloads are ignored: the current first-party route is already
       // a safe destination, and an external URL is never accepted here.
       if (target && target !== pathname) {
+        pendingReplaceRef.current = target;
         router.replace(target);
       }
     };
@@ -228,27 +256,37 @@ export default function TelegramMiniApp() {
       // in-app history. Go "up" to the Flow index rather than closing the Mini
       // App or jumping back to the Lobby.
       const sectionHome = resolveTelegramSectionHome(pathname);
+      const stack = navigationStackRef.current;
+      const previousRoute = stack.length > 1 ? stack[stack.length - 2] : null;
 
       if (sectionHome) {
-        router.replace(sectionHome);
+        if (previousRoute === sectionHome) {
+          router.back();
+        } else {
+          pendingReplaceRef.current = sectionHome;
+          router.replace(sectionHome);
+        }
+
         return;
       }
 
-      if (typeof window !== 'undefined' && window.history.length > 1) {
+      // Only navigate back when the Mini App actually has another in-app
+      // screen. Otherwise close the Mini App at its root.
+      if (previousRoute) {
         router.back();
         return;
       }
 
-      if (pathname !== '/lobby') {
-        router.push('/lobby');
-        return;
+      try {
+        if (typeof tg?.close === 'function') {
+          tg.close();
+          return;
+        }
+      } catch {
+        /* Fall through to the browser fallback. */
       }
 
-      try {
-        tg?.close?.();
-      } catch {
-        router.push(WORLD_ROUTE);
-      }
+      router.push(WORLD_ROUTE);
     };
 
     try {
@@ -290,10 +328,10 @@ export default function TelegramMiniApp() {
         return;
       }
     } catch {
-      /* Fall through to browser history. */
+      /* Fall through to in-app history. */
     }
 
-    if (typeof window !== 'undefined' && window.history.length > 1) {
+    if (navigationStackRef.current.length > 1) {
       router.back();
       return;
     }

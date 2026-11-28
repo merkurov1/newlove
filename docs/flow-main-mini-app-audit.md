@@ -1,116 +1,119 @@
 # Flow × Telegram Main Mini App — audit (2026-11-28)
 
-This audit covers the existing Flow / Pierrot Mini App integration. It does not
-change public bot metadata. Production settings that require the bot token or
-BotFather were **not** read or changed from this environment.
+Scope: the existing Flow / Pierrot Mini App shell and its launch from the
+Telegram bot profile. The owner has confirmed that the required BotFather
+settings are already enabled; this audit does not ask for them to be re-enabled
+and does not change public bot settings.
 
-Official references checked:
+Out of scope: the Telegram Mini App Store/catalog (a later decision for Temple),
+Temple changes, payments, a new bot, the bot webhook, and public bot metadata.
 
-- Telegram Mini Apps: <https://core.telegram.org/bots/webapps>
-- Bot features / Main Mini App / Mini App Store:
-  <https://core.telegram.org/bots/features#mini-apps>
-- Bot API 8.0 fullscreen, safe area, Home Screen and loading screen:
-  <https://core.telegram.org/bots/webapps#recent-changes>
+## 1. What was verified
 
-## 1. Bot and public configuration
+| Check                                   | Evidence                                                                                                                                                                                                                            | Result                                                                                 |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Direct-link Mini App exists             | `https://t.me/PierrotAi_bot/flow` returns the public **Open App** action with `appname=flow`.                                                                                                                                       | Confirmed without a token.                                                             |
+| `startapp` launch exists                | `https://t.me/PierrotAi_bot?startapp=flow` and `?startapp=flow__…` return **Open App**.                                                                                                                                             | Confirmed without a token.                                                             |
+| Main Mini App enabled                   | Owner-confirmed. BotFather is not readable from the repository; no token was read.                                                                                                                                                  | Confirmed by owner; not independently provable from source.                            |
+| Canonical browser URL                   | `https://www.merkurov.love/flow` returns `200`, `<link rel="canonical" href="https://www.merkurov.love/flow">`.                                                                                                                     | Confirmed against production.                                                          |
+| Production pre-change SDK behaviour     | The current production HTML still contains the old `lazyOnload` Telegram script on ordinary browser pages.                                                                                                                          | Baseline captured; regression to be removed by this change.                            |
+| Local production cold launch            | A production build served locally, with a stubbed `telegram-web-app.js`, resolves `/lobby?…&tgWebAppStartParam=flow` to `/flow`, calls `ready`, `expand`, `requestFullscreen`, applies a 47px safe inset and requests the SDK once. | Confirmed in Chromium with a Telegram WebView-sized viewport.                          |
+| Deep link to a Flow publication path    | `tgWebAppStartParam=flow__am9pbg` opens the publication-shaped `/flow/join` fixture; the native back handler then returns to `/flow`. The same `flow__<slug>` resolver is unit-tested against real publication slugs.               | Confirmed in the same local production run.                                            |
+| Browser fallback                        | `https://…/flow` without launch markers makes zero requests to `telegram.org/js/telegram-web-app.js` and receives no Telegram body class.                                                                                           | Confirmed in Chromium and by unit tests.                                               |
+| iOS / Android installed Telegram client | Not available in this environment.                                                                                                                                                                                                  | Not verified here; one device pass remains. See `docs/telegram-botfather-setup.md` §3. |
 
-| Item                       | Repository evidence                                                                                                                                                                               | Live status                                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Primary Flow / Pierrot bot | `@PierrotAi_bot` is the bot username used by the Mini App link tests and Instant View fixtures (`lib/telegram/__tests__/miniAppLinks.test.ts`, `lib/flow/__tests__/telegramInstantView.test.ts`). | **Not verified from this environment.** Confirm with `getMe` / BotFather. No token was read.         |
-| Bot token source           | `PIERROT_BOT_TOKEN` (fallbacks `OSIRIS_BOT_TOKEN`, `TELEGRAM_BOT_TOKEN`) in `lib/telegram/botToken.ts`.                                                                                           | Presence in production is not asserted.                                                              |
-| Webhook                    | Repository expects `https://www.merkurov.love/api/pierrot` for the primary bot (`docs/telegram-operations.md`).                                                                                   | **Not verified.** Run `getWebhookInfo` server-side; do not change it as part of Mini App work.       |
-| Menu button                | `scripts/telegram/configure-bot.mjs` sets `setChatMenuButton` → `https://www.merkurov.love/lobby`, text `Open Pierrot`.                                                                           | **Not verified.** The script was not run.                                                            |
-| Main Mini App              | BotFather-only setting. Bot API has no method to set it.                                                                                                                                          | **Not configured/verified.** Owner action required.                                                  |
-| Short name / direct link   | Direct link format is `https://t.me/<bot>/<short_name>` and `https://t.me/<bot>?startapp=<param>`.                                                                                                | **Not configured/verified.** Choosing a short name is a public-link decision for the owner.          |
-| Domain                     | Canonical origin is `https://www.merkurov.love`; `merkurov.love` redirects to `www` in `next.config.js`.                                                                                          | Code verified. TLS/redirect behaviour should be confirmed in production.                             |
-| Allowed Mini App URLs      | Telegram requires an HTTPS URL. The repository uses one canonical origin and canonical routes; no second Mini App host exists.                                                                    | Code verified. BotFather may additionally confirm the domain; record the prompt instead of guessing. |
+No bot token, signed `initData`, cookie or private credential was read, printed
+or stored during this audit.
 
-### Exact owner read-only checks
+## 2. Problems found and fixed
 
-Do not paste the token into chat. Run locally / in a trusted server shell:
+### 2.1 SDK was loaded too late
+
+`app/layout.tsx` used `next/script` with `lazyOnload` for
+`telegram-web-app.js`. Telegram's loading placeholder stayed until the browser
+went idle, and fullscreen/safe-area setup was delayed until after hydration.
+
+Fix: `lib/telegram/sdkBootstrap.ts` renders a small head bootstrap that queues
+the SDK through Next.js' before-interactive loader **only** when the URL carries
+Telegram launch markers or the older WebView bridge exists. An ordinary browser
+still makes no Telegram request. Runtime detection keeps an idempotent fallback
+for clients that block the before-interactive queue.
+
+### 2.2 `start_param` could arrive before the SDK
+
+The shell read only `Telegram.WebApp.initDataUnsafe.start_param`. A cold direct
+link can be visible before the SDK finishes loading.
+
+Fix: `readTelegramStartParamFromUrl` now reads the documented
+`tgWebAppStartParam` URL value as a fallback. The value remains untrusted and
+still passes the first-party allowlist in `resolveTelegramStartParam`; arbitrary
+URLs and malformed payloads are rejected.
+
+### 2.3 Back from a cold deep link had no section home
+
+A Flow publication opened from `startapp` had no in-app history. Back could
+fall through to the Lobby or out of the app.
+
+Fix: `resolveTelegramSectionHome` returns `/flow` for a nested Flow publication
+and the issue archive for `/flow-issues/*` and `/en/flow-issues/*`. The shell
+uses it before any generic history fallback.
+
+### 2.4 `window.history.length` is not a reliable Back signal
+
+A Telegram WebView can start with a blank history entry. `history.length` can
+therefore be greater than one on a cold launch, and the old fallback could
+navigate away from the Mini App instead of closing it. `router.replace` also
+keeps the length unchanged, so duplicate entries were possible.
+
+Fix: `components/TelegramMiniApp.tsx` keeps a small in-app route stack
+(`lib/telegram/navigation.ts`). It records client-side pushes, models
+`router.replace` without duplicates, and treats a cold launch as a single root
+entry. Back now returns to the previous in-app screen when one exists, or closes
+the Mini App at a root. This also removes the `/lobby` ↔ `/flow` loop.
+
+### 2.5 Documentation drifted from the owner's configuration
+
+The previous draft described BotFather actions that were not required and
+included a Mini App Store readiness document, which is explicitly out of scope.
+Those instructions/doc were removed. The remaining document records the
+owner-confirmed settings and the single device check that cannot be automated.
+
+## 3. Existing behaviour preserved
+
+- Canonical Next.js routes `/flow`, `/flow/[slug]`, `/flow-issues` and
+  `/en/flow-issues`; no parallel Mini App pages or second origin.
+- `initData` is still HMAC-verified server-side with freshness checks
+  (`lib/telegram/initData.ts`). `initDataUnsafe` remains deep-link metadata only,
+  never identity or authorization.
+- Fullscreen is requested only on Flow routes; leaving Flow restores the normal
+  shell. Unsupported clients stay expanded.
+- Safe area, content safe area, viewport height and theme events still feed the
+  same CSS variables. Flow's CSS uses `max(env(...), var(--tg-safe-area-*))`.
+- Loading, retry and empty states in `app/flow/page.tsx` are unchanged.
+- Telegram crossposting and Instant View links are unchanged; `startapp` links
+  still fall back to the canonical web URL when the bot username is absent.
+- No migration, webhook, public bot field, Store submission or paid feature was
+  added.
+
+## 4. Verification commands
+
+Focused and full checks are recorded in the task result. The relevant suites are:
 
 ```bash
-curl -s "https://api.telegram.org/bot${PIERROT_BOT_TOKEN}/getMe"
-curl -s "https://api.telegram.org/bot${PIERROT_BOT_TOKEN}/getWebhookInfo"
-curl -s "https://api.telegram.org/bot${PIERROT_BOT_TOKEN}/getChatMenuButton"
+pnpm test --runInBand lib/telegram app/flow/__tests__
+pnpm typecheck
+pnpm lint
+pnpm build   # placeholder Supabase env, same as CI
 ```
 
-Record only `username`, `url`, `pending_update_count`, `last_error_date`,
-`last_error_message` and the menu button type/URL. Never record the token or
-full `initData`.
+Browser launch coverage lives in
+`tests/flow-telegram-launch.spec.ts` (cold launch, repeat launch, deep link,
+Back, safe area/fullscreen and browser fallback).
 
-## 2. Mini App shell audit
+## 5. Honest remaining limitation
 
-| Capability         | Current implementation                                                                                                                                                                                                                                      | Status                                                                         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| SDK loading        | `app/layout.tsx` renders a small head bootstrap (`lib/telegram/sdkBootstrap.ts`) that injects `telegram-web-app.js` only when the URL has Telegram launch markers or the older WebView bridge exists. `lib/telegram/detection.ts` keeps a runtime fallback. | **Implemented in this task.** Ordinary browsers do not request Telegram's SDK. |
-| `ready` / `expand` | `lib/telegram/lifecycle.ts` calls both before other UI work; all methods are feature-detected.                                                                                                                                                              | Working in code; live client not available.                                    |
-| Fullscreen         | `requestFullscreen()` only on `/flow` and `/flow/<slug>`; `exitFullscreen()` when leaving Flow. The close control reserves masthead space.                                                                                                                  | Working in code. Bot API 8.0+; older clients stay expanded.                    |
-| Safe area          | `safeAreaInset` + `contentSafeAreaInset` are merged into `--tg-safe-area-*`; Flow CSS uses `max(env(safe-area-inset-*), var(--tg-safe-area-*))`.                                                                                                            | Working in code; physical iOS/Android not available.                           |
-| Viewport           | `viewportHeight` / `viewportStableHeight` become `--tg-viewport-*`; `viewportChanged`, `safeAreaChanged`, `contentSafeAreaChanged` update them.                                                                                                             | Working in code.                                                               |
-| Theme              | `colorScheme` + `themeParams` become CSS variables with a luminance fallback; `themeChanged` updates live.                                                                                                                                                  | Working in code.                                                               |
-| Back button        | Overlays consume Back first; nested Flow publications go “up” to `/flow`; otherwise real history is used; `/lobby` closes or falls back safely.                                                                                                             | **Implemented in this task** for the cold deep-link case.                      |
-| `start_param`      | Reads `initDataUnsafe.start_param` and now the documented URL fallback `tgWebAppStartParam`. Only an allowlist of first-party routes is accepted; arbitrary URLs are rejected.                                                                              | **Implemented in this task.**                                                  |
-| Deep-link encoding | `flow__<base64url-slug>` for a publication; simple tokens for indexes. Slug is validated against a Unicode-safe allowlist.                                                                                                                                  | Working; tests cover round-trips and injection attempts.                       |
-| initData auth      | Raw `initData` is HMAC-verified server-side (`lib/telegram/initData.ts`, 24h freshness). `initDataUnsafe` is never identity.                                                                                                                                | Working in code; existing auth tests pass.                                     |
-| Canonical routes   | `/flow`, `/flow/[slug]`, `/flow-issues`, `/en/flow-issues` remain normal Next.js routes. No parallel Mini App pages or second origin.                                                                                                                       | Working.                                                                       |
-| Browser fallback   | `TelegramMiniApp` renders nothing outside Telegram; the normal site header/footer remain; no Telegram SDK request without launch markers or the WebView bridge.                                                                                             | Working in code; browser regression checked by existing site tests.            |
-| External links     | Existing `openLink` / browser fallbacks are unchanged; no new redirect surface was added.                                                                                                                                                                   | Working by inspection.                                                         |
-
-## 3. What is already working, what BotFather can enable, what needs code
-
-### Already working in the repository
-
-- One canonical origin and one Next.js route tree for browser and Telegram.
-- `@PierrotAi_bot` Mini App link building (only when
-  `TELEGRAM_MINI_APP_BOT_USERNAME` is configured).
-- `initData` server verification and owner allowlist checks.
-- Fullscreen, safe-area variables, theme, BackButton and Home Screen helpers.
-- Flow publication deep links and crosspost links with a safe canonical fallback.
-- Graceful browser behaviour when Telegram is absent.
-
-### Enableable through BotFather (owner action, no code)
-
-- Main Mini App: enable it, set the HTTPS URL, choose the short name, icon and
-  splash colours.
-- Menu Button URL/text (also settable through `setChatMenuButton`).
-- Bot profile name, About, Description, photo, commands.
-- Mini App previews (screenshots/video demos) shown on the profile and in
-  Search / the Apps tab.
-- Splash screen icon and light/dark colours.
-
-### Requires code (this PR)
-
-- Early SDK bootstrap in the document head, only for Telegram launches.
-- `tgWebAppStartParam` URL fallback for cold deep links.
-- Predictable “up” navigation from a deep-linked Flow publication to `/flow`.
-- Audit, BotFather runbook and Store-readiness checklist.
-
-### Not changed without owner approval
-
-- Bot username, public name, About/Description, profile photo.
-- Main Mini App URL, short name and public direct link.
-- Menu Button text/URL in production.
-- Webhook, domain, catalog submission, paid features.
-
-## 4. Verification matrix
-
-| Check                            | Result                                                                                               |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Cold Main Mini App launch        | Not executable here (no Telegram client). Covered by mocked WebApp tests and the owner checklist.    |
-| Repeat launch                    | Not executable here. `start_param` handling is idempotent per value.                                 |
-| Deep link to a Flow post         | Unit-tested for `startapp` → `/flow/<slug>`, including URL fallback and malicious payload rejection. |
-| Return to Flow home              | Unit-tested for `/flow/<slug>` → `/flow`.                                                            |
-| initData verification            | Existing Jest suite covers signature, freshness, malformed input and owner/admin boundaries.         |
-| iOS / Android WebView            | Not available. Safe-area/fullscreen code is feature-detected; owner must check on devices.           |
-| Canonical URL / browser fallback | Existing Flow and site tests; Playwright Telegram mocks in `tests/flow-telegram-reader.spec.ts`.     |
-| Production smoke test            | Not run from this environment (no deployment or Telegram client).                                    |
-
-## 5. Honest limitations
-
-- Production bot settings cannot be proven from source code. The owner must run
-  the read-only checks above.
-- Main Mini App is curated by Telegram; enabling it does not guarantee presence
-  in the Mini App Store or the Apps tab.
-- No physical iOS/Android device was available. Layout and lifecycle are tested
-  with mocks only.
+The installed Telegram client on iOS and Android is the only unverified surface.
+The public `t.me` links, the production build, the unit suite and the
+mocked-Telegram Chromium run all pass. A single device pass using the five steps
+in `docs/telegram-botfather-setup.md` §3 is the only owner action still needed;
+it is a verification step, not a configuration change.

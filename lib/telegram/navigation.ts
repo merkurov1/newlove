@@ -219,6 +219,51 @@ export function resolveTelegramSectionHome(pathname: string): string | null {
   return null;
 }
 
+/**
+ * Minimal in-app route stack for the native BackButton.
+ *
+ * `window.history.length` is not a reliable signal: Telegram WebViews can start
+ * with a blank entry, server redirects can add one, and `router.replace` keeps
+ * the same length. This stack records only client-side route transitions the
+ * Mini App actually made, so Back can distinguish "return to the previous Flow
+ * screen" from "there is nowhere to go; close the Mini App".
+ */
+export function pushTelegramNavigationRoute(
+  stack: readonly string[],
+  nextPathname: string
+): string[] {
+  const next = normalizeTelegramNavigationPath(nextPathname);
+
+  if (stack.length === 0) return [next];
+
+  const current = stack[stack.length - 1];
+
+  if (current === next) return [...stack];
+
+  const existing = stack.lastIndexOf(next);
+
+  // A browser Back/Forward landed on a route that is already in the stack.
+  if (existing >= 0) return stack.slice(0, existing + 1);
+
+  return [...stack, next];
+}
+
+/** A `router.replace` must not create a second entry for the same route. */
+export function replaceTelegramNavigationRoute(
+  stack: readonly string[],
+  nextPathname: string
+): string[] {
+  const next = normalizeTelegramNavigationPath(nextPathname);
+
+  if (stack.length === 0) return [next];
+
+  const existing = stack.lastIndexOf(next);
+
+  if (existing >= 0) return stack.slice(0, existing + 1);
+
+  return [...stack.slice(0, -1), next];
+}
+
 export function resolveTelegramNavigationContext(pathname: string): TelegramNavigationContext {
   return isTelegramFlowRoute(pathname) ? 'flow' : 'temple';
 }

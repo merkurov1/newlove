@@ -11,16 +11,20 @@
  * appends launch parameters to the URL (`tgWebAppData`, `tgWebAppVersion`,
  * `tgWebAppPlatform`, `tgWebAppThemeParams` and, for direct links,
  * `tgWebAppStartParam`), and its older WebViews expose `TelegramWebviewProxy`.
- * The bootstrap below only injects the SDK when one of those markers is present,
- * which means:
  *
- * - a Mini App launch gets the SDK before hydration and can call `ready()` early;
- * - an ordinary browser never requests Telegram's script;
- * - runtime detection in `lib/telegram/detection.ts` stays the safety net for a
- *   late or blocked bootstrap.
+ * The bootstrap below queues the SDK through Next.js' own before-interactive
+ * loader (`self.__next_s`) only when one of those markers is present. Using
+ * Next's queue keeps the server/client head in sync, loads the script before
+ * hydration, and avoids the hydration mismatch that a parser-time
+ * `document.write` injects into the head.
+ *
+ * Runtime detection in `lib/telegram/detection.ts` remains the safety net for a
+ * blocked or late bootstrap.
  */
 
 export const TELEGRAM_WEB_APP_SCRIPT_SRC = 'https://telegram.org/js/telegram-web-app.js';
+
+export const TELEGRAM_WEB_APP_SCRIPT_ID = 'telegram-web-app-sdk';
 
 export const TELEGRAM_LAUNCH_KEYS = [
   'tgWebAppData',
@@ -57,18 +61,18 @@ export function isTelegramLaunchLocation(href: string): boolean {
 /**
  * Synchronous bootstrap rendered inside the server `<head>`.
  *
- * `document.write` is intentional: the snippet runs while the head is still
- * being parsed, so the SDK is available before Next.js hydration. It never runs
- * in a normal browser and it never overwrites an SDK that is already present.
+ * It only queues the SDK; Next.js starts loading queued before-interactive
+ * scripts before hydration. It never runs in a normal browser and it never
+ * overwrites an SDK that is already present.
  */
 export const TELEGRAM_SDK_BOOTSTRAP = `(function(){try{var t=window.Telegram;if(t&&t.WebApp)return;if(document.querySelector('script[src*="telegram-web-app.js"]'))return;var u=window.location;var p=new URLSearchParams([u.search.replace(/^\\?/,""),u.hash.replace(/^#/,"")].filter(Boolean).join("&"));var k=${JSON.stringify(
   TELEGRAM_LAUNCH_KEYS
-)};var found=false;for(var i=0;i<k.length;i++){if(p.has(k[i])){found=true;break}}if(!found&&!window.TelegramWebviewProxy&&!window.TelegramWebviewProxyProto)return;document.write('<scr'+'ipt src="${TELEGRAM_WEB_APP_SCRIPT_SRC}"><\\/scr'+'ipt>')}catch(e){}})();`;
+)};var found=false;for(var i=0;i<k.length;i++){if(p.has(k[i])){found=true;break}}if(!found&&!window.TelegramWebviewProxy&&!window.TelegramWebviewProxyProto)return;(self.__next_s=self.__next_s||[]).push(["${TELEGRAM_WEB_APP_SCRIPT_SRC}",{"id":"${TELEGRAM_WEB_APP_SCRIPT_ID}"}])}catch(e){}})();`;
 
 /**
  * Runtime fallback used by detection when the head bootstrap did not run (for
- * example, a client that blocks `document.write`). It is idempotent and only
- * called for URLs with Telegram launch markers.
+ * example, a client that blocks the before-interactive queue). It is
+ * idempotent and only called for URLs with Telegram launch markers.
  */
 export function ensureTelegramSdk(
   doc: Document | null = typeof document === 'undefined' ? null : document
@@ -79,6 +83,7 @@ export function ensureTelegramSdk(
 
   script.src = TELEGRAM_WEB_APP_SCRIPT_SRC;
   script.async = true;
+  script.id = TELEGRAM_WEB_APP_SCRIPT_ID;
   script.dataset.telegramSdkFallback = 'true';
   doc.head?.appendChild(script);
 }

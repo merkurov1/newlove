@@ -7,10 +7,13 @@ import { ensureTelegramSdk } from './sdkBootstrap';
 /**
  * Deterministic Telegram Mini App detection for the browser.
  *
- * The SDK is loaded with `next/script` (`lazyOnload`), so it can appear before
- * or after hydration. Detection therefore combines the SDK's `load` event, a
- * single shared readiness store and a bounded-backoff safety poll. There is no
- * fixed three-second cutoff: a late SDK or late initData is still picked up.
+ * `lib/telegram/sdkBootstrap.ts` queues the SDK through Next.js'
+ * before-interactive loader for real Telegram launch URLs, so `Telegram.WebApp`
+ * is normally present before hydration. Detection still combines the SDK's load
+ * event, a single shared readiness store and a bounded-backoff safety poll,
+ * because a client can block the head bootstrap or restore a Mini App without
+ * launch markers. There is no fixed three-second cutoff: a late SDK or late
+ * initData is still picked up.
  *
  * `initDataUnsafe` is deliberately not read here. It is client-controlled and
  * can never be evidence of identity. Only the raw, signed `initData` string is
@@ -108,7 +111,8 @@ function hasTelegramLaunchParams(): boolean {
       params.has('tgWebAppData') ||
       params.has('tgWebAppVersion') ||
       params.has('tgWebAppPlatform') ||
-      params.has('tgWebAppThemeParams')
+      params.has('tgWebAppThemeParams') ||
+      params.has('tgWebAppStartParam')
     );
   } catch {
     return false;

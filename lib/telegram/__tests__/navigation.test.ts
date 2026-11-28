@@ -5,6 +5,8 @@ import {
   TELEGRAM_NAV_WORLD_HREF,
   isTelegramFlowRoute,
   isTelegramTempleRoute,
+  pushTelegramNavigationRoute,
+  replaceTelegramNavigationRoute,
   resolveTelegramNavigation,
   resolveTelegramNavigationContext,
   resolveTelegramSectionHome,
@@ -132,5 +134,35 @@ describe('Telegram navigation route model', () => {
     expect(resolveTelegramSectionHome('/en/flow-issues')).toBeNull();
     expect(resolveTelegramSectionHome('/temple')).toBeNull();
     expect(resolveTelegramSectionHome('/lobby')).toBeNull();
+  });
+
+  it('tracks in-app BackButton history without blank or duplicate entries', () => {
+    let stack = ['/lobby'];
+
+    stack = pushTelegramNavigationRoute(stack, '/flow');
+    expect(stack).toEqual(['/lobby', '/flow']);
+
+    stack = pushTelegramNavigationRoute(stack, '/flow/structural-integrity');
+    expect(stack).toEqual(['/lobby', '/flow', '/flow/structural-integrity']);
+
+    // Browser Back or a nested section return lands on an existing route.
+    stack = pushTelegramNavigationRoute(stack, '/flow');
+    expect(stack).toEqual(['/lobby', '/flow']);
+
+    // router.replace (for example a start_param or the Flow section home)
+    // must not add a duplicate entry.
+    stack = replaceTelegramNavigationRoute(stack, '/flow');
+    expect(stack).toEqual(['/lobby', '/flow']);
+
+    stack = replaceTelegramNavigationRoute(stack, '/flow/structural-integrity');
+    expect(stack).toEqual(['/lobby', '/flow/structural-integrity']);
+
+    stack = replaceTelegramNavigationRoute(stack, '/flow');
+    expect(stack).toEqual(['/lobby', '/flow']);
+
+    // A cold launch has exactly one entry, so Back closes the Mini App rather
+    // than navigating to an unrelated blank WebView page.
+    expect(pushTelegramNavigationRoute(['/flow'], '/flow')).toEqual(['/flow']);
+    expect(replaceTelegramNavigationRoute(['/flow'], '/flow')).toEqual(['/flow']);
   });
 });

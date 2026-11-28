@@ -70,8 +70,10 @@ without the real tokens. Use the owner checklist in `docs/telegram-operations.md
   parameters: `lobby`, `flow`, `journal`, `temple`, `selection`, `art`, and a
   concrete Flow slug encoded as `flow__<base64url-slug>`. It reads the
   documented `tgWebAppStartParam` URL fallback as well as `start_param`.
-- BackButton goes “up” from a nested Flow publication to `/flow`, then follows
-  real history, then falls back to `/lobby` or closes.
+- BackButton goes “up” from a nested Flow publication to `/flow`, then returns
+  to the previous in-app screen, then closes the Mini App at a root. The shell
+  keeps its own in-app route stack instead of trusting
+  `window.history.length`, which is unreliable in a Telegram WebView.
 - Flow, Temple and Journal remain normal Next.js routes; there are no duplicate
   Mini App pages.
 

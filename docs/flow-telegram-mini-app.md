@@ -8,7 +8,7 @@ administration, auth and the shared Telegram navigation are unchanged.
 
 | Surface             | File                                                     | Behaviour                                                                                                                                                                                                                |
 | ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| SDK bootstrap       | `lib/telegram/sdkBootstrap.ts`, `app/layout.tsx`         | Injects `telegram-web-app.js` in the head only for Telegram launch markers or the WebView bridge; ordinary browsers never request it.                                                                                    |
+| SDK bootstrap       | `lib/telegram/sdkBootstrap.ts`, `app/layout.tsx`         | Queues `telegram-web-app.js` through Next.js' before-interactive loader only for Telegram launch markers or the WebView bridge; ordinary browsers never request it.                                                      |
 | SDK lifecycle       | `lib/telegram/lifecycle.ts`                              | One feature-detected lifecycle: `ready`, `expand`, viewport, safe-area, theme, fullscreen and activation events, with full listener cleanup.                                                                             |
 | Shell               | `components/TelegramMiniApp.tsx`                         | Uses the lifecycle; asks for fullscreen only on Flow routes; keeps BackButton, start-param and native chrome behaviour. Reserves masthead space for the fullscreen close control.                                        |
 | Feed continuity     | `app/flow/page.tsx`                                      | Stable entry-anchor scroll restoration (including bounded re-pagination), versioned local last-read/progress, a quiet “Continue reading” line and a Home Screen offer.                                                   |
@@ -45,6 +45,7 @@ Newly exercised by this task:
 - `fullscreenChanged` event
 - `tgWebAppStartParam` URL fallback for `start_param`
 - Route-aware BackButton fallback from `/flow/<slug>` to `/flow`
+- In-app BackButton stack that ignores the WebView's blank initial history entry
 
 Unavailable or intentionally not used:
 
@@ -61,7 +62,8 @@ Unavailable or intentionally not used:
 - `lib/telegram/__tests__/lifecycle.test.ts`
 - `lib/telegram/__tests__/sdkBootstrap.test.ts` (launch-marker detection, no SDK in a normal browser, single fallback injection)
 - `lib/telegram/__tests__/miniAppRoutes.test.ts` (`start_param` allowlist, URL fallback and injection rejection)
-- `lib/telegram/__tests__/navigation.test.ts` (BackButton section-home fallback)
+- `lib/telegram/__tests__/navigation.test.ts` (BackButton section-home fallback and in-app route stack)
+- `tests/flow-telegram-launch.spec.ts` (cold/repeat launch, `start_param`, deep link, Back, safe area/fullscreen and browser fallback)
 - `components/flow/__tests__/FlowImageViewer.test.tsx`
 - `components/flow/__tests__/FlowReaderShell.test.tsx`
 - `components/flow/__tests__/FlowHomeScreenPrompt.test.tsx`

@@ -21,6 +21,7 @@ export default defineConfig({
     'temple-sanctuary.spec.ts',
     'telegram-navigation.spec.ts',
     'flow-telegram-reader.spec.ts',
+    'flow-telegram-launch.spec.ts',
     'flow-composer.spec.ts',
     'flow-link-cards.spec.ts',
     'flow-pierrot-reader.spec.ts',

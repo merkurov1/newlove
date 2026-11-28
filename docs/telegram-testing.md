@@ -117,8 +117,10 @@ CI.
 - [ ] Deep link `lobby`, `flow`, `journal`, `temple`, `selection`, `art` works.
 - [ ] Deep link to a concrete Flow slug works, including via `tgWebAppStartParam`.
 - [ ] Telegram Back from a deep-linked Flow publication returns to `/flow`.
+- [ ] Telegram Back on a cold root (`/flow` or `/lobby`) closes the Mini App
+      instead of navigating to a blank WebView page.
 - [ ] Unknown/deep-link injection is rejected.
-- [ ] BackButton follows real history outside nested Flow routes.
+- [ ] BackButton follows real in-app history outside nested Flow routes.
 - [ ] BackButton at `/lobby` closes or falls back safely.
 - [ ] ThemeChanged updates theme variables.
 - [ ] Safe Area / content safe area works on iOS.
